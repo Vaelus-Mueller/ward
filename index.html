@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0e0d0b" />
+    <meta name="color-scheme" content="dark" />
+    <title>Ward</title>
+    <link rel="icon" href="./favicon.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view"></canvas>
+      <div id="hud" class="hidden">
+        <header id="topbar">
+          <div class="identity-block">
+            <div id="identity">Unbound</div>
+            <div id="wave-label">Wave 1</div>
+            <div class="xp" aria-hidden="true"><div id="xp-fill"></div></div>
+          </div>
+          <div id="top-actions">
+            <button id="btn-character" type="button">Character</button>
+            <button id="btn-tree" type="button">Skills</button>
+            <button id="btn-pack" type="button">Pack</button>
+            <button id="btn-mute" type="button">Sound</button>
+          </div>
+          <div id="gold">0</div>
+        </header>
+        <div id="banner" class="hidden"></div>
+        <div id="globes">
+          <div id="life-globe" class="globe life" style="--fill: 1">
+            <span id="hp-text">1</span>
+            <small id="hp-max">1</small>
+          </div>
+          <div id="mana-globe" class="globe mana" style="--fill: 1">
+            <span id="mana-text">1</span>
+            <small id="mana-max">1</small>
+          </div>
+        </div>
+        <div id="joy" aria-label="Move"><div id="joy-knob"></div></div>
+        <div id="actions">
+          <button id="loot" type="button" class="hidden">Take</button>
+          <button id="attack" type="button">Attack</button>
+          <button id="skill-0" type="button" class="skill empty">Empty</button>
+          <button id="skill-1" type="button" class="skill empty">Empty</button>
+          <button id="skill-2" type="button" class="skill empty">Empty</button>
+        </div>
+      </div>
+
+      <section id="title" class="overlay">
+        <div class="panel title-panel">
+          <p class="eyebrow">Gate Ward</p>
+          <h1>Ward</h1>
+          <p class="lede">An exile holds a ruined ward. Paths open on a wheel. Attributes are spent by hand.</p>
+          <div class="row-buttons">
+            <button id="new-game" type="button" class="primary">Enter the gate</button>
+            <button id="continue" type="button" hidden>Continue</button>
+          </div>
+          <ul class="help">
+            <li>Hold the phone sideways. Left thumb moves. Right thumb attacks.</li>
+            <li>Each level gives 5 attribute points and 1 skill point.</li>
+            <li>The skill wheel has three paths. Specializations open after you invest in a path.</li>
+            <li>Passives are always on. Actives, auras, and channels fill three slots. Hits shorten cooldowns.</li>
+          </ul>
+          <button id="open-privacy" type="button" class="text">Privacy</button>
+        </div>
+      </section>
+
+      <section id="sheet" class="overlay hidden" role="dialog" aria-labelledby="sheet-word">
+        <div class="panel ledger">
+          <header class="ledger-top">
+            <h2 id="sheet-word">Character</h2>
+            <div id="sheet-gold">0</div>
+            <button id="close-sheet" type="button">Close</button>
+          </header>
+          <div class="ledger-body">
+            <aside class="ledger-side">
+              <div id="sheet-title">Exile</div>
+              <div id="sheet-level">Level 1</div>
+              <div class="xp sheet-xp"><div id="sheet-xp-fill"></div></div>
+              <div id="sheet-xp" class="muted">0 / 0</div>
+              <div class="summary-row">
+                <div><span>DPS</span><strong id="sum-dps">0</strong></div>
+                <div><span>RES</span><strong id="sum-res">0</strong></div>
+                <div><span>REG</span><strong id="sum-reg">0</strong></div>
+              </div>
+              <div class="stat-row">
+                <div class="stat-name">Strength</div>
+                <div id="stat-strength" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="strength" aria-label="Refund Strength">−</button>
+                <button class="plus" type="button" data-attr="strength" aria-label="Spend Strength">+</button>
+              </div>
+              <div class="stat-row">
+                <div class="stat-name">Agility</div>
+                <div id="stat-agility" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="agility" aria-label="Refund Agility">−</button>
+                <button class="plus" type="button" data-attr="agility" aria-label="Spend Agility">+</button>
+              </div>
+              <div class="stat-row">
+                <div class="stat-name">Endurance</div>
+                <div id="stat-endurance" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="endurance" aria-label="Refund Endurance">−</button>
+                <button class="plus" type="button" data-attr="endurance" aria-label="Spend Endurance">+</button>
+              </div>
+              <div class="stat-row">
+                <div class="stat-name">Wisdom</div>
+                <div id="stat-wisdom" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="wisdom" aria-label="Refund Wisdom">−</button>
+                <button class="plus" type="button" data-attr="wisdom" aria-label="Spend Wisdom">+</button>
+              </div>
+              <p class="points">Points <strong id="unspent-stats">0</strong> · Skills <strong id="unspent-skills">0</strong></p>
+              <p id="sheet-gear" class="muted">Fists and empty cloth.</p>
+              <button id="retrain" type="button">Retrain (free)</button>
+            </aside>
+            <div class="ledger-cols">
+              <section>
+                <h3>Offence</h3>
+                <div class="statline"><span>Total Damage</span><b id="s-total">0</b></div>
+                <div class="statline"><span>Physical Damage</span><b id="s-phys">0</b></div>
+                <div class="statline"><span>Fire Damage</span><b id="s-fire">0</b></div>
+                <div class="statline"><span>Water Damage</span><b id="s-water">0</b></div>
+                <div class="statline"><span>Poison Damage</span><b id="s-poison">0</b></div>
+                <div class="statline"><span>Light Damage</span><b id="s-light">0</b></div>
+                <div class="statline"><span>Darkness Damage</span><b id="s-dark">0</b></div>
+                <div class="statline"><span>Damage Bonus</span><b id="s-dbonus">0</b></div>
+                <div class="statline"><span>Skill Damage Bonus</span><b id="s-sbonus">0</b></div>
+                <div class="statline"><span>Physical Skills Damage</span><b id="s-pskill">0</b></div>
+                <div class="statline"><span>Fire Skills Damage</span><b id="s-fskill">0</b></div>
+                <div class="statline"><span>Air Skills Damage</span><b id="s-askill">0</b></div>
+                <div class="statline"><span>Water Skills Damage</span><b id="s-wskill">0</b></div>
+                <div class="statline"><span>Light Skills Damage</span><b id="s-lskill">0</b></div>
+                <div class="statline"><span>Darkness Skills Damage</span><b id="s-dskill">0</b></div>
+                <h3>Bonus to races</h3>
+                <div class="statline"><span>Damage to Humans</span><b id="s-humans">0%</b></div>
+                <div class="statline"><span>Damage to Undead</span><b id="s-undead">0%</b></div>
+                <div class="statline"><span>Damage to Reptiles</span><b id="s-reptiles">0%</b></div>
+                <div class="statline"><span>Damage to Demons</span><b id="s-demons">0%</b></div>
+                <div class="statline"><span>Damage to Spirits</span><b id="s-spirits">0%</b></div>
+                <div class="statline"><span>Damage to Beasts</span><b id="s-beasts">0%</b></div>
+                <div class="statline"><span>Damage to Oceans</span><b id="s-oceans">0%</b></div>
+                <div class="statline"><span>Defence Penetration</span><b id="s-defpen">0%</b></div>
+                <div class="statline"><span>Elemental Penetration</span><b id="s-elepen">0%</b></div>
+              </section>
+              <section>
+                <h3>Defence</h3>
+                <div class="statline"><span>Attack Speed</span><b id="s-aspeed">0</b></div>
+                <div class="statline"><span>Critical Chance</span><b id="s-crit">0%</b></div>
+                <div class="statline"><span>Crit Damage Bonus</span><b id="s-critd">65%</b></div>
+                <div class="statline"><span>Area Damage</span><b id="s-area">0%</b></div>
+                <div class="statline"><span>Thorns</span><b id="s-thorns">0</b></div>
+                <div class="statline"><span>Health</span><b id="s-hp">0</b></div>
+                <div class="statline"><span>Health Regen</span><b id="s-hregen">0</b></div>
+                <div class="statline"><span>Skill Healing Bonus</span><b id="s-skillheal">0%</b></div>
+                <div class="statline"><span>Damage Reduction</span><b id="s-dr">0%</b></div>
+                <div class="statline"><span>Defence</span><b id="s-def">0</b></div>
+                <div class="statline"><span>Mana</span><b id="s-mana">0</b></div>
+                <h3>Elemental resistance</h3>
+                <div class="statline"><span>Physical Resistance</span><b id="s-pres">0</b></div>
+                <div class="statline"><span>Fire Resistance</span><b id="s-fres">0</b></div>
+                <div class="statline"><span>Air Resistance</span><b id="s-ares">0</b></div>
+                <div class="statline"><span>Water Resistance</span><b id="s-wres">0</b></div>
+                <div class="statline"><span>Poison Resistance</span><b id="s-pores">0</b></div>
+                <div class="statline"><span>Light Resistance</span><b id="s-lres">0</b></div>
+                <div class="statline"><span>Darkness Resistance</span><b id="s-dkres">0</b></div>
+                <h3>Status resistance</h3>
+                <div class="statline"><span>Stun Resistance</span><b id="s-stunr">0%</b></div>
+                <div class="statline"><span>Slow Resistance</span><b id="s-slowr">0%</b></div>
+                <div class="statline"><span>Bleed Resistance</span><b id="s-bleedr">0%</b></div>
+                <div class="statline"><span>Fear Resistance</span><b id="s-fearr">0%</b></div>
+                <div class="statline"><span>Silence Resistance</span><b id="s-silr">0%</b></div>
+              </section>
+              <section>
+                <h3>Bonus to races</h3>
+                <div class="statline"><span>Human Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Undead Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Reptile Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Demon Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Spirit Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Beast Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Oceanic Resistance</span><b>0%</b></div>
+                <div class="statline"><span>Dodge Chance</span><b id="s-dodge">0%</b></div>
+                <div class="statline"><span>Block Chance</span><b id="s-block">0%</b></div>
+                <h3>Resources</h3>
+                <div class="statline"><span>Energy on Hit</span><b id="s-ehit">0</b></div>
+                <div class="statline"><span>Energy Cost Reduction</span><b id="s-ecdr">0%</b></div>
+                <div class="statline"><span>Energy Regen</span><b id="s-eregen">0</b></div>
+                <div class="statline"><span>Energy on Kill</span><b id="s-ekill">0</b></div>
+                <div class="statline"><span>Life Steal</span><b id="s-steal">0%</b></div>
+                <div class="statline"><span>Life on Hit</span><b id="s-lhit">0</b></div>
+                <div class="statline"><span>Life on Kill</span><b id="s-lkill">0</b></div>
+                <h3>Utility</h3>
+                <div class="statline"><span>Magic Find</span><b id="s-mf">0%</b></div>
+                <div class="statline"><span>Gold Find</span><b id="s-gf">0%</b></div>
+                <div class="statline"><span>Globe Drop Chance</span><b id="s-globe">0%</b></div>
+                <div class="statline"><span>Experience Bonus</span><b id="s-xpb">0%</b></div>
+                <div class="statline"><span>Attack Rating</span><b id="s-ar">0</b></div>
+                <div class="statline"><span>Movement Speed</span><b id="s-move">0</b></div>
+                <div class="statline"><span>Spell Damage</span><b id="s-spell">0</b></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tree" class="overlay hidden" role="dialog" aria-label="Skill wheel">
+        <div class="panel tree-panel">
+          <header class="panel-head">
+            <h2>Skill wheel</h2>
+            <button id="close-tree" type="button">Close</button>
+          </header>
+          <div class="filters">
+            <button id="filter-all" type="button" data-filter="all">All paths</button>
+            <button type="button" data-filter="bulwark">Bulwark</button>
+            <button type="button" data-filter="shade">Shade</button>
+            <button type="button" data-filter="rite">Rite</button>
+          </div>
+          <div id="tree-scroll">
+            <svg id="tree-svg"></svg>
+          </div>
+          <div id="tree-card">
+            <h3 id="tree-name">Choose a node</h3>
+            <p id="tree-blurb"></p>
+            <p id="tree-next"></p>
+            <p id="tree-reason" class="muted"></p>
+            <div class="row-buttons">
+              <button id="tree-invest" type="button" hidden>Invest</button>
+              <button id="assign-0" type="button" hidden>Slot 1</button>
+              <button id="assign-1" type="button" hidden>Slot 2</button>
+              <button id="assign-2" type="button" hidden>Slot 3</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="pack" class="overlay hidden" role="dialog" aria-label="Pack">
+        <div class="panel">
+          <header class="panel-head">
+            <h2>Pack</h2>
+            <button id="close-pack" type="button">Close</button>
+          </header>
+          <div class="equip">
+            <div id="eq-head"></div>
+            <div id="eq-weapon"></div>
+            <div id="eq-neck"></div>
+            <div id="eq-gloves"></div>
+            <div id="eq-chest"></div>
+            <div id="eq-ring1"></div>
+            <div id="eq-boots"></div>
+            <div id="eq-belt"></div>
+            <div id="eq-ring2"></div>
+          </div>
+          <div id="pack-list"></div>
+          <p id="pack-note" class="muted"></p>
+        </div>
+      </section>
+
+      <section id="dead" class="overlay hidden" role="dialog">
+        <div class="panel title-panel">
+          <p class="eyebrow">Fallen</p>
+          <h2>The gate claims you</h2>
+          <p>Fifteen percent of your gold is lost. The wave starts again with your levels, skills, and gear intact.</p>
+          <button id="retry" type="button" class="primary">Stand up</button>
+        </div>
+      </section>
+
+      <section id="privacy" class="overlay hidden" role="dialog" aria-label="Privacy">
+        <div class="panel">
+          <header class="panel-head">
+            <h2>Privacy</h2>
+            <button id="close-privacy" type="button">Close</button>
+          </header>
+          <p>Ward stores your character only on this device. It does not create an account, show ads, or send gameplay to a server.</p>
+          <p>Before a Play Store release, publish this same statement at a public URL and paste that URL into the store listing and Data safety form. Declare that no data is collected.</p>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

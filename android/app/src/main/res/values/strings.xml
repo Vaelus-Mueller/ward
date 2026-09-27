@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ward</string>
+    <string name="title_activity_main">Ward</string>
+    <string name="package_name">com.vaelus.arpg</string>
+    <string name="custom_url_scheme">com.vaelus.arpg</string>
+</resources>
