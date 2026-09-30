@@ -205,28 +205,43 @@
       <section id="tree" class="overlay hidden" role="dialog" aria-label="Skill wheel">
         <div class="panel tree-panel">
           <header class="panel-head">
-            <h2>Skill wheel</h2>
+            <div>
+              <h2>Skill wheel</h2>
+              <p id="tree-points" class="muted">0 skill points</p>
+            </div>
             <button id="close-tree" type="button">Close</button>
           </header>
-          <div class="filters">
-            <button id="filter-all" type="button" data-filter="all">All paths</button>
-            <button type="button" data-filter="bulwark">Bulwark</button>
-            <button type="button" data-filter="shade">Shade</button>
-            <button type="button" data-filter="rite">Rite</button>
+          <div class="tree-tools">
+            <div class="filters">
+              <button id="filter-all" type="button" data-filter="all">All paths</button>
+              <button type="button" data-filter="bulwark">Bulwark</button>
+              <button type="button" data-filter="shade">Shade</button>
+              <button type="button" data-filter="rite">Rite</button>
+            </div>
+            <div class="tree-zoom">
+              <button id="tree-zoom-out" type="button" aria-label="Zoom out">−</button>
+              <button id="tree-zoom-fit" type="button">Fit</button>
+              <button id="tree-zoom-in" type="button" aria-label="Zoom in">+</button>
+            </div>
           </div>
-          <div id="tree-scroll">
-            <svg id="tree-svg"></svg>
-          </div>
-          <div id="tree-card">
-            <h3 id="tree-name">Choose a node</h3>
-            <p id="tree-blurb"></p>
-            <p id="tree-next"></p>
-            <p id="tree-reason" class="muted"></p>
-            <div class="row-buttons">
-              <button id="tree-invest" type="button" hidden>Invest</button>
-              <button id="assign-0" type="button" hidden>Slot 1</button>
-              <button id="assign-1" type="button" hidden>Slot 2</button>
-              <button id="assign-2" type="button" hidden>Slot 3</button>
+          <div class="tree-body">
+            <div id="tree-scroll">
+              <svg id="tree-svg"></svg>
+            </div>
+            <div id="tree-card">
+              <h3 id="tree-name">Choose a node</h3>
+              <p id="tree-blurb"></p>
+              <p id="tree-next"></p>
+              <p id="tree-reason" class="muted"></p>
+              <p id="tree-confirm" class="hidden"></p>
+              <div class="row-buttons">
+                <button id="tree-invest" type="button" hidden>Spend point</button>
+                <button id="tree-confirm-yes" type="button" hidden>Confirm</button>
+                <button id="tree-cancel-spend" type="button" hidden>Cancel</button>
+                <button id="assign-0" type="button" hidden>Slot 1</button>
+                <button id="assign-1" type="button" hidden>Slot 2</button>
+                <button id="assign-2" type="button" hidden>Slot 3</button>
+              </div>
             </div>
           </div>
         </div>

@@ -12,6 +12,15 @@ export class Ui {
   private treeKey = "";
   private packKey = "";
   private treeCenter = true;
+  private fitOnPaint = true;
+  private confirmSpend = false;
+  private treeZoom = 1;
+  private treePos = new Map<string, { x: number; y: number }>();
+  private pointers = new Map<number, { x: number; y: number }>();
+  private treeGesture: "none" | "pan" | "pinch" = "none";
+  private panOrigin = { x: 0, y: 0, left: 0, top: 0 };
+  private pinchStart = 1;
+  private pinchZoom = 1;
 
   constructor(private actions: { changed: () => void; mutedLabel: () => string }) {
     this.bindStatic();
@@ -123,12 +132,16 @@ export class Ui {
       document.querySelector(`[data-filter="${id}"]`)?.addEventListener("click", () => {
         this.treeFilter = id;
         this.treeCenter = true;
+        this.fitOnPaint = true;
+        this.confirmSpend = false;
         this.treeKey = "";
       });
     }
     must("filter-all").addEventListener("click", () => {
       this.treeFilter = "all";
       this.treeCenter = true;
+      this.fitOnPaint = true;
+      this.confirmSpend = false;
       this.treeKey = "";
     });
     for (const attr of ATTRS) {
@@ -137,6 +150,12 @@ export class Ui {
     }
     must("retrain").addEventListener("click", () => this.doRetrain());
     must("tree-invest").addEventListener("click", () => this.invest());
+    must("tree-confirm-yes").addEventListener("click", () => this.confirmInvest());
+    must("tree-cancel-spend").addEventListener("click", () => this.cancelInvest());
+    must("tree-zoom-out").addEventListener("click", () => this.setTreeZoom(this.treeZoom / 1.25, this.scrollerCenter()));
+    must("tree-zoom-in").addEventListener("click", () => this.setTreeZoom(this.treeZoom * 1.25, this.scrollerCenter()));
+    must("tree-zoom-fit").addEventListener("click", () => this.fitTree());
+    this.bindTreeGestures();
     for (let i = 0; i < 3; i++) {
       const index = i as 0 | 1 | 2;
       must(`assign-${i}`).addEventListener("click", () => this.assign(index));
@@ -151,6 +170,8 @@ export class Ui {
   private openTree(): void {
     this.treeKey = "";
     this.treeCenter = true;
+    this.fitOnPaint = true;
+    this.confirmSpend = false;
     this.show("tree");
   }
 
@@ -186,10 +207,28 @@ export class Ui {
   private invest(): void {
     if (!this.selectedId) return;
     const sim = current();
-    if (!spendSkill(sim.character, this.selectedId)) return;
+    if (!canSpendSkill(sim.character, this.selectedId).ok) return;
+    this.confirmSpend = true;
+    this.paintCard(sim);
+  }
+
+  private confirmInvest(): void {
+    if (!this.selectedId || !this.confirmSpend) return;
+    const sim = current();
+    if (!spendSkill(sim.character, this.selectedId)) {
+      this.confirmSpend = false;
+      this.paintCard(sim);
+      return;
+    }
+    this.confirmSpend = false;
     sim.recompute();
     this.treeKey = "";
     this.actions.changed();
+  }
+
+  private cancelInvest(): void {
+    this.confirmSpend = false;
+    this.paintCard(current());
   }
 
   private assign(index: 0 | 1 | 2): void {
@@ -273,6 +312,7 @@ export class Ui {
     const filter = this.treeFilter;
     const visible = SKILLS.filter((skill) => filter === "all" || skill.sector === filter);
     const pos = new Map<string, { x: number; y: number }>();
+    this.treePos = pos;
     for (const skill of visible) {
       const angle = displayAngle(skill.angle, skill.sector, filter);
       const radius = spreadRadius(skill.radius);
@@ -345,23 +385,6 @@ export class Ui {
       circle.setAttribute("fill", rank > 0 ? color : "#221c17");
       circle.setAttribute("stroke", this.selectedId === skill.id ? "#f4efe6" : gate.ok ? "#e7c39a" : "rgba(232,214,196,0.35)");
       circle.setAttribute("stroke-width", this.selectedId === skill.id ? "3" : "1.5");
-      circle.style.cursor = "pointer";
-      let tapX = 0;
-      let tapY = 0;
-      circle.addEventListener("pointerdown", (event) => {
-        tapX = event.clientX;
-        tapY = event.clientY;
-      });
-      circle.addEventListener("pointerup", (event) => {
-        if (Math.hypot(event.clientX - tapX, event.clientY - tapY) > 12) return;
-        this.selectedId = skill.id;
-        if (this.treeFilter === "all") {
-          this.treeFilter = skill.sector;
-          this.treeCenter = true;
-        }
-        this.treeKey = "";
-        this.paintTree(sim);
-      });
       svg.append(circle);
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("x", String(at.x));
@@ -383,14 +406,14 @@ export class Ui {
       svg.append(name);
     }
     this.paintCard(sim);
-    if (this.treeCenter) {
+    this.applyTreeZoom();
+    if (this.fitOnPaint) {
+      this.fitOnPaint = false;
       this.treeCenter = false;
-      requestAnimationFrame(() => {
-        const scroller = document.getElementById("tree-scroll");
-        if (!scroller) return;
-        scroller.scrollLeft = Math.max(0, (svg.scrollWidth - scroller.clientWidth) / 2);
-        scroller.scrollTop = Math.max(0, (svg.scrollHeight - scroller.clientHeight) / 2);
-      });
+      requestAnimationFrame(() => this.fitTree());
+    } else if (this.treeCenter) {
+      this.treeCenter = false;
+      requestAnimationFrame(() => this.centerTree());
     }
     for (const id of ["filter-all", ...Object.keys(SECTORS)]) {
       const button = document.querySelector(`[data-filter="${id === "filter-all" ? "all" : id}"]`);
@@ -400,34 +423,210 @@ export class Ui {
 
   private paintCard(sim: Sim): void {
     const skill = this.selectedId ? skillById(this.selectedId) : undefined;
-    const card = must("tree-card");
+    text("tree-points", pointLabel(sim.character.unspentSkills));
+    const confirm = must("tree-confirm");
     if (!skill) {
-      text("tree-name", "Choose a node");
-      text("tree-blurb", "Drag the wheel to look around. Tap a circle to read it.");
+      this.confirmSpend = false;
+      text("tree-name", "Choose a skill");
+      text("tree-blurb", "Pinch to zoom, or use the buttons. Tap a circle to read what it does.");
       text("tree-next", "");
-      text("tree-reason", `${sim.character.unspentSkills} skill points.`);
+      text("tree-reason", "");
+      confirm.classList.add("hidden");
       must("tree-invest").toggleAttribute("hidden", true);
+      must("tree-confirm-yes").toggleAttribute("hidden", true);
+      must("tree-cancel-spend").toggleAttribute("hidden", true);
       for (let i = 0; i < 3; i++) must(`assign-${i}`).toggleAttribute("hidden", true);
-      card.classList.remove("hidden");
       return;
     }
     const rank = sim.character.skillRanks[skill.id] ?? 0;
     const gate = canSpendSkill(sim.character, skill.id);
+    if (!gate.ok) this.confirmSpend = false;
     text("tree-name", `${skill.name}  ·  ${skill.kind}  ·  ${rank}/${skill.maxRank}`);
-    text("tree-blurb", rank > 0 ? describeSkill(skill.id, rank) : `${skill.blurb} Not learned.`);
+    text("tree-blurb", describeSkill(skill.id, Math.max(1, rank)));
     text(
       "tree-next",
-      rank < skill.maxRank ? `Next rank (${rank + 1}): ${describeSkill(skill.id, rank + 1)}` : "No further ranks.",
+      rank > 0 && rank < skill.maxRank
+        ? `Next rank (${rank + 1}): ${describeSkill(skill.id, rank + 1)}`
+        : rank >= skill.maxRank
+          ? "No further ranks."
+          : "",
     );
-    text("tree-reason", gate.ok ? "Ready to invest." : gate.reason);
+    text("tree-reason", gate.reason || (rank === 0 ? "Not learned yet." : ""));
+    const asking = this.confirmSpend && gate.ok;
+    confirm.classList.toggle("hidden", !asking);
+    if (asking) {
+      const left = Math.max(0, sim.character.unspentSkills - 1);
+      confirm.textContent = `Spend 1 skill point on ${skill.name}? Rank ${rank} becomes ${rank + 1}. ${pointLabel(left)} will remain.`;
+    }
     const invest = must("tree-invest") as HTMLButtonElement;
-    invest.hidden = false;
+    invest.hidden = asking || rank >= skill.maxRank;
     invest.disabled = !gate.ok;
+    invest.textContent = rank === 0 ? "Learn" : "Spend point";
+    must("tree-confirm-yes").toggleAttribute("hidden", !asking);
+    must("tree-cancel-spend").toggleAttribute("hidden", !asking);
     const canSlot = skill.kind !== "passive" && rank > 0;
     for (let i = 0; i < 3; i++) {
       const button = must(`assign-${i}`);
       button.toggleAttribute("hidden", !canSlot);
     }
+  }
+
+  private selectSkill(id: string | null): void {
+    if (id === this.selectedId && id !== null) {
+      this.treeKey = "";
+      this.paintTree(current());
+      return;
+    }
+    this.selectedId = id;
+    this.confirmSpend = false;
+    this.treeKey = "";
+    this.paintTree(current());
+  }
+
+  private bindTreeGestures(): void {
+    const scroller = must("tree-scroll");
+    scroller.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      try {
+        scroller.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer that has already ended cannot be captured.
+      }
+      this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.pointers.size === 1) {
+        this.treeGesture = "none";
+        this.panOrigin = { x: event.clientX, y: event.clientY, left: scroller.scrollLeft, top: scroller.scrollTop };
+      } else {
+        this.treeGesture = "pinch";
+        this.pinchStart = this.pointerSpan();
+        this.pinchZoom = this.treeZoom;
+      }
+    });
+    scroller.addEventListener("pointermove", (event) => {
+      if (!this.pointers.has(event.pointerId)) return;
+      this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.pointers.size >= 2 && this.pinchStart > 0) {
+        this.treeGesture = "pinch";
+        const mid = this.pointerMidpoint();
+        this.setTreeZoom(this.pinchZoom * (this.pointerSpan() / this.pinchStart), mid);
+        return;
+      }
+      const dx = event.clientX - this.panOrigin.x;
+      const dy = event.clientY - this.panOrigin.y;
+      if (this.treeGesture !== "pinch" && Math.hypot(dx, dy) > 8) {
+        this.treeGesture = "pan";
+        scroller.scrollLeft = this.panOrigin.left - dx;
+        scroller.scrollTop = this.panOrigin.top - dy;
+      }
+    });
+    const finish = (event: PointerEvent) => {
+      if (!this.pointers.has(event.pointerId)) return;
+      const start = this.pointers.get(event.pointerId)!;
+      this.pointers.delete(event.pointerId);
+      if (this.pointers.size === 0 && this.treeGesture === "none") {
+        const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (moved < 12) this.selectSkill(this.nodeAt(event.clientX, event.clientY));
+      }
+      if (this.pointers.size === 1) {
+        const rest = [...this.pointers.values()][0]!;
+        this.treeGesture = "pan";
+        this.panOrigin = { x: rest.x, y: rest.y, left: scroller.scrollLeft, top: scroller.scrollTop };
+      }
+      if (this.pointers.size === 0) this.treeGesture = "none";
+    };
+    scroller.addEventListener("pointerup", finish);
+    scroller.addEventListener("pointercancel", (event) => {
+      this.pointers.delete(event.pointerId);
+      if (this.pointers.size === 0) this.treeGesture = "none";
+    });
+    scroller.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+        this.setTreeZoom(this.treeZoom * factor, { x: event.clientX, y: event.clientY });
+      },
+      { passive: false },
+    );
+  }
+
+  private nodeAt(clientX: number, clientY: number): string | null {
+    const svg = document.getElementById("tree-svg");
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return null;
+    const x = ((clientX - rect.left) / rect.width) * 1480;
+    const y = ((clientY - rect.top) / rect.height) * 1480;
+    let best: string | null = null;
+    let bestD = 78;
+    for (const [id, at] of this.treePos) {
+      const d = Math.hypot(x - at.x, y - at.y);
+      if (d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  private pointerSpan(): number {
+    const pts = [...this.pointers.values()];
+    if (pts.length < 2) return 1;
+    return Math.max(1, Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y));
+  }
+
+  private pointerMidpoint(): { x: number; y: number } {
+    const pts = [...this.pointers.values()];
+    if (pts.length < 2) return pts[0] ?? this.scrollerCenter();
+    return { x: (pts[0]!.x + pts[1]!.x) / 2, y: (pts[0]!.y + pts[1]!.y) / 2 };
+  }
+
+  private scrollerCenter(): { x: number; y: number } {
+    const scroller = must("tree-scroll");
+    const rect = scroller.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
+  private applyTreeZoom(): void {
+    const svg = document.getElementById("tree-svg");
+    if (!svg) return;
+    const size = 1480 * this.treeZoom;
+    svg.style.width = `${size}px`;
+    svg.style.height = `${size}px`;
+  }
+
+  private setTreeZoom(next: number, focal: { x: number; y: number }): void {
+    const scroller = document.getElementById("tree-scroll");
+    if (!scroller) return;
+    const prev = this.treeZoom;
+    const zoom = clamp(next, 0.15, 2.5);
+    const rect = scroller.getBoundingClientRect();
+    const localX = focal.x - rect.left;
+    const localY = focal.y - rect.top;
+    const contentX = scroller.scrollLeft + localX;
+    const contentY = scroller.scrollTop + localY;
+    const ratio = prev > 0 ? zoom / prev : 1;
+    this.treeZoom = zoom;
+    this.applyTreeZoom();
+    scroller.scrollLeft = contentX * ratio - localX;
+    scroller.scrollTop = contentY * ratio - localY;
+  }
+
+  private fitTree(): void {
+    const scroller = document.getElementById("tree-scroll");
+    if (!scroller) return;
+    const fit = Math.min(scroller.clientWidth, scroller.clientHeight) / 1480;
+    this.treeZoom = clamp(fit * 0.96, 0.15, 1.6);
+    this.applyTreeZoom();
+    this.centerTree();
+  }
+
+  private centerTree(): void {
+    const scroller = document.getElementById("tree-scroll");
+    const svg = document.getElementById("tree-svg");
+    if (!scroller || !svg) return;
+    scroller.scrollLeft = Math.max(0, (svg.clientWidth - scroller.clientWidth) / 2);
+    scroller.scrollTop = Math.max(0, (svg.clientHeight - scroller.clientHeight) / 2);
   }
 
   private paintPack(sim: Sim): void {
@@ -577,6 +776,14 @@ function must(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing #${id}`);
   return el;
+}
+
+function pointLabel(count: number): string {
+  return `${count} skill point${count === 1 ? "" : "s"}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function text(id: string, value: string): void {

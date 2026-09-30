@@ -164,6 +164,7 @@ async function nativeChrome(): Promise<void> {
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color: "#0e0d0b" });
     await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.hide();
   } catch {
     // Status bar styling is Android-only.
   }
