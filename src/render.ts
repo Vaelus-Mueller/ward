@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { classTitle } from "./game/character";
 import { ARENA, type Item } from "./game/types";
-import type { Enemy, FloatText, Shot, Sim } from "./game/sim";
+import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
 
 const SCALE = 0.045;
 const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
@@ -76,7 +76,8 @@ export class Renderer {
   private readonly enemyRoots: THREE.Object3D[] = [];
   private player: Actor | null = null;
   private playerKind = "";
-  private readonly shots: THREE.Mesh[] = [];
+  private readonly shots: THREE.Group[] = [];
+  private readonly bursts: { kind: string; group: THREE.Group }[] = [];
   private readonly rings: THREE.Mesh[] = [];
   private readonly drops: THREE.Mesh[] = [];
   private readonly floatLayer: HTMLElement;
@@ -153,7 +154,7 @@ export class Renderer {
   lookAt(sim: Sim): void {
     const x = sim.player.x * SCALE;
     const z = sim.player.y * SCALE;
-    this.camera.position.set(x, 8.6, z + 7.6);
+    this.camera.position.set(x, 10.46, z + 9.5);
     this.camera.lookAt(x, 1.15, z);
     this.moon.position.set(x - 5, 14, z + 6);
     this.moon.target.position.set(x, 0, z);
@@ -189,6 +190,7 @@ export class Renderer {
     this.syncPlayer(sim, dt);
     this.syncEnemies(sim, dt);
     this.syncShots(sim.shots);
+    this.syncBursts(sim.bursts);
     this.syncRings(sim.enemies);
     this.syncDrops(sim);
     this.syncFloats(sim.floats);
@@ -417,6 +419,7 @@ export class Renderer {
     cloneMaterials(model);
     fitFeet(model, height);
     const root = new THREE.Group();
+    model.rotation.y = Math.PI;
     root.add(model);
     const marker = markerFor(kind);
     const ring = new THREE.Mesh(
@@ -513,6 +516,8 @@ export class Renderer {
     showAddon(model, "hips", "gear-belt", "belt", eq.belt);
     showAddon(model, "hand.r", "gear-ring-r", "ring", eq.ring1);
     showAddon(model, "hand.l", "gear-ring-l", "ring", eq.ring2);
+    showAddon(model, "head", "gear-ear-l", "earring", eq.ear1);
+    showAddon(model, "head", "gear-ear-r", "earring", eq.ear2);
     if (!showAddon(model, "chest", "gear-neck", "neck", eq.neck)) showAddon(model, "spine", "gear-neck", "neck", eq.neck);
     if (eq.weapon?.ethereal) ghostWeapon(model);
   }
@@ -571,19 +576,51 @@ export class Renderer {
 
   private syncShots(shots: Shot[]): void {
     while (this.shots.length < shots.length) {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 12, 10),
-        new THREE.MeshBasicMaterial({ color: 0xffe2b0 }),
-      );
-      this.shots.push(mesh);
-      this.scene.add(mesh);
+      const group = shotVisual();
+      this.shots.push(group);
+      this.scene.add(group);
     }
-    this.shots.forEach((mesh, index) => {
+    this.shots.forEach((group, index) => {
       const shot = shots[index];
-      mesh.visible = !!shot;
+      group.visible = !!shot;
       if (!shot) return;
-      (mesh.material as THREE.MeshBasicMaterial).color.set(shot.color);
-      mesh.position.set(shot.x * SCALE, 1.05, shot.y * SCALE);
+      group.position.set(shot.x * SCALE, shot.style === "arrow" || shot.style === "knife" ? 1.15 : 1.25, shot.y * SCALE);
+      group.rotation.y = Math.atan2(shot.vx, shot.vy);
+      group.children.forEach((child) => {
+        child.visible = child.name === shot.style;
+        const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        material.color.set(shot.color);
+        material.opacity = shot.style === "fire" ? 0.92 : 0.95;
+      });
+    });
+  }
+
+  private syncBursts(bursts: Burst[]): void {
+    while (this.bursts.length < bursts.length) {
+      const group = new THREE.Group();
+      this.scene.add(group);
+      this.bursts.push({ kind: "", group });
+    }
+    this.bursts.forEach((entry, index) => {
+      const burst = bursts[index];
+      entry.group.visible = !!burst;
+      if (!burst) return;
+      if (entry.kind !== burst.kind) {
+        entry.group.clear();
+        buildBurst(entry.group, burst.kind, burst.color);
+        entry.kind = burst.kind;
+      }
+      const age = 1 - burst.t / Math.max(0.001, burst.life);
+      entry.group.position.set(burst.x * SCALE, burst.kind === "heal" ? age * 1.5 : 0, burst.y * SCALE);
+      entry.group.rotation.y = Math.atan2(Math.cos(burst.facing), Math.sin(burst.facing));
+      const spread = burst.kind === "fire" || burst.kind === "frost" || burst.kind === "arcane" ? 0.55 + age * burst.radius : 1;
+      entry.group.scale.setScalar(spread);
+      entry.group.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        if (material?.opacity !== undefined) material.opacity = 0.9 * (1 - age);
+      });
     });
   }
 
@@ -719,17 +756,84 @@ function markerFor(kind: string): { ring: number; swing: number; melee: boolean 
 }
 
 function swingMesh(color: number, melee: boolean): THREE.Mesh {
-  const geo = melee
-    ? new THREE.RingGeometry(0.55, 1.05, 28, 1, Math.PI / 2 - 0.7, 1.4)
-    : new THREE.RingGeometry(0.2, 0.62, 24);
+  const geo = melee ? new THREE.RingGeometry(0.4, 1.02, 28, 1, -1.15, 2.3) : new THREE.RingGeometry(0.18, 0.55, 22);
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthWrite: false }),
   );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.06;
+  mesh.position.set(0, melee ? 1.22 : 1.05, -0.58);
+  mesh.renderOrder = 2;
   mesh.visible = false;
   return mesh;
+}
+
+function shotVisual(): THREE.Group {
+  const group = new THREE.Group();
+  const material = () => new THREE.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, depthWrite: false });
+  const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), material());
+  spark.name = "spark";
+  const fire = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.48, 7), material());
+  fire.name = "fire";
+  fire.rotation.x = Math.PI / 2;
+  const knife = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.42), material());
+  knife.name = "knife";
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.4, 5), material());
+  arrow.name = "arrow";
+  arrow.rotation.x = Math.PI / 2;
+  group.add(spark, fire, knife, arrow);
+  return group;
+}
+
+function buildBurst(group: THREE.Group, kind: string, color: string): void {
+  const material = () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+  if (kind === "fire" || kind === "frost" || kind === "arcane") {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.72, 28), material());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.08;
+    const inner = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.28, 20), material());
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.12;
+    group.add(ring, inner);
+    const spikes = kind === "frost" ? 8 : 6;
+    for (let i = 0; i < spikes; i++) {
+      const spike = new THREE.Mesh(kind === "fire" ? new THREE.ConeGeometry(0.08, 0.42, 5) : new THREE.BoxGeometry(0.06, 0.36, 0.06), material());
+      const angle = (i / spikes) * Math.PI * 2;
+      spike.position.set(Math.cos(angle) * 0.7, 0.28, Math.sin(angle) * 0.7);
+      group.add(spike);
+    }
+    return;
+  }
+  if (kind === "heal") {
+    for (let i = 0; i < 3; i++) {
+      const disc = new THREE.Mesh(new THREE.RingGeometry(0.18 + i * 0.12, 0.28 + i * 0.12, 20), material());
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.4 + i * 0.35;
+      group.add(disc);
+    }
+    return;
+  }
+  if (kind === "ward") {
+    const shield = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 8, 18), material());
+    shield.position.set(0, 1.15, -0.45);
+    group.add(shield);
+    return;
+  }
+  if (kind === "dash") {
+    const streak = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.6), material());
+    streak.position.set(0, 0.9, -0.7);
+    group.add(streak);
+    return;
+  }
+  const wide = kind === "cleave";
+  const steps = wide ? 7 : 5;
+  const span = wide ? 1.7 : kind === "bleed" ? 0.7 : 1.15;
+  for (let i = 0; i < steps; i++) {
+    const angle = -span / 2 + (span * i) / Math.max(1, steps - 1);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(kind === "bleed" ? 0.05 : 0.1, kind === "bleed" ? 0.72 : 0.58, 0.08), material());
+    blade.position.set(Math.sin(angle) * 0.82, 1.15, -Math.cos(angle) * 0.82);
+    blade.rotation.y = angle;
+    group.add(blade);
+  }
 }
 
 function bladeMesh(color: number): THREE.Mesh {
@@ -892,12 +996,19 @@ function applyFinish(
   if (ethereal) material.color.lerp(new THREE.Color(0xd7e8f6), 0.45);
 }
 
-function showAddon(root: THREE.Object3D, boneName: string, addonName: string, shape: "belt" | "ring" | "neck", item: Item | null): boolean {
+function showAddon(root: THREE.Object3D, boneName: string, addonName: string, shape: "belt" | "ring" | "neck" | "earring", item: Item | null): boolean {
   const bone = root.getObjectByName(boneName);
   if (!bone) return false;
   let mesh = bone.getObjectByName(addonName) as THREE.Mesh | undefined;
   if (!mesh) {
-    const geometry = shape === "belt" ? new THREE.TorusGeometry(0.22, 0.045, 8, 18) : shape === "ring" ? new THREE.TorusGeometry(0.045, 0.012, 6, 12) : new THREE.OctahedronGeometry(0.07, 0);
+    const geometry =
+      shape === "belt"
+        ? new THREE.TorusGeometry(0.22, 0.045, 8, 18)
+        : shape === "ring"
+          ? new THREE.TorusGeometry(0.045, 0.012, 6, 12)
+          : shape === "earring"
+            ? new THREE.SphereGeometry(0.035, 8, 8)
+            : new THREE.OctahedronGeometry(0.07, 0);
     mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: 0.4, metalness: 0.6 }));
     mesh.name = addonName;
     if (shape === "belt") {
@@ -906,6 +1017,7 @@ function showAddon(root: THREE.Object3D, boneName: string, addonName: string, sh
     }
     if (shape === "neck") mesh.position.set(0, 0.12, 0.08);
     if (shape === "ring") mesh.rotation.z = Math.PI / 2;
+    if (shape === "earring") mesh.position.set(addonName.endsWith("-r") ? 0.12 : -0.12, 0.02, 0.06);
     bone.add(mesh);
   }
   mesh.visible = !!item;

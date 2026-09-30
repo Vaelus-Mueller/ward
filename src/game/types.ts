@@ -7,13 +7,44 @@ export const PARAGON_SKILL_EVERY = 5;
 export const MAX_LEVEL = 100;
 export const PARAGON_CAP = 200;
 export const INVENTORY_CAP = 16;
+export const GEM_QUALITIES = 20;
 
 export type Attr = "strength" | "agility" | "endurance" | "wisdom";
-export type SlotName = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring1" | "ring2" | "neck";
-export type ItemSlot = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring" | "neck" | "gem";
+export type SlotName = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring1" | "ring2" | "neck" | "ear1" | "ear2";
+export type ItemSlot = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring" | "neck" | "earring" | "gem";
 export type ArmorType = "cloth" | "leather" | "mail" | "plate";
 export type Rarity = "grey" | "white" | "green" | "blue" | "purple" | "orange" | "yellow" | "gold" | "red" | "rainbow";
 export type GemKind = "ruby" | "sapphire" | "topaz" | "emerald" | "diamond" | "amethyst" | "skull";
+export type MaterialId = "weave" | "hide" | "rings" | "plate" | "steel" | "dust";
+
+export const RARITIES: Rarity[] = ["grey", "white", "green", "blue", "purple", "orange", "yellow", "gold", "red", "rainbow"];
+
+export const MATERIAL_LABEL: Record<MaterialId, string> = {
+  weave: "Cloth Weave",
+  hide: "Hide",
+  rings: "Mail Rings",
+  plate: "Plate Shards",
+  steel: "Weapon Steel",
+  dust: "Jewel Dust",
+};
+
+export const MATERIAL_ORDER: MaterialId[] = ["weave", "hide", "rings", "plate", "steel", "dust"];
+
+export interface SocketGem {
+  kind: GemKind;
+  quality: number;
+}
+
+export interface GemStack {
+  kind: GemKind;
+  quality: number;
+  count: number;
+}
+
+export interface MaterialStack {
+  id: MaterialId;
+  count: number;
+}
 export type WeaponStyle = "melee" | "bow" | "focus";
 export type SectorId = "bulwark" | "shade" | "rite";
 export type SkillKind = "passive" | "active" | "aura" | "channel";
@@ -41,7 +72,7 @@ export interface Affix {
   label: string;
 }
 
-export const GEAR_SLOTS: SlotName[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring1", "ring2", "neck"];
+export const GEAR_SLOTS: SlotName[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring1", "ring2", "neck", "ear1", "ear2"];
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   grey: "Grey",
@@ -74,6 +105,8 @@ export function emptyEquipment(): Record<SlotName, Item | null> {
     ring1: null,
     ring2: null,
     neck: null,
+    ear1: null,
+    ear2: null,
   };
 }
 
@@ -98,8 +131,9 @@ export interface Item {
   bornLevel: number;
   ilvl: number;
   dye: number;
+  quality: number;
   sockets: number;
-  gems: (GemKind | null)[];
+  gems: (SocketGem | null)[];
 }
 
 export interface Character {
@@ -113,6 +147,9 @@ export interface Character {
   slotted: [string | null, string | null, string | null];
   equipment: Record<SlotName, Item | null>;
   inventory: Item[];
+  gems: GemStack[];
+  materials: MaterialStack[];
+  salvageMarks: Rarity[];
   retrains: number;
   paragon: number;
 }

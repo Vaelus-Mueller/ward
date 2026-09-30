@@ -26,6 +26,9 @@ export function createCharacter(): Character {
     slotted: [null, null, null],
     equipment: emptyEquipment(),
     inventory: [],
+    gems: [],
+    materials: [],
+    salvageMarks: ["grey", "white"],
     retrains: 0,
     paragon: 0,
   };

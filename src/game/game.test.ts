@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
 import { derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
-import { equipItem, isSignatureAffix, starterBlade, tryAddItem, uniqueRoster } from "./items";
+import { addMaterial, equipItem, isSignatureAffix, materialCount, salvageCount, salvageItem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { deserialize, serialize } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim, wavePlan } from "./sim";
@@ -162,6 +162,41 @@ describe("gear and saving", () => {
 });
 
 describe("the ward", () => {
+  it("waits ten seconds before every tenth wave", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    sim.wave = 9;
+    sim.enemies = [];
+    sim.phase = "play";
+    sim.update(emptyIntent(), 0.05);
+    expect(sim.phase).toBe("between");
+    expect(sim.between).toBe(10);
+    expect(sim.banner).toContain("Wave 10 in 10");
+    sim.update(emptyIntent(), 9);
+    expect(sim.wave).toBe(9);
+    expect(sim.phase).toBe("between");
+    sim.update(emptyIntent(), 1.1);
+    expect(sim.wave).toBe(10);
+    expect(sim.phase).toBe("play");
+    expect(sim.enemies.length).toBeGreaterThan(0);
+    const quiet = new Sim(createCharacter(), 2);
+    quiet.begin();
+    quiet.wave = 3;
+    quiet.enemies = [];
+    quiet.phase = "play";
+    quiet.update(emptyIntent(), 0.05);
+    expect(quiet.between).toBe(2.2);
+  });
+
+  it("regenerates in town without filling life", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    sim.player.hp = 10;
+    sim.rest(1);
+    expect(sim.player.hp).toBeCloseTo(10 + sim.derived.lifeRegen);
+    expect(sim.player.hp).toBeLessThan(sim.derived.life);
+  });
+
   it("sends a champion every fifth wave", () => {
     expect(wavePlan(5)).toContain("brute");
     expect(wavePlan(1)).not.toContain("brute");
@@ -177,8 +212,13 @@ describe("the ward", () => {
     const hound = makeEnemy("hound", 1, sim.player.x + 36, sim.player.y, 50);
     sim.enemies = [hound];
     const before = hound.hp;
-    for (let i = 0; i < 40; i++) sim.update(emptyIntent(), 0.1);
+    let marked = false;
+    for (let i = 0; i < 40; i++) {
+      sim.update(emptyIntent(), 0.1);
+      if (sim.bursts.some((burst) => burst.kind === "slash")) marked = true;
+    }
     expect(sim.killedTotal > 0 || hound.hp < before).toBe(true);
+    expect(marked).toBe(true);
   });
 
   it("does not swing while you are moving or the foe is out of reach", () => {
@@ -269,6 +309,72 @@ describe("the ward", () => {
     };
     expect(derive(hero).thorns).toBe(5);
     expect(derive(hero).damageReduction).toBeCloseTo(0.06);
+  });
+
+  it("raises a piece by one item level and spends that many materials", () => {
+    const hero = createCharacter();
+    const blade = starterBlade("up");
+    blade.ilvl = 8;
+    blade.damageMin = 8;
+    blade.damageMax = 16;
+    hero.equipment.weapon = blade;
+    expect(upgradeItem(hero, blade.uid)).toBe("Needs 8 Weapon Steel.");
+    addMaterial(hero, "steel", 8);
+    expect(upgradeItem(hero, blade.uid)).toBeNull();
+    expect(blade.ilvl).toBe(9);
+    expect(blade.damageMin).toBe(9);
+    expect(blade.damageMax).toBe(18);
+    expect(materialCount(hero, "steel")).toBe(0);
+    const coat = starterBlade("coat");
+    coat.slot = "chest";
+    coat.armorType = "cloth";
+    coat.damageMin = 0;
+    coat.damageMax = 0;
+    coat.armor = 10;
+    coat.ilvl = 4;
+    hero.inventory.push(coat);
+    addMaterial(hero, "weave", 4);
+    expect(upgradeItem(hero, coat.uid)).toBeNull();
+    expect(coat.ilvl).toBe(5);
+    expect(coat.armor).toBe(13);
+    const band = starterBlade("band");
+    band.slot = "ring";
+    band.armorType = null;
+    band.damageMin = 0;
+    band.damageMax = 0;
+    band.armor = 0;
+    band.ilvl = 4;
+    band.affixes = [{ key: "strength", value: 4, label: "+4 Strength" }];
+    hero.equipment.ring1 = band;
+    addMaterial(hero, "dust", 4);
+    expect(upgradeItem(hero, band.uid)).toBeNull();
+    expect(band.ilvl).toBe(5);
+    expect(band.affixes[0]?.value).toBe(5);
+    expect(materialCount(hero, "dust")).toBe(0);
+    const stud = starterBlade("stud");
+    stud.slot = "earring";
+    stud.damageMin = 0;
+    stud.damageMax = 0;
+    stud.armor = 0;
+    stud.ilvl = 2;
+    hero.equipment.ear1 = stud;
+    expect(upgradeItem(hero, stud.uid)).toBe("Needs 2 Jewel Dust.");
+  });
+
+  it("breaks an item into materials from its level and rarity", () => {
+    const hero = createCharacter();
+    const coat = starterBlade("scrap");
+    coat.slot = "chest";
+    coat.armorType = "mail";
+    coat.rarity = "blue";
+    coat.ilvl = 8;
+    coat.damageMin = 0;
+    coat.damageMax = 0;
+    hero.inventory = [coat];
+    expect(salvageCount(coat)).toBe(4);
+    expect(salvageItem(hero, coat.uid)).toBeNull();
+    expect(hero.inventory).toHaveLength(0);
+    expect(materialCount(hero, "rings")).toBe(4);
   });
 
   it("keeps an old armor piece as a chest with a newer tier", () => {

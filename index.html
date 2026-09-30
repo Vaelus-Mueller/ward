@@ -22,6 +22,7 @@
             <button id="btn-character" type="button">Character</button>
             <button id="btn-tree" type="button">Skills</button>
             <button id="btn-pack" type="button">Pack</button>
+            <button id="btn-town" type="button">Town</button>
             <button id="btn-mute" type="button">Sound</button>
           </div>
           <div id="gold">0</div>
@@ -255,17 +256,35 @@
           </header>
           <div class="equip">
             <div id="eq-head"></div>
-            <div id="eq-weapon"></div>
+            <div id="eq-ear1"></div>
+            <div id="eq-ear2"></div>
             <div id="eq-neck"></div>
-            <div id="eq-gloves"></div>
+            <div id="eq-weapon"></div>
             <div id="eq-chest"></div>
-            <div id="eq-ring1"></div>
-            <div id="eq-boots"></div>
+            <div id="eq-gloves"></div>
             <div id="eq-belt"></div>
+            <div id="eq-boots"></div>
+            <div id="eq-ring1"></div>
             <div id="eq-ring2"></div>
           </div>
+          <div id="salvage-bar" class="salvage-bar"></div>
           <div id="pack-list"></div>
           <p id="pack-note" class="muted"></p>
+        </div>
+      </section>
+
+      <section id="town" class="overlay hidden" role="dialog" aria-label="Town">
+        <div class="panel town-panel">
+          <header class="panel-head">
+            <div>
+              <h2>Sable's stall</h2>
+              <p class="muted">A quiet court off the ward. Weapons, armor, and jewelry can be raised one item level.</p>
+            </div>
+            <button id="close-town" type="button">Return</button>
+          </header>
+          <div id="town-materials" class="material-line"></div>
+          <div id="town-list"></div>
+          <p id="town-note" class="muted"></p>
         </div>
       </section>
 

@@ -114,7 +114,9 @@ function frame(now: number): void {
   last = now;
   renderer.resize();
   renderer.lookAt(box.sim);
-  if (box.started && !ui.blocking()) {
+  if (box.started && ui.resting()) {
+    box.sim.rest(dt);
+  } else if (box.started && !ui.blocking()) {
     const result = box.sim.update(input.sample(), dt);
     if (result.enemyHit) audio.hit();
     if (result.playerHit) audio.hurt();

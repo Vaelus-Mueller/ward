@@ -1,4 +1,4 @@
-import type { Affix, ArmorType, GemKind, Item, ItemSlot, Rarity, WeaponStyle } from "./types";
+import { GEM_QUALITIES, type Affix, type ArmorType, type GemKind, type Item, type ItemSlot, type Rarity, type WeaponStyle } from "./types";
 
 /**
  * Reminder for later — do not implement yet.
@@ -36,10 +36,17 @@ const GEM_ARMOR: Record<GemKind, Affix> = {
   skull: { key: "lifeRegen", value: 0.4, label: "Skull: +0.40 life regeneration" },
 };
 
+export function gemSocketAffix(slot: "weapon" | "head" | "chest", kind: GemKind, quality: number): Affix {
+  const base = (slot === "weapon" ? GEM_WEAPON : slot === "head" ? GEM_HELM : GEM_ARMOR)[kind];
+  const rank = Math.min(GEM_QUALITIES, Math.max(1, Math.round(quality) || 1));
+  const value = roundAffix(base.key, base.value * (1 + (rank - 1) * 0.2));
+  return { key: base.key, value, label: affixLabel(base.key, value) };
+}
+
 export function gemAffixes(item: Item): Affix[] {
-  const table = item.slot === "weapon" ? GEM_WEAPON : item.slot === "head" ? GEM_HELM : GEM_ARMOR;
   if (item.slot !== "weapon" && item.slot !== "head" && item.slot !== "chest") return [];
-  return item.gems.filter((gem): gem is GemKind => gem !== null).map((gem) => table[gem]);
+  const slot = item.slot;
+  return item.gems.flatMap((gem) => (gem ? [gemSocketAffix(slot, gem.kind, gem.quality)] : []));
 }
 
 export function socketCap(slot: ItemSlot, armorType: ArmorType | null, style: WeaponStyle, ilvl: number): number {

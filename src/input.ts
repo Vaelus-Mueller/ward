@@ -116,6 +116,5 @@ export class Input {
     const hit = this.pick(event.clientX, event.clientY);
     if (!hit) return;
     if (hit.enemyId !== null) this.pendingAim = hit.enemyId;
-    else this.pendingDest = { x: hit.x, y: hit.y };
   }
 }

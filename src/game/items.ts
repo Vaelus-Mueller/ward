@@ -1,7 +1,7 @@
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { meetsRequirements } from "./formulas";
-import type { Affix, ArmorType, Character, GemKind, Item, ItemSlot, Rarity, SlotName, WeaponStyle } from "./types";
-import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, RARITY_LABEL } from "./types";
+import type { Affix, ArmorType, Character, GemKind, Item, ItemSlot, MaterialId, Rarity, SlotName, WeaponStyle } from "./types";
+import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, MATERIAL_LABEL, RARITY_LABEL } from "./types";
 
 /**
  * Reminder for later — do not implement yet.
@@ -68,6 +68,8 @@ const JEWELRY: BaseItem[] = [
   { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
   { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
   { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
 ];
 
 const DYES: Record<ArmorType, number[]> = {
@@ -439,13 +441,14 @@ export function uniqueChance(wave: number): number {
   return Math.min(0.04, 0.018 + Math.max(0, wave - 1) * 0.001);
 }
 
-function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "sockets" | "gems"> & Partial<Item>): Item {
+function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "quality" | "sockets" | "gems"> & Partial<Item>): Item {
   return {
     ethereal: false,
     uniqueId: null,
     bornLevel: 0,
     ilvl: 1,
     dye: 0xcfc6b8,
+    quality: 0,
     sockets: 0,
     gems: [],
     ...partial,
@@ -485,13 +488,15 @@ export function rollGem(rng: () => number, uid: string): Item {
     reqDex: 0,
     reqEne: 0,
     affixes: [],
-    gems: [kind],
+    quality: 1,
+    gems: [{ kind, quality: 1 }],
     dye: gemDye(kind),
   });
 }
 
 export function gemKind(item: Item): GemKind | null {
-  return item.slot === "gem" ? (item.gems[0] ?? null) : null;
+  if (item.slot !== "gem") return null;
+  return item.gems[0]?.kind ?? null;
 }
 
 export function rollItem(rng: () => number, wave: number, uid: string, level = wave): Item {
@@ -500,9 +505,9 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
     if (pool.length > 0) return makeUnique(pick(rng, pool), rng, uid, wave, level);
   }
   const slotRoll = rng();
-  const slotCut = [0.22, 0.34, 0.5, 0.58, 0.68, 0.78, 0.9];
+  const slotCut = [0.2, 0.31, 0.45, 0.53, 0.61, 0.69, 0.79, 0.89];
   const slots: ItemSlot[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring", "neck"];
-  let slot: ItemSlot = "neck";
+  let slot: ItemSlot = "earring";
   for (let i = 0; i < slotCut.length; i++) {
     if (slotRoll < slotCut[i]!) {
       slot = slots[i]!;
@@ -512,7 +517,7 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
   const pool = BASES.filter((base) => base.slot === slot);
   const base = pick(rng, pool);
   const rarity = rollRarity(rng, wave);
-  const jewelry = slot === "ring" || slot === "neck";
+  const jewelry = isJewelry(slot);
   let affixCount = TIER_AFFIXES[rarity];
   if (jewelry) affixCount = Math.max(1, affixCount);
   const affixes: Affix[] = [];
@@ -536,7 +541,7 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
   const ilvl = Math.max(1, wave, level);
   const cap = socketCap(base.slot, base.armorType, base.style, ilvl);
   const sockets = rollSocketCount(rng, rarity, cap);
-  const ethereal = base.slot !== "ring" && base.slot !== "neck" && base.slot !== "gem" && rng() < ETHEREAL_CHANCE;
+  const ethereal = !isJewelry(base.slot) && base.slot !== "gem" && rng() < ETHEREAL_CHANCE;
   const prefix = prefixes[0] ? `${prefixes[0]} ` : "";
   const name = `${ethereal ? "Ethereal " : ""}${prefix}${base.name}`;
   const dyes = base.armorType ? DYES[base.armorType] : [0xcfc6b8, 0xe4c37a, 0x9aa7b8];
@@ -559,7 +564,7 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
 }
 
 function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: number, level: number): Item {
-  const ethereal = unique.slot !== "ring" && unique.slot !== "neck" && rng() < ETHEREAL_CHANCE;
+  const ethereal = !isJewelry(unique.slot) && rng() < ETHEREAL_CHANCE;
   return blankItem({
     uid,
     name: `${ethereal ? "Ethereal " : ""}${unique.name}`,
@@ -625,6 +630,11 @@ function destination(c: Character, item: Item): SlotName | null {
     if (!c.equipment.ring2) return "ring2";
     return "ring1";
   }
+  if (item.slot === "earring") {
+    if (!c.equipment.ear1) return "ear1";
+    if (!c.equipment.ear2) return "ear2";
+    return "ear1";
+  }
   return item.slot;
 }
 
@@ -660,7 +670,7 @@ export function socketGem(c: Character, itemUid: string, gemUid: string): string
   if (!host) return "That item is not here.";
   const hole = host.gems.findIndex((entry) => entry === null);
   if (hole < 0) return "That item has no empty socket.";
-  host.gems[hole] = kind;
+  host.gems[hole] = { kind, quality: gem.quality > 0 ? gem.quality : 1 };
   c.inventory.splice(gemIndex, 1);
   return null;
 }
@@ -676,7 +686,7 @@ export function itemSummary(item: Item, level = 1): string {
     return kind ? `${GEM_NAMES[kind]}. Socket it into a weapon, helm, or chest.` : "Gem";
   }
   const live = liveItem(item, level);
-  const bits = [RARITY_LABEL[item.rarity]];
+  const bits = [RARITY_LABEL[item.rarity], `item level ${Math.max(1, item.ilvl || 1)}`];
   if (item.armorType) bits.push(ARMOR_LABEL[item.armorType]);
   if (item.ethereal) bits.push(item.slot === "weapon" ? "+10% damage" : "+10% defence");
   if (item.slot === "weapon") {
@@ -689,6 +699,154 @@ export function itemSummary(item: Item, level = 1): string {
   }
   if (item.rarity === "rainbow") bits.push("Scales with level");
   return bits.join(" · ");
+}
+
+const RARITY_YIELD: Record<Rarity, number> = {
+  grey: 0.5,
+  white: 1,
+  green: 1.5,
+  blue: 2,
+  purple: 3,
+  orange: 4,
+  yellow: 5,
+  gold: 6,
+  red: 8,
+  rainbow: 6,
+};
+
+const FRACTION_AFFIX = new Set([
+  "crit",
+  "manaRegen",
+  "lifeRegen",
+  "goldFind",
+  "meleeMult",
+  "spellMult",
+  "evasion",
+  "damageReduction",
+  "moveSpeed",
+  "bleedChance",
+  "cdr",
+  "attackSpeed",
+]);
+
+export function materialFor(item: Item): MaterialId {
+  if (item.slot === "weapon") return "steel";
+  if (isJewelry(item.slot)) return "dust";
+  if (item.armorType === "leather") return "hide";
+  if (item.armorType === "mail") return "rings";
+  if (item.armorType === "plate") return "plate";
+  return "weave";
+}
+
+function isJewelry(slot: ItemSlot): boolean {
+  return slot === "ring" || slot === "neck" || slot === "earring";
+}
+
+export function canUpgrade(item: Item): boolean {
+  return item.slot === "weapon" || item.slot === "head" || item.slot === "chest" || item.slot === "belt" || item.slot === "boots" || item.slot === "gloves" || isJewelry(item.slot);
+}
+
+export function upgradeCost(item: Item): number {
+  return Math.max(1, Math.round(item.ilvl) || 1);
+}
+
+export function salvageCount(item: Item): number {
+  const level = Math.max(1, Math.round(item.ilvl) || 1);
+  return Math.max(1, Math.round((level * (RARITY_YIELD[item.rarity] ?? 1)) / 4));
+}
+
+export function materialCount(c: Character, id: MaterialId): number {
+  return c.materials.find((entry) => entry.id === id)?.count ?? 0;
+}
+
+export function addMaterial(c: Character, id: MaterialId, count: number): void {
+  if (!Array.isArray(c.materials)) c.materials = [];
+  const stack = c.materials.find((entry) => entry.id === id);
+  if (stack) stack.count += count;
+  else c.materials.push({ id, count });
+}
+
+function spendMaterial(c: Character, id: MaterialId, count: number): boolean {
+  const stack = c.materials.find((entry) => entry.id === id);
+  if (!stack || stack.count < count) return false;
+  stack.count -= count;
+  if (stack.count <= 0) c.materials = c.materials.filter((entry) => entry.count > 0);
+  return true;
+}
+
+export function salvageItem(c: Character, uid: string): string | null {
+  const index = c.inventory.findIndex((item) => item.uid === uid);
+  if (index < 0) return "That item is not in the pack.";
+  const item = c.inventory[index]!;
+  if (item.slot === "gem") return "Gems are not broken down.";
+  const sockets = item.gems.filter((gem) => gem);
+  const room = INVENTORY_CAP - (c.inventory.length - 1);
+  if (sockets.length > room) return "Make room for the gems socketed in that item.";
+  c.inventory.splice(index, 1);
+  for (const gem of sockets) {
+    if (!gem) continue;
+    c.inventory.push(looseGem(gem.kind, gem.quality, `gem-back-${item.uid}-${gem.kind}-${c.inventory.length}`));
+  }
+  const count = salvageCount(item);
+  addMaterial(c, materialFor(item), count);
+  return null;
+}
+
+export function salvageMarked(c: Character): string[] {
+  const marks = new Set(c.salvageMarks ?? []);
+  const ids = c.inventory.filter((item) => item.slot !== "gem" && marks.has(item.rarity)).map((item) => item.uid);
+  const names: string[] = [];
+  for (const uid of ids) {
+    const item = c.inventory.find((entry) => entry.uid === uid);
+    if (!item) continue;
+    const name = item.name;
+    if (salvageItem(c, uid) === null) names.push(name);
+  }
+  return names;
+}
+
+export function upgradeItem(c: Character, uid: string): string | null {
+  const item = findHost(c, uid);
+  if (!item) return "That item is not here.";
+  if (!canUpgrade(item)) return "Sable improves weapons, armor, and jewelry only.";
+  const material = materialFor(item);
+  const cost = upgradeCost(item);
+  if (materialCount(c, material) < cost) return `Needs ${cost} ${MATERIAL_LABEL[material]}.`;
+  if (!spendMaterial(c, material, cost)) return `Needs ${cost} ${MATERIAL_LABEL[material]}.`;
+  const from = Math.max(1, Math.round(item.ilvl) || 1);
+  const mul = (from + 1) / from;
+  if (item.damageMin > 0) item.damageMin = Math.max(1, Math.round(item.damageMin * mul));
+  if (item.damageMax > 0) item.damageMax = Math.max(item.damageMin, Math.round(item.damageMax * mul));
+  if (item.armor > 0) item.armor = Math.max(1, Math.round(item.armor * mul));
+  for (const affix of item.affixes) {
+    affix.value = FRACTION_AFFIX.has(affix.key) ? Math.round(affix.value * mul * 100) / 100 : Math.max(1, Math.round(affix.value * mul));
+  }
+  item.ilvl = from + 1;
+  return null;
+}
+
+function looseGem(kind: GemKind, quality: number, uid: string): Item {
+  const rank = Math.max(1, quality || 1);
+  return blankItem({
+    uid,
+    name: GEM_NAMES[kind],
+    slot: "gem",
+    rarity: "white",
+    armorType: null,
+    style: "melee",
+    damageMin: 0,
+    damageMax: 0,
+    armor: 0,
+    speed: 1,
+    rangeBonus: 0,
+    reqStr: 0,
+    reqDex: 0,
+    reqEne: 0,
+    affixes: [],
+    quality: rank,
+    gems: [{ kind, quality: rank }],
+    dye: gemDye(kind),
+  });
 }
 
 function gemDye(kind: GemKind): number {

@@ -301,7 +301,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     cooldown: 6,
     scaling: "spell",
     mult: 0.9,
-    range: 128,
+    range: 192,
     slow: 0.4,
     slowDur: 2.4,
   }),

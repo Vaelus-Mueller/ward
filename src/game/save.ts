@@ -1,4 +1,4 @@
-import { emptyEquipment, GEAR_SLOTS, type ArmorType, type Character, type Item, type Rarity } from "./types";
+import { emptyEquipment, GEAR_SLOTS, type ArmorType, type Character, type GemKind, type Item, type Rarity, type SocketGem } from "./types";
 import type { Snapshot } from "./sim";
 
 export const SAVE_KEY = "vaelus-save-v1";
@@ -40,6 +40,9 @@ function migrateGear(character: Character): void {
   for (const item of gear) {
     if (item) migrateItem(item);
   }
+  if (!Array.isArray(character.gems)) character.gems = [];
+  if (!Array.isArray(character.materials)) character.materials = [];
+  if (!Array.isArray(character.salvageMarks)) character.salvageMarks = ["grey", "white"];
 }
 
 function migrateItem(item: Item): void {
@@ -63,10 +66,32 @@ function migrateItem(item: Item): void {
   if (!Number.isFinite(item.dye)) item.dye = 0xcfc6b8;
   if (typeof item.ethereal !== "boolean") item.ethereal = false;
   if (typeof item.uniqueId !== "string") item.uniqueId = null;
+  if (!Number.isFinite(item.quality)) item.quality = item.slot === "gem" ? 1 : 0;
   if (!Number.isFinite(item.sockets)) item.sockets = 0;
-  if (!Array.isArray(item.gems)) item.gems = [];
-  item.gems = item.gems.slice(0, item.sockets);
+  const raw = (Array.isArray(item.gems) ? item.gems : []) as unknown[];
+  const next: (SocketGem | null)[] = [];
+  for (const entry of raw) next.push(asSocket(entry));
+  if (item.slot === "gem") {
+    const gem = next.find((entry) => entry);
+    item.quality = Math.min(20, Math.max(1, item.quality || gem?.quality || 1));
+    item.sockets = 0;
+    item.gems = gem ? [{ kind: gem.kind, quality: item.quality }] : [];
+    return;
+  }
+  item.gems = next.slice(0, item.sockets);
   while (item.gems.length < item.sockets) item.gems.push(null);
+}
+
+function asSocket(entry: unknown): SocketGem | null {
+  if (!entry) return null;
+  if (typeof entry === "string") return { kind: entry as GemKind, quality: 1 };
+  if (typeof entry === "object" && "kind" in entry) {
+    const kind = (entry as { kind?: GemKind }).kind;
+    if (!kind) return null;
+    const quality = Number((entry as { quality?: number }).quality);
+    return { kind, quality: Number.isFinite(quality) && quality > 0 ? quality : 1 };
+  }
+  return null;
 }
 
 function guessArmor(name: string): ArmorType {

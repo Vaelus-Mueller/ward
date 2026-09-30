@@ -53,6 +53,20 @@ export interface Shot {
   pierce: boolean;
   burn: number;
   bleed: boolean;
+  style: "spark" | "fire" | "knife" | "arrow";
+}
+
+export type BurstKind = "slash" | "cleave" | "bleed" | "fire" | "frost" | "arcane" | "heal" | "ward" | "dash";
+
+export interface Burst {
+  x: number;
+  y: number;
+  facing: number;
+  t: number;
+  life: number;
+  kind: BurstKind;
+  color: string;
+  radius: number;
 }
 
 export interface Drop {
@@ -197,6 +211,7 @@ export class Sim {
   enemies: Enemy[] = [];
   shots: Shot[] = [];
   drops: Drop[] = [];
+  bursts: Burst[] = [];
   itemStore = new Map<string, ReturnType<typeof starterBlade>>();
   floats: FloatText[] = [];
   wave = 1;
@@ -320,11 +335,21 @@ export class Sim {
     this.shots = [];
   }
 
+  rest(dt: number): void {
+    this.recompute();
+    this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.lifeRegen * dt);
+    this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.manaRegen * dt);
+  }
+
   update(intent: Intent, dt: number): TickResult {
     const result: TickResult = { playerHit: false, enemyHit: false, killed: 0, leveled: 0, died: false, waveStarted: 0 };
     this.bannerT = Math.max(0, this.bannerT - dt);
     this.decayFloats(dt);
     if (this.phase === "title" || this.phase === "dead") return result;
+    this.bursts = this.bursts.filter((burst) => {
+      burst.t -= dt;
+      return burst.t > 0;
+    });
 
     if (this.phase === "between") {
       this.tickTimers(dt);
@@ -333,10 +358,20 @@ export class Sim {
       this.collectGold();
       this.clampBodies();
       this.between -= dt;
+      const nextWave = this.wave + 1;
+      if (nextWave % 10 === 0 && this.between > 0) {
+        const seconds = Math.max(1, Math.ceil(this.between));
+        this.banner = `Wave ${nextWave} in ${seconds}. The gate is open.`;
+        this.bannerT = this.between;
+      }
       if (this.between <= 0) {
         this.wave += 1;
         this.phase = "play";
         this.spawnWave();
+        if (this.wave % 10 === 0) {
+          this.banner = "";
+          this.bannerT = 0;
+        }
         result.waveStarted = this.wave;
       }
       return result;
@@ -450,12 +485,7 @@ export class Sim {
       else {
         const dx = enemy.x - p.x;
         const dy = enemy.y - p.y;
-        const dist = Math.hypot(dx, dy) || 1;
         p.facing = Math.atan2(dy, dx);
-        if (dist > this.derived.weaponRange * 0.92) {
-          vx = dx / dist;
-          vy = dy / dist;
-        }
       }
     } else if (p.dest) {
       const dx = p.dest.x - p.x;
@@ -488,10 +518,12 @@ export class Sim {
     p.attackCd = this.derived.attackPeriod;
     p.swing = 0.16;
     if (style === "melee") {
+      this.burst("slash", "#e7c39a", 1);
       if (target) this.hitEnemy(target, this.rollWeapon(), false, 0, result);
     } else {
       const damage = style === "focus" ? this.rollSpell(1) : this.rollWeapon();
-      this.fire(p.facing, 0, 1, damage, style === "focus" ? "#d8ccff" : "#e7d3a1", 0, false, range);
+      this.fire(p.facing, 0, 1, damage, style === "focus" ? "#c9b6ff" : "#f0e2c4", 0, false, range, style === "focus" ? "spark" : "arrow");
+      this.burst(style === "focus" ? "arcane" : "slash", style === "focus" ? "#c9b6ff" : "#f0e2c4", 0.7);
     }
   }
 
@@ -509,6 +541,7 @@ export class Sim {
         return;
       }
       this.recompute();
+      this.burst("ward", spec.color, 1.1);
       return;
     }
     if (this.player.skillCd[index] > 0) return;
@@ -521,6 +554,7 @@ export class Sim {
     this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
     this.player.swing = 0.18;
+    this.castFx(spec);
     if (spec.kind === "channel") {
       this.breakChannel();
       this.player.channel = {
@@ -583,8 +617,47 @@ export class Sim {
     }
     if (spec.kind === "projectile") {
       const damage = this.rollScaled(spec) * (spec.scaling === "melee" ? 1 + this.mods.projectileMult : 1);
-      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range);
+      const style = spec.burn > 0 ? "fire" : spec.scaling === "spell" ? "spark" : "knife";
+      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range, style);
     }
+  }
+
+  private castFx(spec: ActiveSpec): void {
+    if (spec.kind === "buff") {
+      this.burst(spec.shieldFrac > 0 ? "ward" : "dash", spec.color, 1.15);
+      return;
+    }
+    if (spec.kind === "dash") {
+      this.burst("dash", spec.color, 1.45);
+      if (spec.bleed > 0) this.burst("bleed", "#e15b4c", 0.95);
+      return;
+    }
+    if (spec.kind === "channel") {
+      this.burst("heal", spec.color, 1);
+      return;
+    }
+    if (spec.kind === "nova") {
+      const kind = spec.burn > 0 ? "fire" : spec.slow > 0 ? "frost" : "arcane";
+      this.burst(kind, spec.color, spec.range / 90);
+      return;
+    }
+    if (spec.kind === "melee" || spec.kind === "arc") {
+      const kind = spec.bleed > 0 ? "bleed" : spec.slow > 0 ? "frost" : spec.kind === "arc" ? "cleave" : spec.stun > 0 ? "ward" : "slash";
+      this.burst(kind, spec.color, spec.kind === "arc" ? 1.3 : 1.05);
+    }
+  }
+
+  private burst(kind: BurstKind, color: string, radius = 1): void {
+    this.bursts.push({
+      x: this.player.x,
+      y: this.player.y,
+      facing: this.player.facing,
+      t: 0.46,
+      life: 0.46,
+      kind,
+      color,
+      radius,
+    });
   }
 
   private fire(
@@ -596,6 +669,7 @@ export class Sim {
     burn: number,
     radial: boolean,
     speed: number,
+    style: Shot["style"],
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -615,6 +689,7 @@ export class Sim {
         pierce: count === 1 && speed >= 400,
         burn,
         bleed: false,
+        style,
       });
     }
   }
@@ -707,11 +782,12 @@ export class Sim {
           life: 1.4,
           damage: enemy.damage,
           fromPlayer: false,
-          color: "#e0b15a",
+          color: "#e7c39a",
           hit: [],
           pierce: false,
           burn: 0,
           bleed: false,
+          style: "arrow",
         });
         enemy.cd = enemy.maxCd;
         continue;
@@ -792,7 +868,8 @@ export class Sim {
     enemy.hp -= damage;
     enemy.flash = 0.12;
     result.enemyHit = true;
-    this.float(enemy.x, enemy.y - enemy.radius - 8, `${Math.round(damage)}`, crit ? "#ffd27a" : "#f4efe6");
+    const tint = burn > 0 ? "#ff8a3d" : forceBleed ? "#e15b4c" : slow > 0 ? "#8ec8ff" : stun > 0 ? "#ffe0a0" : crit ? "#ffd27a" : "#f4efe6";
+    this.float(enemy.x, enemy.y - enemy.radius - 8, `${Math.round(damage)}`, tint);
     if (forceBleed || this.rng() < this.derived.bleedChance) {
       const dps = 2 + this.derived.meleeMax * 0.12;
       enemy.dot = { dps: Math.max(enemy.dot?.dps ?? 0, dps), t: 3 };
@@ -858,9 +935,15 @@ export class Sim {
     this.enemies = living;
     if (this.enemies.length === 0 && this.phase === "play") {
       this.phase = "between";
-      this.between = 2.2;
-      this.banner = this.wave % 5 === 0 ? "The champion falls." : "The ward is quiet… more are coming.";
-      this.bannerT = 2.2;
+      const nextWave = this.wave + 1;
+      const gate = nextWave % 10 === 0;
+      this.between = gate ? 10 : 2.2;
+      this.banner = gate
+        ? `Wave ${nextWave} in 10. The gate is open.`
+        : this.wave % 5 === 0
+          ? "The champion falls."
+          : "The ward is quiet… more are coming.";
+      this.bannerT = this.between;
     }
   }
 
