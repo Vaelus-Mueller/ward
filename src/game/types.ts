@@ -62,8 +62,8 @@ export const ATTR_LABEL: Record<Attr, string> = {
 export const ATTR_HINT: Record<Attr, string> = {
   strength: "Melee damage and armor.",
   agility: "Hit chance, evasion, bows, and speed.",
-  endurance: "Life. Four life per point, and 1 health each second for every 10 points.",
-  wisdom: "Mana and spell damage.",
+  endurance: "Life. One life per point, and 1 health each second for every 10 points.",
+  wisdom: "Mana and spell damage. Half a mana per point.",
 };
 
 export interface Affix {

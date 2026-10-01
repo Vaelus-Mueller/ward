@@ -1,6 +1,6 @@
 import { classTitle, refundStat, retrain, retrainCost, slotSkill, spendSkill, spendStat, canSpendSkill } from "./game/character";
 import { derive, requirementText, xpGoal } from "./game/formulas";
-import { canUpgrade, equipItem, gemKind, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeCost, upgradeItem } from "./game/items";
+import { canUpgrade, equipItem, gemKind, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
 import type { Sim } from "./game/sim";
@@ -827,14 +827,14 @@ export class Ui {
       meta.className = "muted";
       const jewelry = item.slot === "ring" || item.slot === "neck" || item.slot === "earring";
       const stat = item.slot === "weapon" ? `${live.damageMin}–${live.damageMax} damage` : jewelry ? live.affixes.map((entry) => entry.label).join(", ") || "Jewelry" : `${live.armor} armor`;
-      const material = materialFor(item);
-      const cost = upgradeCost(item);
-      meta.textContent = `Item level ${Math.max(1, item.ilvl || 1)} → ${Math.max(1, item.ilvl || 1) + 1}. ${stat}. Costs ${cost} ${MATERIAL_LABEL[material]}.`;
+      const bill = upgradeBill(item);
+      const costText = bill.map((row) => `${row.count} ${MATERIAL_LABEL[row.id]}`).join(", ");
+      meta.textContent = `Item level ${Math.max(1, item.ilvl || 1)} → ${Math.max(1, item.ilvl || 1) + 1}. ${stat}. Costs ${costText}.`;
       copy.append(name, meta);
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = "Upgrade";
-      button.disabled = materialCount(c, material) < cost;
+      button.disabled = bill.some((row) => materialCount(c, row.id) < row.count);
       button.addEventListener("click", () => {
         const error = upgradeItem(c, item.uid);
         text("town-note", error ?? `${item.name} is now item level ${item.ilvl}.`);
@@ -908,7 +908,8 @@ function spreadRadius(radius: number): number {
   if (radius < 0.55) return 0.4;
   if (radius < 0.72) return 0.58;
   if (radius < 0.86) return 0.76;
-  if (radius < 0.96) return 0.9;
+  if (radius < 0.96) return 0.78;
+  if (radius < 1.08) return 0.9;
   return 1;
 }
 

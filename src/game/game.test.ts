@@ -4,7 +4,7 @@ import { derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, salvageCount, salvageItem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { deserialize, serialize } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, SKILLS } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, scaledActive, skillById, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim, wavePlan } from "./sim";
 import { STAT_POINTS_PER_LEVEL } from "./types";
 
@@ -52,12 +52,44 @@ describe("levels and attributes", () => {
     spendStat(hearty, "endurance");
     spendStat(hearty, "endurance");
     spendStat(hearty, "endurance");
-    expect(derive(hearty).life).toBe(derive(plain).life + 12);
+    expect(derive(hearty).life).toBe(derive(plain).life + 3);
     const strong = createCharacter();
     strong.unspentStats = 5;
     for (let i = 0; i < 5; i++) spendStat(strong, "strength");
     expect(derive(strong).meleeMax).toBeGreaterThan(derive(plain).meleeMax);
     expect(derive(strong).armor).toBeGreaterThan(derive(plain).armor);
+  });
+
+  it("keeps a channel through movement and ordinary hits, and drops it on a slam", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreMana: false };
+    const walking = emptyIntent();
+    walking.moveX = 1;
+    sim.update(walking, 0.1);
+    expect(sim.player.channel).not.toBeNull();
+    const hound = makeEnemy("hound", 1, sim.player.x + 30, sim.player.y, 70);
+    hound.cd = 0;
+    sim.enemies = [hound];
+    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreMana: false };
+    sim.update(emptyIntent(), 0.05);
+    expect(sim.player.channel).not.toBeNull();
+    const brute = makeEnemy("brute", 1, sim.player.x + 40, sim.player.y, 71);
+    brute.telegraph = 0.01;
+    brute.cd = 0;
+    sim.enemies = [brute];
+    sim.player.hp = sim.derived.life;
+    sim.update(emptyIntent(), 0.05);
+    expect(sim.player.channel).toBeNull();
+    expect(Math.hypot(sim.player.x - brute.x, sim.player.y - brute.y)).toBeGreaterThan(40);
+  });
+
+  it("places an outer skill beyond each specialization", () => {
+    for (const id of ["citadel", "sundering", "hemorrhage", "deadeye", "inferno", "benediction"]) {
+      const skill = skillById(id);
+      expect(skill?.ring).toBe(4);
+      expect(skill?.levelGate).toBe(16);
+    }
   });
 
   it("heals one health each second per level, plus one for every ten endurance", () => {
@@ -311,6 +343,23 @@ describe("the ward", () => {
     expect(derive(hero).damageReduction).toBeCloseTo(0.06);
   });
 
+  it("caps ranked skills at 20 and keeps the per-rank scaling", () => {
+    expect(skillById("heavy-blow")?.maxRank).toBe(20);
+    expect(skillById("iron-oath")?.maxRank).toBe(1);
+    const base = ACTIVES["heavy-blow"]!.mult;
+    expect(scaledActive("heavy-blow", 20)?.mult).toBeCloseTo(base * (1 + 0.12 * 19));
+  });
+
+  it("gives one life per endurance and five life per level, and half a mana per wisdom", () => {
+    const hero = createCharacter();
+    hero.level = 4;
+    hero.spent.endurance = 10;
+    hero.spent.wisdom = 20;
+    const stats = derive(hero);
+    expect(stats.life).toBe(4 * 5 + (10 + 10));
+    expect(stats.mana).toBe(Math.round(16 + 4 + 30 * 0.5));
+  });
+
   it("raises a piece by one item level and spends that many materials", () => {
     const hero = createCharacter();
     const blade = starterBlade("up");
@@ -318,8 +367,9 @@ describe("the ward", () => {
     blade.damageMin = 8;
     blade.damageMax = 16;
     hero.equipment.weapon = blade;
-    expect(upgradeItem(hero, blade.uid)).toBe("Needs 8 Weapon Steel.");
-    addMaterial(hero, "steel", 8);
+    expect(upgradeItem(hero, blade.uid)).toContain("Cloth Weave");
+    expect(upgradeItem(hero, blade.uid)).toContain("Weapon Steel");
+    for (const id of ["weave", "hide", "rings", "plate", "steel"] as const) addMaterial(hero, id, 8);
     expect(upgradeItem(hero, blade.uid)).toBeNull();
     expect(blade.ilvl).toBe(9);
     expect(blade.damageMin).toBe(9);
@@ -346,7 +396,7 @@ describe("the ward", () => {
     band.ilvl = 4;
     band.affixes = [{ key: "strength", value: 4, label: "+4 Strength" }];
     hero.equipment.ring1 = band;
-    addMaterial(hero, "dust", 4);
+    for (const id of ["weave", "hide", "rings", "plate", "steel", "dust"] as const) addMaterial(hero, id, 4);
     expect(upgradeItem(hero, band.uid)).toBeNull();
     expect(band.ilvl).toBe(5);
     expect(band.affixes[0]?.value).toBe(5);
@@ -358,7 +408,9 @@ describe("the ward", () => {
     stud.armor = 0;
     stud.ilvl = 2;
     hero.equipment.ear1 = stud;
-    expect(upgradeItem(hero, stud.uid)).toBe("Needs 2 Jewel Dust.");
+    const short = upgradeItem(hero, stud.uid) ?? "";
+    expect(short).toContain("2 Cloth Weave");
+    expect(short).toContain("2 Jewel Dust");
   });
 
   it("breaks an item into materials from its level and rarity", () => {

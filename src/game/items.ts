@@ -1,7 +1,7 @@
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { meetsRequirements } from "./formulas";
 import type { Affix, ArmorType, Character, GemKind, Item, ItemSlot, MaterialId, Rarity, SlotName, WeaponStyle } from "./types";
-import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, MATERIAL_LABEL, RARITY_LABEL } from "./types";
+import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, MATERIAL_LABEL, MATERIAL_ORDER, RARITY_LABEL } from "./types";
 
 /**
  * Reminder for later — do not implement yet.
@@ -750,6 +750,12 @@ export function upgradeCost(item: Item): number {
   return Math.max(1, Math.round(item.ilvl) || 1);
 }
 
+export function upgradeBill(item: Item): { id: MaterialId; count: number }[] {
+  const count = upgradeCost(item);
+  const index = MATERIAL_ORDER.indexOf(materialFor(item));
+  return MATERIAL_ORDER.slice(0, Math.max(0, index) + 1).map((id) => ({ id, count }));
+}
+
 export function salvageCount(item: Item): number {
   const level = Math.max(1, Math.round(item.ilvl) || 1);
   return Math.max(1, Math.round((level * (RARITY_YIELD[item.rarity] ?? 1)) / 4));
@@ -809,10 +815,10 @@ export function upgradeItem(c: Character, uid: string): string | null {
   const item = findHost(c, uid);
   if (!item) return "That item is not here.";
   if (!canUpgrade(item)) return "Sable improves weapons, armor, and jewelry only.";
-  const material = materialFor(item);
-  const cost = upgradeCost(item);
-  if (materialCount(c, material) < cost) return `Needs ${cost} ${MATERIAL_LABEL[material]}.`;
-  if (!spendMaterial(c, material, cost)) return `Needs ${cost} ${MATERIAL_LABEL[material]}.`;
+  const bill = upgradeBill(item);
+  const short = bill.filter((row) => materialCount(c, row.id) < row.count);
+  if (short.length > 0) return `Needs ${short.map((row) => `${row.count} ${MATERIAL_LABEL[row.id]}`).join(", ")}.`;
+  for (const row of bill) spendMaterial(c, row.id, row.count);
   const from = Math.max(1, Math.round(item.ilvl) || 1);
   const mul = (from + 1) / from;
   if (item.damageMin > 0) item.damageMin = Math.max(1, Math.round(item.damageMin * mul));

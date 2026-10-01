@@ -419,7 +419,6 @@ export class Renderer {
     cloneMaterials(model);
     fitFeet(model, height);
     const root = new THREE.Group();
-    model.rotation.y = Math.PI;
     root.add(model);
     const marker = markerFor(kind);
     const ring = new THREE.Mesh(

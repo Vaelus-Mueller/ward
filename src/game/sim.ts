@@ -124,6 +124,7 @@ interface PlayerBody {
   buffs: Buff[];
   shield: number;
   iFrame: number;
+  stun: number;
   aimId: number | null;
   dest: { x: number; y: number } | null;
   swing: number;
@@ -246,6 +247,7 @@ export class Sim {
       buffs: [],
       shield: 0,
       iFrame: 0,
+      stun: 0,
       aimId: null,
       dest: null,
       swing: 0,
@@ -300,6 +302,7 @@ export class Sim {
     this.player.buffs = [];
     this.player.shield = 0;
     this.player.iFrame = 0;
+    this.player.stun = 0;
     this.shots = [];
     this.recompute();
     this.player.hp = this.derived.life;
@@ -401,7 +404,7 @@ export class Sim {
     this.clampBodies();
     if (intent.lootId !== null) this.takeDrop(intent.lootId);
     this.collectGold();
-    if (this.hurtThisTick) this.breakChannel();
+    if (this.player.stun > 0) this.breakChannel();
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.phase = "dead";
@@ -442,6 +445,7 @@ export class Sim {
     p.attackCd = Math.max(0, p.attackCd - dt);
     p.swing = Math.max(0, p.swing - dt);
     p.iFrame = Math.max(0, p.iFrame - dt);
+    p.stun = Math.max(0, p.stun - dt);
     for (let i = 0; i < 3; i++) p.skillCd[i] = Math.max(0, p.skillCd[i]! - dt);
     p.buffs = p.buffs.filter((buff) => {
       buff.t -= dt;
@@ -473,12 +477,13 @@ export class Sim {
     const stick = Math.hypot(intent.moveX, intent.moveY);
     let vx = 0;
     let vy = 0;
-    if (stick > 0.18) {
+    if (p.stun > 0) {
+      p.dest = null;
+    } else if (stick > 0.18) {
       p.dest = null;
       p.aimId = null;
       vx = intent.moveX / stick;
       vy = intent.moveY / stick;
-      if (stick > 0.55 && p.channel) this.breakChannel();
     } else if (p.aimId !== null) {
       const enemy = this.enemies.find((entry) => entry.id === p.aimId);
       if (!enemy) p.aimId = null;
@@ -754,7 +759,7 @@ export class Sim {
       if (enemy.kind === "brute" && enemy.telegraph > 0) {
         enemy.telegraph -= dt;
         if (enemy.telegraph <= 0) {
-          if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result);
+          if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result, { knockback: true, stun: 0.6 });
           enemy.cd = enemy.maxCd;
         }
         continue;
@@ -822,7 +827,13 @@ export class Sim {
     this.shots = this.shots.filter((shot) => shot.life > 0);
   }
 
-  private hurtPlayer(amount: number, sourceLevel: number, attacker: Enemy | null, result: TickResult): void {
+  private hurtPlayer(
+    amount: number,
+    sourceLevel: number,
+    attacker: Enemy | null,
+    result: TickResult,
+    blow: { knockback?: boolean; stun?: number } = {},
+  ): void {
     if (this.iframeLeft() > 0) return;
     if (this.rng() < this.derived.evasion) {
       this.float(this.player.x, this.player.y - 20, "evade", "#c8d5cf");
@@ -839,6 +850,16 @@ export class Sim {
     this.hurtThisTick = true;
     result.playerHit = true;
     this.float(this.player.x, this.player.y - 22, `${Math.round(damage)}`, "#e15a4a");
+    if (blow.stun && blow.stun > 0) this.player.stun = Math.max(this.player.stun, blow.stun);
+    if (blow.knockback && attacker) {
+      const dx = this.player.x - attacker.x;
+      const dy = this.player.y - attacker.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      this.player.x += (dx / dist) * 78;
+      this.player.y += (dy / dist) * 78;
+      this.float(this.player.x, this.player.y - 28, "knocked back", "#e7c39a");
+    }
+    if ((blow.stun && blow.stun > 0) || blow.knockback) this.breakChannel();
     if (attacker && this.derived.thorns > 0) attacker.hp -= this.derived.thorns;
   }
 

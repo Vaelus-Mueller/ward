@@ -6,7 +6,7 @@ export interface SkillNode {
   kind: SkillKind;
   sector: SectorId;
   spec: string | null;
-  ring: 1 | 2 | 3;
+  ring: 1 | 2 | 3 | 4;
   angle: number;
   radius: number;
   maxRank: number;
@@ -90,7 +90,7 @@ function node(
     sector: SectorId;
     offset: number;
     radius: number;
-    ring: 1 | 2 | 3;
+    ring: 1 | 2 | 3 | 4;
     spec?: string | null;
     maxRank?: number;
     levelGate?: number;
@@ -111,7 +111,7 @@ function node(
     ring: partial.ring,
     angle: spot.angle,
     radius: spot.radius,
-    maxRank: partial.maxRank ?? 5,
+    maxRank: partial.maxRank ?? 20,
     levelGate: partial.levelGate ?? 2,
     requires: partial.requires ?? [],
     requiresAny: partial.requiresAny ?? [],
@@ -158,7 +158,7 @@ export const SKILLS: SkillNode[] = [
   node({ id: "spark", name: "Spark", kind: "active", sector: "rite", offset: 0, radius: 0.48, ring: 1, requires: ["first-rite"], blurb: "A fast bolt." }),
   node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "rite", offset: 24, radius: 0.46, ring: 1, requires: ["first-rite"], blurb: "Mana returns faster." }),
   node({ id: "frost-ring", name: "Rime Ring", kind: "active", sector: "rite", offset: -18, radius: 0.64, ring: 1, requires: ["spark"], blurb: "A cold ring that slows." }),
-  node({ id: "mend", name: "Mend", kind: "channel", sector: "rite", offset: 18, radius: 0.64, ring: 1, requires: ["ember-flow"], blurb: "Channel to knit wounds. Movement and a hit break it." }),
+  node({ id: "mend", name: "Mend", kind: "channel", sector: "rite", offset: 18, radius: 0.64, ring: 1, requires: ["ember-flow"], blurb: "Channel to knit wounds. A stun or a knockback breaks it." }),
   node({ id: "pyre", name: "Pyre", kind: "passive", sector: "rite", spec: "pyre", offset: -26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["spark", "frost-ring"], blurb: "The specialization of fire." }),
   node({ id: "cantor", name: "Cantor", kind: "passive", sector: "rite", spec: "cantor", offset: 26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["mend", "reservoir"], blurb: "The specialization of chants, wards, and breath." }),
   node({ id: "kindling", name: "Kindling", kind: "passive", sector: "rite", spec: "pyre", offset: -34, radius: 0.92, ring: 2, requires: ["pyre"], blurb: "Spells burn hotter." }),
@@ -166,7 +166,13 @@ export const SKILLS: SkillNode[] = [
   node({ id: "conflagration", name: "Conflagration", kind: "active", sector: "rite", spec: "pyre", offset: -26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["kindling", "cinder-lance"], blurb: "Fire in every direction." }),
   node({ id: "breath", name: "Breath", kind: "passive", sector: "rite", spec: "cantor", offset: 16, radius: 0.92, ring: 2, requires: ["cantor"], blurb: "A steadier return of mana." }),
   node({ id: "ward-chant", name: "Ward Chant", kind: "aura", sector: "rite", spec: "cantor", offset: 34, radius: 0.92, ring: 2, requires: ["cantor"], blurb: "A sung ward. Drains mana while it holds." }),
-  node({ id: "litany", name: "Litany", kind: "channel", sector: "rite", spec: "cantor", offset: 26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["breath", "ward-chant"], blurb: "Channel a restoration of life and mana." }),
+  node({ id: "litany", name: "Litany", kind: "channel", sector: "rite", spec: "cantor", offset: 26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["breath", "ward-chant"], blurb: "Channel a restoration of life and mana. A stun or a knockback breaks it." }),
+  node({ id: "citadel", name: "Citadel", kind: "passive", sector: "bulwark", spec: "bastion", offset: -26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["aegis"], blurb: "The outer wall. Armor and a share of incoming blows turned aside." }),
+  node({ id: "sundering", name: "Sundering", kind: "active", sector: "bulwark", spec: "ravager", offset: 26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["breaker"], blurb: "A wider shock that staggers everything close." }),
+  node({ id: "hemorrhage", name: "Hemorrhage", kind: "passive", sector: "shade", spec: "cutpurse", offset: -26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["veiled-strike"], blurb: "Opened wounds bleed harder and more often." }),
+  node({ id: "deadeye", name: "Deadeye", kind: "passive", sector: "shade", spec: "marksman", offset: 26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["ash-rain"], blurb: "Thrown and shot weapons bite deeper, and crit more often." }),
+  node({ id: "inferno", name: "Inferno", kind: "active", sector: "rite", spec: "pyre", offset: -26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["conflagration"], blurb: "A larger fire that keeps burning." }),
+  node({ id: "benediction", name: "Benediction", kind: "passive", sector: "rite", spec: "cantor", offset: 26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["litany"], blurb: "The outer chant. Life and mana return faster." }),
 ];
 
 const byId = new Map(SKILLS.map((skill) => [skill.id, skill]));
@@ -197,6 +203,10 @@ export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
   kindling: { spellMult: 0.035 },
   cantor: { mana: 12, cdr: 0.04 },
   breath: { manaRegen: 0.45 },
+  citadel: { armor: 10, damageReduction: 0.01 },
+  hemorrhage: { bleedChance: 0.02 },
+  deadeye: { projectileMult: 0.04, crit: 0.01 },
+  benediction: { lifeRegen: 0.35, manaRegen: 0.2 },
 };
 
 function act(partial: Partial<ActiveSpec> & Pick<ActiveSpec, "kind" | "color">): ActiveSpec {
@@ -334,6 +344,8 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     aura: { damageReduction: 0.12, armor: 10 },
   }),
   litany: act({ kind: "channel", color: "#f3e9ff", mana: 0, cooldown: 12, channelTime: 2.4, healFrac: 0.16 }),
+  sundering: act({ kind: "nova", color: "#c4532a", mana: 22, cooldown: 14, mult: 2.1, range: 180, stun: 0.45 }),
+  inferno: act({ kind: "nova", color: "#ff5a1f", mana: 24, cooldown: 13, scaling: "spell", mult: 2.4, range: 210, burn: 7 }),
 };
 
 export function passiveContribution(id: string, rank: number): Partial<Mods> {

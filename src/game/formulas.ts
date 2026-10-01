@@ -73,12 +73,8 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const attr = attributes(c);
   const weapon = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
   const style: WeaponStyle = weapon?.style ?? "melee";
-  const life = Math.round(
-    32 + c.level * 4 + attr.endurance * 4 + mods.life + gearNumber(c, "life"),
-  );
-  const mana = Math.round(
-    16 + c.level + attr.wisdom * 3 + mods.mana + gearNumber(c, "mana"),
-  );
+  const life = Math.round(c.level * 5 + attr.endurance + mods.life + gearNumber(c, "life"));
+  const mana = Math.round(16 + c.level + attr.wisdom * 0.5 + mods.mana + gearNumber(c, "mana"));
   let armor =
     attr.strength * 0.35 + gearNumber(c, "armor") + mods.armor;
   armor *= 1 + mods.armorPct;
