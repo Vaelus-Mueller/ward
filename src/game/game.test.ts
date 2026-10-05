@@ -78,7 +78,8 @@ describe("levels and attributes", () => {
     spendStat(hearty, "stamina");
     spendStat(hearty, "stamina");
     spendStat(hearty, "stamina");
-    expect(derive(hearty).life).toBe(derive(plain).life + 3);
+    // Human +4% stamina: three spent points land as four total after rounding.
+    expect(derive(hearty).life).toBe(derive(plain).life + 4);
     expect(derive(hearty).armor).toBeGreaterThan(derive(plain).armor);
     const strong = createCharacter();
     strong.unspentStats = 5;
@@ -138,12 +139,13 @@ describe("levels and attributes", () => {
 
   it("heals one health each second per level, plus one for every ten stamina", () => {
     const hero = createCharacter();
-    // Human starts with +2 stamina → 12 total, so regen is 1 + 1.2.
-    expect(derive(hero).lifeRegen).toBeCloseTo(2.2);
+    // Human +4% stamina rounds to 10 at base → regen 1 + 1.0.
+    expect(derive(hero).lifeRegen).toBeCloseTo(2);
     hero.level = 8;
     hero.unspentStats = 20;
     for (let i = 0; i < 20; i++) spendStat(hero, "stamina");
-    expect(derive(hero).lifeRegen).toBeCloseTo(11.2);
+    // Innate 30 × 1.04 → 31 → regen 8 + 3.1
+    expect(derive(hero).lifeRegen).toBeCloseTo(11.1);
   });
 
   it("reduces damage with armor, with a hard floor", () => {
@@ -236,7 +238,7 @@ describe("gear and saving", () => {
     expect(restored?.character.name).toBe("Exile");
   });
 
-  it("applies each race’s attribute deltas on top of base", () => {
+  it("applies each race’s attribute percentages on innate stats", () => {
     const attrs: Attr[] = ["strength", "agility", "stamina", "luck", "spirit"];
     expect(RACES).toHaveLength(8);
     for (const race of RACES) {
@@ -244,14 +246,20 @@ describe("gear and saving", () => {
       const totals = attributes(hero);
       const mods = raceAttrs(race.id);
       for (const attr of attrs) {
-        expect(totals[attr]).toBe(BASE_ATTR + mods[attr]);
+        expect(totals[attr]).toBe(Math.round(BASE_ATTR * (1 + mods[attr])));
       }
     }
     const human = attributes(createCharacter("Exile", "human"));
-    expect(human.strength).toBe(BASE_ATTR + 2);
-    expect(human.agility).toBe(BASE_ATTR - 1);
-    expect(human.stamina).toBe(BASE_ATTR + 2);
-    expect(human.spirit).toBe(BASE_ATTR - 1);
+    expect(human.strength).toBe(Math.round(BASE_ATTR * 1.04));
+    expect(human.agility).toBe(Math.round(BASE_ATTR * 0.98));
+    expect(human.stamina).toBe(Math.round(BASE_ATTR * 1.04));
+    expect(human.spirit).toBe(Math.round(BASE_ATTR * 0.98));
+    for (const race of RACES) {
+      for (const attr of attrs) {
+        const pct = Math.abs(Math.round(race.attrs[attr] * 100));
+        expect(pct, `${race.id}.${attr}`).toBeLessThan(10);
+      }
+    }
   });
 
   it("migrates missing race to human and round-trips a chosen race", () => {
@@ -316,6 +324,32 @@ describe("gear and saving", () => {
     const blocked = equipItem(human, "side2");
     expect(blocked).toMatch(/two-handed|Bull Grip|off-hand/i);
     expect(human.equipment.weapon?.uid).toBe("maul2");
+  });
+
+  it("lets minotaurs dual-wield two-handers at full and half weapon dice", () => {
+    const bull = createCharacter("Horn", "minotaur");
+    bull.spent.strength = 40;
+    const main = starterBlade("great-a");
+    main.name = "Great Ashblade";
+    main.hands = 2;
+    main.damageMin = 20;
+    main.damageMax = 20;
+    const off = starterBlade("great-b");
+    off.name = "Oak Maul";
+    off.hands = 2;
+    off.damageMin = 20;
+    off.damageMax = 20;
+    expect(tryAddItem(bull, main)).toBe(true);
+    expect(equipItem(bull, main.uid)).toBeNull();
+    expect(tryAddItem(bull, off)).toBe(true);
+    expect(equipItem(bull, off.uid)).toBeNull();
+    expect(bull.equipment.weapon?.hands).toBe(2);
+    expect(bull.equipment.offhand?.hands).toBe(2);
+    const dual = derive(bull);
+    bull.equipment.offhand = null;
+    const single = derive(bull);
+    // Off-hand adds 50% of its dice before STR/skill multipliers.
+    expect(dual.meleeMax / single.meleeMax).toBeCloseTo(30 / 20, 2);
   });
 
   it("flags elite aggro and unique finds for voice cues", () => {
@@ -595,10 +629,11 @@ describe("the ward", () => {
     hero.spent.stamina = 10;
     hero.spent.spirit = 20;
     const stats = derive(hero);
-    // Human: +2 stamina, −1 spirit on top of base 10.
-    expect(stats.life).toBe(4 * 5 + (10 + 10 + 2));
+    // Human: +4% stamina, −2% spirit on innate (base + spent).
+    const stamina = Math.round((10 + 10) * 1.04);
+    expect(stats.life).toBe(4 * 5 + stamina);
     // 24 + level*0.5 + spirit*0.4
-    const spirit = 10 + 20 - 1;
+    const spirit = Math.round((10 + 20) * 0.98);
     expect(stats.energy).toBe(Math.round(24 + 4 * 0.5 + spirit * 0.4));
   });
 
@@ -789,6 +824,16 @@ describe("the ward", () => {
     bug.equipment.weapon4 = d;
     const fists = createCharacter("Fists", "insectoid");
     expect(derive(bug).meleeMax).toBeGreaterThan(derive(fists).meleeMax);
+    // Main 75% + three arms at 25% = 1.5× a lone main-hand's 75% dice.
+    const mainOnly = createCharacter("One", "insectoid");
+    mainOnly.equipment.weapon = { ...a, uid: "solo" };
+    expect(derive(bug).meleeMax / derive(mainOnly).meleeMax).toBeCloseTo(1.5 / 0.75, 2);
+    const maul = starterBlade("maul-bug");
+    maul.name = "Oak Maul";
+    maul.hands = 2;
+    expect(tryAddItem(bug, maul)).toBe(true);
+    expect(equipItem(bug, maul.uid)).toMatch(/weak arms|two-handed/i);
+    expect(bug.equipment.weapon?.uid).toBe("a");
   });
 });
 

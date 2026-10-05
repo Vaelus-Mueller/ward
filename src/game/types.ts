@@ -220,7 +220,17 @@ export interface Item {
   gems: (SocketGem | null)[];
 }
 
-export type RaceId = "human" | "elf" | "dwarf" | "gnome" | "hobbit" | "insectoid" | "minotaur" | "golem";
+export type RaceId =
+  | "human"
+  | "elf"
+  | "dwarf"
+  | "gnome"
+  | "hobbit"
+  | "insectoid"
+  | "minotaur"
+  | "golem"
+  | "lizard"
+  | "undead";
 
 export interface Character {
   name: string;
@@ -300,6 +310,8 @@ export interface Derived {
   magicFind: number;
   vendorPrice: number;
   vendorQuality: number;
+  /** Fraction of damage dealt healed on hit (racial + gear). */
+  lifeSteal: number;
 }
 
 export function emptyMods(): Mods {

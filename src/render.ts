@@ -6,7 +6,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { ARENA, type Item } from "./game/types";
 import { ROAD_X, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
-import { buildHero, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { buildHero, heroAnimationClips, HERO_HEIGHT, isHeroRace } from "./render/heroes";
 import { syncHeroGear } from "./render/gear";
 import { AdaptiveQuality } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
@@ -776,7 +776,7 @@ export class Renderer {
     const procedural = !hero && isProceduralMonster(kind);
     const loaded = hero || procedural ? null : this.templates.get(kind);
     const template = hero
-      ? { scene: buildHero(kind), clips: [] as THREE.AnimationClip[] }
+      ? { scene: buildHero(kind), clips: heroAnimationClips(kind) }
       : procedural
         ? { scene: buildMonster(kind as import("./game/types").EnemyKind), clips: [] as THREE.AnimationClip[] }
         : loaded ?? fallbackFigure(kind, height);
@@ -880,7 +880,7 @@ export class Renderer {
     // Soft body dye under the handcrafted armor shells.
     tintHead(model, eq.head);
     tintNamed(model, ["Body"], eq.chest);
-    tintNamed(model, ["ArmLeft", "ArmRight"], eq.gloves);
+    tintNamed(model, ["ArmLeft", "ArmRight", "ArmLeft2", "ArmRight2"], eq.gloves);
     tintNamed(model, ["LegLeft", "LegRight"], eq.boots);
     syncHeroGear(model, eq, performance.now());
   }

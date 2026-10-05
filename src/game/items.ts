@@ -716,7 +716,19 @@ function destination(c: Character, item: Item): SlotName | null {
   if (item.slot === "shield") return "offhand";
   if (item.slot === "weapon") {
     const main = c.equipment.weapon;
-    if (itemHands(item) === 2) return "weapon";
+    if (itemHands(item) === 2) {
+      // Minotaur can seat a second melee two-hander in the off-hand.
+      if (
+        c.race === "minotaur" &&
+        item.style === "melee" &&
+        main &&
+        !c.equipment.offhand &&
+        canPairOffhand(c, main)
+      ) {
+        return "offhand";
+      }
+      return "weapon";
+    }
     // Fill the next free weapon hand (insectoids have four).
     for (const slot of weaponHandSlots(c)) {
       if (c.equipment[slot]) continue;
@@ -738,7 +750,15 @@ export function weaponHandSlots(c: Character): SlotName[] {
 }
 
 function canFillWeaponHand(c: Character, item: Item, slot: SlotName): boolean {
-  if (itemHands(item) === 2) return false;
+  if (itemHands(item) === 2) {
+    return (
+      c.race === "minotaur" &&
+      slot === "offhand" &&
+      item.slot === "weapon" &&
+      item.style === "melee" &&
+      canPairOffhand(c, c.equipment.weapon)
+    );
+  }
   if (slot === "weapon3" || slot === "weapon4") {
     return c.race === "insectoid" && item.slot === "weapon";
   }
@@ -766,11 +786,15 @@ export function isRangedStyle(style: WeaponStyle): boolean {
   return style === "bow" || style === "thrown" || style === "handbow";
 }
 
-/** Minotaur Bull Grip: 2H melee still leaves the off-hand free. */
+/** Minotaur Bull Grip: 2H melee still leaves the off-hand free (1H or another 2H). */
 export function canPairOffhand(c: Character, main: Item | null | undefined): boolean {
   if (!main) return true;
   if (itemHands(main) === 1) return true;
   return c.race === "minotaur" && main.style === "melee";
+}
+
+export function canWieldTwoHand(c: Character): boolean {
+  return c.race !== "insectoid";
 }
 
 export function defaultHands(slot: ItemSlot, style: WeaponStyle, name = ""): WeaponHands {
@@ -791,12 +815,22 @@ export function equipItem(c: Character, uid: string): string | null {
   if ((slot === "weapon3" || slot === "weapon4") && c.race !== "insectoid") {
     return "Only insectoids can bind a third or fourth weapon.";
   }
+  if (itemHands(item) === 2 && !canWieldTwoHand(c)) {
+    return "Weak arms — insectoids cannot wield two-handed weapons.";
+  }
   if (slot === "offhand" || slot === "weapon3" || slot === "weapon4") {
     if (slot === "offhand" && isShield(item)) {
       if (!canPairOffhand(c, c.equipment.weapon)) {
         return c.race === "minotaur"
           ? "That main-hand needs both hands."
           : "Two-handed weapons leave no room for an off-hand. Minotaurs can Bull Grip melee two-handers.";
+      }
+    } else if (item.slot === "weapon" && itemHands(item) === 2) {
+      if (slot !== "offhand" || c.race !== "minotaur" || item.style !== "melee") {
+        return "Only minotaurs can Bull Grip a second two-hander.";
+      }
+      if (!canPairOffhand(c, c.equipment.weapon)) {
+        return "That main-hand needs both hands.";
       }
     } else if (!(item.slot === "weapon" && itemHands(item) === 1)) {
       return slot === "offhand"

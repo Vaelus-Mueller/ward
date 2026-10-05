@@ -311,6 +311,25 @@ export function monsterOf(kind: EnemyKind): MonsterDef {
   return MONSTERS[kind];
 }
 
+/** Default damage pair an enemy deals in melee (shots carry their own pair). */
+export function monsterAttackPair(kind: EnemyKind): DamagePair {
+  switch (monsterOf(kind).creatureType) {
+    case "undead":
+    case "fiend":
+      return "unholy";
+    case "ooze":
+    case "plant":
+      return "poison";
+    case "dragon":
+    case "elemental":
+      return "fire";
+    case "celestial":
+      return "holy";
+    default:
+      return "bleed";
+  }
+}
+
 export function creatureTypesCovered(): CreatureType[] {
   return [...new Set(WAVE1_KINDS.map((id) => MONSTERS[id].creatureType))];
 }

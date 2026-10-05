@@ -11,14 +11,17 @@ export const HERO_HEIGHT: Record<RaceId, number> = {
   insectoid: 1.7,
   minotaur: 2.15,
   golem: 2.05,
+  lizard: 1.74,
+  undead: 1.76,
 };
+
+type SkinKind = "flesh" | "fur" | "chitin" | "scale" | "stone" | "bone";
 
 interface RaceLook {
   skin: number;
   cloth: number;
   accent: number;
-  metal: number;
-  rough: number;
+  skinKind: SkinKind;
   emissive?: number;
   emit?: number;
   torso: { w: number; d: number; h: number };
@@ -29,96 +32,110 @@ interface RaceLook {
 
 const LOOK: Record<RaceId, RaceLook> = {
   human: {
-    skin: 0xc9a07a,
-    cloth: 0x4a3a2c,
-    accent: 0x7a5a3a,
-    metal: 0.12,
-    rough: 0.62,
+    skin: 0xb8926e,
+    cloth: 0x3f3228,
+    accent: 0x6a5238,
+    skinKind: "flesh",
     torso: { w: 0.34, d: 0.22, h: 0.52 },
     head: { r: 0.16 },
     limb: { arm: 0.46, leg: 0.55, thick: 0.07 },
     foot: { w: 0.12, d: 0.2, h: 0.07 },
   },
   elf: {
-    skin: 0xd8c4a8,
-    cloth: 0x3d4f3a,
-    accent: 0x8fb070,
-    metal: 0.08,
-    rough: 0.48,
+    skin: 0xc9b49a,
+    cloth: 0x334438,
+    accent: 0x6f8a58,
+    skinKind: "flesh",
     torso: { w: 0.28, d: 0.18, h: 0.56 },
     head: { r: 0.145 },
     limb: { arm: 0.52, leg: 0.66, thick: 0.055 },
     foot: { w: 0.1, d: 0.18, h: 0.06 },
   },
   dwarf: {
-    skin: 0xb88962,
-    cloth: 0x5a3a28,
-    accent: 0xc4a05a,
-    metal: 0.22,
-    rough: 0.7,
+    skin: 0xa67a52,
+    cloth: 0x4a3224,
+    accent: 0xa8884a,
+    skinKind: "flesh",
     torso: { w: 0.42, d: 0.3, h: 0.42 },
     head: { r: 0.17 },
     limb: { arm: 0.34, leg: 0.34, thick: 0.095 },
     foot: { w: 0.14, d: 0.2, h: 0.08 },
   },
   gnome: {
-    skin: 0xd2b090,
-    cloth: 0x4a3d66,
-    accent: 0xc58bff,
-    metal: 0.1,
-    rough: 0.55,
+    skin: 0xc4a888,
+    cloth: 0x3a3552,
+    accent: 0x8a6aa8,
+    skinKind: "flesh",
     torso: { w: 0.3, d: 0.22, h: 0.34 },
     head: { r: 0.19 },
     limb: { arm: 0.28, leg: 0.28, thick: 0.06 },
     foot: { w: 0.11, d: 0.16, h: 0.06 },
   },
   hobbit: {
-    skin: 0xc9a07a,
-    cloth: 0x5c6e3a,
-    accent: 0xb7a04a,
-    metal: 0.06,
-    rough: 0.68,
+    skin: 0xb8926e,
+    cloth: 0x4a5a32,
+    accent: 0x8a7a3a,
+    skinKind: "flesh",
     torso: { w: 0.36, d: 0.26, h: 0.36 },
     head: { r: 0.16 },
     limb: { arm: 0.3, leg: 0.3, thick: 0.075 },
     foot: { w: 0.16, d: 0.26, h: 0.08 },
   },
   insectoid: {
-    skin: 0x6e8a48,
-    cloth: 0x2a3820,
-    accent: 0xa8d45a,
-    metal: 0.35,
-    rough: 0.35,
-    emissive: 0x3a5a18,
-    emit: 0.18,
+    skin: 0x5a7240,
+    cloth: 0x222c1a,
+    accent: 0x7a9a48,
+    skinKind: "chitin",
+    emissive: 0x243818,
+    emit: 0.08,
     torso: { w: 0.3, d: 0.24, h: 0.48 },
     head: { r: 0.15 },
     limb: { arm: 0.5, leg: 0.52, thick: 0.05 },
     foot: { w: 0.1, d: 0.22, h: 0.05 },
   },
   minotaur: {
-    skin: 0x6a4a32,
-    cloth: 0x3a2818,
-    accent: 0xd4b07a,
-    metal: 0.15,
-    rough: 0.72,
+    skin: 0x5a3e2a,
+    cloth: 0x2e2218,
+    accent: 0xb09868,
+    skinKind: "fur",
     torso: { w: 0.48, d: 0.34, h: 0.6 },
     head: { r: 0.2 },
     limb: { arm: 0.52, leg: 0.58, thick: 0.11 },
     foot: { w: 0.16, d: 0.26, h: 0.1 },
   },
   golem: {
-    skin: 0x8a8478,
-    cloth: 0x5c6168,
-    accent: 0xe4c37a,
-    metal: 0.05,
-    rough: 0.92,
-    emissive: 0x6a5020,
-    emit: 0.12,
+    skin: 0x7a756c,
+    cloth: 0x4e5358,
+    accent: 0xc4a86a,
+    skinKind: "stone",
+    emissive: 0x4a3818,
+    emit: 0.06,
     torso: { w: 0.5, d: 0.36, h: 0.62 },
     head: { r: 0.18 },
     limb: { arm: 0.48, leg: 0.52, thick: 0.12 },
     foot: { w: 0.18, d: 0.24, h: 0.12 },
+  },
+  lizard: {
+    skin: 0x4a6a48,
+    cloth: 0x3a3428,
+    accent: 0x8a6a3a,
+    skinKind: "scale",
+    torso: { w: 0.36, d: 0.26, h: 0.5 },
+    head: { r: 0.15 },
+    limb: { arm: 0.48, leg: 0.52, thick: 0.065 },
+    foot: { w: 0.12, d: 0.22, h: 0.06 },
+  },
+  undead: {
+    skin: 0x8a8a7e,
+    cloth: 0x2e2824,
+    accent: 0x5a4a3a,
+    skinKind: "bone",
+    emissive: 0x2a3a2a,
+    emit: 0.04,
+    torso: { w: 0.32, d: 0.2, h: 0.5 },
+    head: { r: 0.155 },
+    limb: { arm: 0.48, leg: 0.54, thick: 0.06 },
+    foot: { w: 0.11, d: 0.2, h: 0.06 },
   },
 };
 
@@ -128,9 +145,9 @@ export function buildHero(race: RaceId): THREE.Group {
   const root = new THREE.Group();
   root.name = `hero-${race}`;
 
-  const skin = mat(look.skin, look.metal, look.rough, look.emissive, look.emit);
-  const cloth = mat(look.cloth, look.metal * 0.5, Math.min(0.95, look.rough + 0.08));
-  const accent = mat(look.accent, 0.45, 0.4, look.emissive, look.emit ? look.emit * 0.6 : 0);
+  const skin = skinMat(look);
+  const cloth = clothMat(look.cloth);
+  const accent = accentMat(look);
 
   const hips = new THREE.Group();
   hips.name = "hips";
@@ -216,8 +233,10 @@ export function buildHero(race: RaceId): THREE.Group {
 }
 
 function addFace(head: THREE.Group, race: RaceId, look: RaceLook, skin: THREE.Material, accent: THREE.Material): void {
-  const eyeColor = race === "insectoid" ? 0xa8d45a : race === "golem" ? 0xe4c37a : 0x1a1410;
-  const eyeMat = mat(eyeColor, 0.2, 0.35, race === "insectoid" || race === "golem" ? eyeColor : undefined, race === "insectoid" ? 0.45 : race === "golem" ? 0.35 : 0);
+  const eyeColor =
+    race === "insectoid" ? 0x7a9a40 : race === "golem" ? 0xc4a86a : race === "undead" ? 0x4a6a4a : race === "lizard" ? 0xc8b040 : 0x1a1410;
+  const glow = race === "insectoid" || race === "golem" || race === "undead";
+  const eyeMat = mat(eyeColor, 0.05, 0.55, glow ? eyeColor : undefined, glow ? 0.22 : 0);
   const eyeY = look.head.r * 0.15;
   const eyeZ = look.head.r * 0.85;
   const eyeX = look.head.r * 0.35;
@@ -304,6 +323,30 @@ function addRaceFeatures(
     beltLine.position.y = 0.02;
     hips.add(beltLine);
   }
+  if (race === "lizard") {
+    const snout = part("Snout", new THREE.CapsuleGeometry(0.06, 0.1, 4, 8), skin);
+    snout.rotation.x = Math.PI / 2;
+    snout.position.set(0, -0.02, look.head.r * 0.9);
+    head.add(snout);
+    const crest = part("Crest", new THREE.ConeGeometry(0.04, 0.16, 5), accent);
+    crest.rotation.x = 0.4;
+    crest.position.set(0, look.head.r * 0.7, -0.02);
+    head.add(crest);
+    const tail = part("Tail", new THREE.CapsuleGeometry(0.05, 0.42, 4, 8), skin);
+    tail.rotation.x = 1.1;
+    tail.position.set(0, -0.05, -look.torso.d * 0.55);
+    hips.add(tail);
+  }
+  if (race === "undead") {
+    for (const side of [-1, 1]) {
+      const hollow = part(side < 0 ? "SocketL" : "SocketR", new THREE.SphereGeometry(0.04, 8, 6), accent);
+      hollow.position.set(side * look.head.r * 0.35, look.head.r * 0.1, look.head.r * 0.72);
+      head.add(hollow);
+    }
+    const ribs = part("Ribs", box(look.torso.w * 0.7, look.torso.h * 0.35, 0.04), accent);
+    ribs.position.set(0, 0.02, look.torso.d * 0.48);
+    chest.add(ribs);
+  }
   void root;
 }
 
@@ -359,10 +402,121 @@ function part(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
 }
 
 function box(w: number, h: number, d: number): THREE.BufferGeometry {
-  const radius = Math.min(w, h, d) * 0.22;
+  // Tighter corners — big rounds read as toy plastic.
+  const radius = Math.min(w, h, d) * 0.12;
   const safe = Math.min(radius, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
   if (safe <= 0.001) return new THREE.BoxGeometry(w, h, d);
-  return new RoundedBoxGeometry(w, h, d, 3, safe);
+  return new RoundedBoxGeometry(w, h, d, 2, safe);
+}
+
+/** Soft organic skin — no clearcoat (that’s what made everyone look like vinyl). */
+function skinMat(look: RaceLook): THREE.MeshPhysicalMaterial {
+  const base = look.skin;
+  const warm = new THREE.Color(base).offsetHSL(0.02, 0.04, 0.02);
+  switch (look.skinKind) {
+    case "chitin":
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0.12,
+        roughness: 0.48,
+        emissive: look.emissive ?? 0x000000,
+        emissiveIntensity: look.emit ?? 0,
+        envMapIntensity: 0.55,
+        clearcoat: 0.22,
+        clearcoatRoughness: 0.62,
+        sheen: 0.08,
+        sheenRoughness: 0.7,
+        sheenColor: warm,
+      });
+    case "scale":
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0.06,
+        roughness: 0.58,
+        envMapIntensity: 0.45,
+        clearcoat: 0.14,
+        clearcoatRoughness: 0.72,
+        sheen: 0.12,
+        sheenRoughness: 0.8,
+        sheenColor: warm,
+      });
+    case "stone":
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0.02,
+        roughness: 0.92,
+        emissive: look.emissive ?? 0x000000,
+        emissiveIntensity: look.emit ?? 0,
+        envMapIntensity: 0.3,
+        clearcoat: 0,
+        sheen: 0,
+      });
+    case "bone":
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0,
+        roughness: 0.78,
+        emissive: look.emissive ?? 0x000000,
+        emissiveIntensity: look.emit ?? 0,
+        envMapIntensity: 0.28,
+        clearcoat: 0,
+        sheen: 0.05,
+        sheenRoughness: 0.9,
+        sheenColor: new THREE.Color(0x6a7060),
+      });
+    case "fur":
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0,
+        roughness: 0.88,
+        envMapIntensity: 0.22,
+        clearcoat: 0,
+        sheen: 0.55,
+        sheenRoughness: 0.85,
+        sheenColor: warm,
+      });
+    default:
+      return new THREE.MeshPhysicalMaterial({
+        color: base,
+        metalness: 0,
+        roughness: 0.68,
+        envMapIntensity: 0.32,
+        clearcoat: 0,
+        // Soft subsurface-ish loft without candy gloss.
+        sheen: 0.28,
+        sheenRoughness: 0.88,
+        sheenColor: warm,
+        specularIntensity: 0.35,
+      });
+  }
+}
+
+function clothMat(color: number): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color,
+    metalness: 0,
+    roughness: 0.9,
+    envMapIntensity: 0.2,
+    clearcoat: 0,
+    sheen: 0.45,
+    sheenRoughness: 0.78,
+    sheenColor: new THREE.Color(color).offsetHSL(0, -0.05, 0.06),
+  });
+}
+
+function accentMat(look: RaceLook): THREE.MeshPhysicalMaterial {
+  const metallic = look.skinKind === "stone" || look.skinKind === "chitin";
+  return new THREE.MeshPhysicalMaterial({
+    color: look.accent,
+    metalness: metallic ? 0.55 : 0.35,
+    roughness: metallic ? 0.42 : 0.55,
+    emissive: look.emissive ?? 0x000000,
+    emissiveIntensity: look.emit ? look.emit * 0.45 : 0,
+    envMapIntensity: 0.65,
+    clearcoat: metallic ? 0.12 : 0.04,
+    clearcoatRoughness: 0.65,
+    sheen: 0,
+  });
 }
 
 function mat(color: number, metal: number, rough: number, emissive?: number, emit = 0): THREE.MeshPhysicalMaterial {
@@ -372,15 +526,94 @@ function mat(color: number, metal: number, rough: number, emissive?: number, emi
     roughness: rough,
     emissive: emissive ?? 0x000000,
     emissiveIntensity: emit,
-    envMapIntensity: 1.05,
-    clearcoat: metal > 0.3 ? 0.45 : 0.1,
-    clearcoatRoughness: 0.4,
-    sheen: rough > 0.65 ? 0.25 : 0,
-    sheenRoughness: 0.7,
+    envMapIntensity: 0.4,
+    clearcoat: 0,
+    sheen: rough > 0.7 ? 0.2 : 0,
+    sheenRoughness: 0.8,
     sheenColor: new THREE.Color(color),
   });
 }
 
 export function isHeroRace(kind: string): kind is RaceId {
   return kind in HERO_HEIGHT;
+}
+
+/** Procedural clips so every arm (incl. insectoid blade-arms) walks and swings. */
+export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
+  const arms = ["ArmLeft", "ArmRight"];
+  if (race === "insectoid") arms.push("ArmLeft2", "ArmRight2");
+  const legs = ["LegLeft", "LegRight"];
+
+  const idle = limbClip("Idle", 1.6, (t, name) => {
+    const breath = Math.sin(t * Math.PI * 2) * 0.04;
+    if (name.startsWith("Arm")) return { x: breath * 0.35, z: name.includes("Left") ? 0.08 : -0.08 };
+    if (name.startsWith("Leg")) return { x: 0, z: 0 };
+    return { x: breath * 0.15, z: 0 };
+  }, [...arms, ...legs, "spine", "chest"]);
+
+  const walk = limbClip("Running_A", 0.7, (t, name) => {
+    const swing = Math.sin(t * Math.PI * 2);
+    if (name === "ArmLeft" || name === "ArmLeft2") {
+      const phase = name.endsWith("2") ? -swing : swing;
+      return { x: phase * 0.55, z: 0.12 };
+    }
+    if (name === "ArmRight" || name === "ArmRight2") {
+      const phase = name.endsWith("2") ? swing : -swing;
+      return { x: phase * 0.55, z: -0.12 };
+    }
+    if (name === "LegLeft") return { x: -swing * 0.7, z: 0 };
+    if (name === "LegRight") return { x: swing * 0.7, z: 0 };
+    return { x: Math.sin(t * Math.PI * 4) * 0.03, z: 0 };
+  }, [...arms, ...legs, "spine"]);
+
+  const attack = limbClip("1H_Melee_Attack_Slice_Horizontal", 0.45, (t, name) => {
+    const wind = t < 0.35 ? t / 0.35 : t < 0.55 ? 1 : 1 - (t - 0.55) / 0.45;
+    if (!name.startsWith("Arm")) {
+      return { x: wind * 0.12, z: 0 };
+    }
+    const left = name.includes("Left");
+    const lower = name.endsWith("2");
+    const lag = lower ? 0.85 : 1;
+    return {
+      x: -wind * 1.15 * lag,
+      y: (left ? -1 : 1) * wind * 0.55 * lag,
+      z: (left ? 1 : -1) * (0.15 + wind * 0.35),
+    };
+  }, [...arms, "spine", "chest"]);
+
+  const hit = limbClip("Hit_A", 0.28, (t, name) => {
+    const flinch = Math.sin(Math.min(1, t) * Math.PI) * 0.45;
+    if (name.startsWith("Arm")) return { x: flinch * 0.4, z: name.includes("Left") ? 0.2 : -0.2 };
+    if (name.startsWith("Leg")) return { x: -flinch * 0.15, z: 0 };
+    return { x: -flinch * 0.25, z: 0 };
+  }, [...arms, ...legs, "spine", "chest"]);
+
+  return [idle, walk, attack, hit];
+}
+
+function limbClip(
+  name: string,
+  duration: number,
+  sample: (t: number, bone: string) => { x?: number; y?: number; z?: number },
+  bones: string[],
+): THREE.AnimationClip {
+  const steps = 8;
+  const times: number[] = [];
+  for (let i = 0; i <= steps; i++) times.push((i / steps) * duration);
+  const tracks: THREE.KeyframeTrack[] = [];
+  for (const bone of bones) {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const zs: number[] = [];
+    for (const time of times) {
+      const pose = sample(time / duration, bone);
+      xs.push(pose.x ?? 0);
+      ys.push(pose.y ?? 0);
+      zs.push(pose.z ?? 0);
+    }
+    tracks.push(new THREE.NumberKeyframeTrack(`${bone}.rotation[x]`, times, xs));
+    tracks.push(new THREE.NumberKeyframeTrack(`${bone}.rotation[y]`, times, ys));
+    tracks.push(new THREE.NumberKeyframeTrack(`${bone}.rotation[z]`, times, zs));
+  }
+  return new THREE.AnimationClip(name, duration, tracks);
 }

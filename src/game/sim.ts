@@ -14,7 +14,8 @@ import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
 import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
-import { MONSTER_ARCH, damageTakenMul, monsterOf } from "./monsters";
+import { MONSTER_ARCH, damageTakenMul, monsterAttackPair, monsterOf } from "./monsters";
+import { raceCdr, raceDamageTakenMul } from "./races";
 import {
   DESPAWN,
   LEASH,
@@ -632,7 +633,8 @@ export class Sim {
       return;
     }
     this.player.energy -= spec.energyCost;
-    const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr"), 0, 0.4);
+    // Racial cdr may be negative (golem), so allow a modest slow band below zero.
+    const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr") + raceCdr(this.character.race), -0.35, 0.4);
     this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
     this.player.swing = 0.18;
@@ -887,7 +889,13 @@ export class Sim {
       if ((enemy.kind === "brute" || enemy.kind === "hillock" || enemy.kind === "whelp") && enemy.telegraph > 0) {
         enemy.telegraph -= dt;
         if (enemy.telegraph <= 0) {
-          if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result, { knockback: true, stun: 0.6 });
+          if (dist < enemy.radius + 62) {
+            this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result, {
+              knockback: true,
+              stun: 0.6,
+              pair: monsterAttackPair(enemy.kind),
+            });
+          }
           enemy.cd = enemy.maxCd;
         }
         continue;
@@ -949,7 +957,7 @@ export class Sim {
         enemy.cd = enemy.maxCd;
         continue;
       }
-      this.hurtPlayer(enemy.damage, enemy.level, enemy, result);
+      this.hurtPlayer(enemy.damage, enemy.level, enemy, result, { pair: monsterAttackPair(enemy.kind) });
       enemy.cd = enemy.maxCd;
     }
   }
@@ -961,7 +969,7 @@ export class Sim {
       shot.life -= dt;
       if (!shot.fromPlayer) {
         if (Math.hypot(shot.x - this.player.x, shot.y - this.player.y) < shot.radius + 16) {
-          this.hurtPlayer(shot.damage, this.wave, null, result);
+          this.hurtPlayer(shot.damage, this.wave, null, result, { pair: shot.pair });
           shot.life = 0;
         }
         continue;
@@ -984,7 +992,7 @@ export class Sim {
     sourceLevel: number,
     attacker: Enemy | null,
     result: TickResult,
-    blow: { knockback?: boolean; stun?: number } = {},
+    blow: { knockback?: boolean; stun?: number; pair?: DamagePair } = {},
   ): void {
     // Dodge / i-frames and shield absorb resolve as defense layers.
     // They must never clear swing / attackCd — committed attacks stay committed.
@@ -1005,6 +1013,8 @@ export class Sim {
       crit = true;
     }
     const maxHit = crit; // enemy damage is flat; a crit is their max-damage critical
+    const pair = blow.pair ?? (attacker ? monsterAttackPair(attacker.kind) : "bleed");
+    damage *= raceDamageTakenMul(this.character.race, pair);
     damage = mitigate(damage, this.derived.armor, sourceLevel, this.derived.damageReduction);
     if (this.player.shield > 0) {
       const absorbed = Math.min(this.player.shield, damage);
@@ -1073,6 +1083,10 @@ export class Sim {
     }
     const tint = burn > 0 ? "#ff8a3d" : forceBleed ? "#e15b4c" : slow > 0 ? "#8ec8ff" : stun > 0 ? "#ffe0a0" : crit ? "#ffd27a" : "#f4efe6";
     this.float(enemy.x, enemy.y - enemy.radius - 8, `${Math.round(damage)}${result.maxCritDealt ? "!" : ""}`, tint);
+    if (this.derived.lifeSteal > 0 && damage > 0) {
+      const heal = damage * this.derived.lifeSteal;
+      this.player.hp = Math.min(this.derived.life, this.player.hp + heal);
+    }
     if (forceBleed || this.rng() < this.derived.bleedChance) {
       const dps = 2 + this.derived.meleeMax * 0.12;
       enemy.dot = { dps: Math.max(enemy.dot?.dps ?? 0, dps), t: 3 };

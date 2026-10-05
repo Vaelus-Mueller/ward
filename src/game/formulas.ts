@@ -1,5 +1,20 @@
 import { liveItem } from "./itemstats";
-import { raceAttrs, raceGearArmorMul, raceInnateArmor } from "./races";
+import {
+  raceArmorPct,
+  raceAttrs,
+  raceEnergyRegenMul,
+  raceEvasion,
+  raceGearArmorMul,
+  raceGoldFind,
+  raceInnateArmor,
+  raceLifePct,
+  raceLifeRegenFlat,
+  raceLifeRegenMul,
+  raceLifeRegenPct,
+  raceLifeSteal,
+  raceMagicFind,
+  raceMoveSpeed,
+} from "./races";
 import {
   ATTRS,
   GEAR_SLOTS,
@@ -31,12 +46,16 @@ export function xpGoal(c: Character): number {
 export function attributes(c: Character): Record<Attr, number> {
   const racial = raceAttrs(c.race);
   const totals: Record<Attr, number> = {
-    strength: BASE_ATTR + c.spent.strength + racial.strength,
-    agility: BASE_ATTR + c.spent.agility + racial.agility,
-    stamina: BASE_ATTR + c.spent.stamina + racial.stamina,
-    luck: BASE_ATTR + c.spent.luck + racial.luck,
-    spirit: BASE_ATTR + c.spent.spirit + racial.spirit,
+    strength: 0,
+    agility: 0,
+    stamina: 0,
+    luck: 0,
+    spirit: 0,
   };
+  for (const attr of ATTRS) {
+    const innate = BASE_ATTR + c.spent[attr];
+    totals[attr] = Math.round(innate * (1 + racial[attr]));
+  }
   for (const item of lived(c)) {
     for (const affix of item.affixes) {
       if ((ATTRS as string[]).includes(affix.key)) {
@@ -100,7 +119,9 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const attr = attributes(c);
   const weapon = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
   const style: WeaponStyle = weapon?.style ?? "melee";
-  const life = Math.round(c.level * 5 + attr.stamina + mods.life + gearNumber(c, "life"));
+  const life = Math.round(
+    (c.level * 5 + attr.stamina + mods.life + gearNumber(c, "life")) * (1 + raceLifePct(c.race)),
+  );
   // Spirit feeds energy storage; passives/gear add more.
   const energy = Math.round(
     24 + c.level * 0.5 + attr.spirit * 0.4 + mods.energy + mods.energyMax + gearNumber(c, "energy") + gearNumber(c, "energyMax"),
@@ -108,12 +129,16 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const energyOnHit = Math.max(1, 3 + mods.energyOnHit + gearNumber(c, "energyOnHit") + attr.spirit * 0.02);
   let armor =
     attr.stamina * 0.25 + raceInnateArmor(c.race) + gearArmorValue(c) + mods.armor + gearNumber(c, "armor");
-  armor *= 1 + mods.armorPct;
+  armor *= 1 + mods.armorPct + raceArmorPct(c.race);
 
   const attackRating = Math.round(
     10 + c.level * 2 + attr.agility * 1.5 + mods.attackRating + gearNumber(c, "attackRating"),
   );
-  const evasion = clamp(0.02 + attr.agility * 0.0025 + mods.evasion + gearNumber(c, "evasion"), 0, 0.45);
+  const evasion = clamp(
+    0.02 + attr.agility * 0.0025 + mods.evasion + gearNumber(c, "evasion") + raceEvasion(c.race),
+    0,
+    0.45,
+  );
   const crit = clamp(
     0.02 + attr.agility * 0.001 + attr.luck * 0.0035 + mods.crit + gearNumber(c, "crit"),
     0,
@@ -148,7 +173,9 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const speed = weapon?.speed ?? 1;
   const attackPeriod =
     0.58 / speed / (1 + mods.attackSpeed + gearNumber(c, "attackSpeed") + attr.agility * 0.002);
-  const moveSpeed = 172 * (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025);
+  const moveSpeed =
+    172 *
+    (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025 + raceMoveSpeed(c.race));
   const weaponRange =
     (style === "bow"
       ? 300
@@ -160,10 +187,21 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
             ? 230
             : 70) + (weapon?.rangeBonus ?? 0);
 
-  const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012;
-  const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01;
+  const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012 + raceGoldFind(c.race);
+  const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01 + raceMagicFind(c.race);
   const vendorPrice = clamp(mods.vendorPrice + gearNumber(c, "vendorPrice") + attr.luck * 0.008, -0.35, 0.5);
   const vendorQuality = mods.vendorQuality + gearNumber(c, "vendorQuality") + attr.luck * 0.006;
+
+  const baseRegen =
+    c.level +
+    attr.stamina / 10 +
+    mods.lifeRegen +
+    gearNumber(c, "lifeRegen") +
+    raceLifeRegenFlat(c.race) +
+    life * raceLifeRegenPct(c.race);
+  const lifeRegen = baseRegen * raceLifeRegenMul(c.race);
+  const energyRegen =
+    (0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen")) * raceEnergyRegenMul(c.race);
 
   return {
     strength: attr.strength,
@@ -186,8 +224,8 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     moveSpeed,
     weaponStyle: style,
     weaponRange,
-    lifeRegen: c.level + attr.stamina / 10 + mods.lifeRegen + gearNumber(c, "lifeRegen"),
-    energyRegen: 0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen"),
+    lifeRegen,
+    energyRegen,
     thorns: mods.thorns + gearNumber(c, "thorns"),
     damageReduction: clamp(mods.damageReduction + gearNumber(c, "damageReduction"), 0, 0.35),
     bleedChance: clamp(mods.bleedChance + gearNumber(c, "bleedChance"), 0, 0.75),
@@ -195,24 +233,29 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     magicFind,
     vendorPrice,
     vendorQuality,
+    lifeSteal: clamp(raceLifeSteal(c.race), 0, 0.25),
   };
 }
 
 /**
- * Main hand full dice; each extra weapon hand adds half its dice
- * (insectoid arms 3–4 included). Shields add none.
+ * Weapon dice before STR/AGI/skill modifiers.
+ * Insectoid (weak arms): main 75%, each off-arm 25%.
+ * Everyone else: main 100%, each extra weapon hand 50%.
+ * Shields add none.
  */
 function weaponDice(c: Character): { min: number; max: number } {
+  const mainMul = c.race === "insectoid" ? 0.75 : 1;
+  const extraMul = c.race === "insectoid" ? 0.25 : 0.5;
   const main = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
-  let min = main?.damageMin ?? 3;
-  let max = main?.damageMax ?? 6;
+  let min = (main?.damageMin ?? 3) * mainMul;
+  let max = (main?.damageMax ?? 6) * mainMul;
   for (const slot of ["offhand", "weapon3", "weapon4"] as const) {
     const piece = c.equipment[slot];
     if (!piece) continue;
     const live = liveItem(piece, c.level);
     if (live.slot === "shield" || live.damageMax <= 0) continue;
-    min += live.damageMin * 0.5;
-    max += live.damageMax * 0.5;
+    min += live.damageMin * extraMul;
+    max += live.damageMax * extraMul;
   }
   return { min, max };
 }

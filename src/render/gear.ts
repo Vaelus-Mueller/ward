@@ -12,10 +12,10 @@ const ELEMENT_COLOR: Record<GearElement, number> = {
 };
 
 const ARMOR_FINISH: Record<ArmorType, { metalness: number; roughness: number }> = {
-  cloth: { metalness: 0.04, roughness: 0.92 },
-  leather: { metalness: 0.1, roughness: 0.7 },
-  mail: { metalness: 0.82, roughness: 0.36 },
-  plate: { metalness: 0.92, roughness: 0.22 },
+  cloth: { metalness: 0, roughness: 0.94 },
+  leather: { metalness: 0.04, roughness: 0.78 },
+  mail: { metalness: 0.72, roughness: 0.42 },
+  plate: { metalness: 0.82, roughness: 0.32 },
 };
 
 /** Infer a visual element from item affixes (and a few related combat keys). */
@@ -50,6 +50,8 @@ export function syncHeroGear(root: THREE.Object3D, equipment: Record<SlotName, I
   attachArmor(root, "head", "gear-helm-piece", equipment.head, "head");
   attachArmor(root, "ArmLeft", "gear-glove-l", equipment.gloves, "gloves");
   attachArmor(root, "ArmRight", "gear-glove-r", equipment.gloves, "gloves");
+  attachArmor(root, "ArmLeft2", "gear-glove-l2", equipment.gloves, "gloves");
+  attachArmor(root, "ArmRight2", "gear-glove-r2", equipment.gloves, "gloves");
   attachArmor(root, "LegLeft", "gear-boot-l", equipment.boots, "boots");
   attachArmor(root, "LegRight", "gear-boot-r", equipment.boots, "boots");
   attachJewelry(root, "hips", "gear-belt", "belt", equipment.belt);
@@ -502,7 +504,13 @@ function part(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
 }
 
 function mat(color: number, metalness: number, roughness: number): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, metalness, roughness, envMapIntensity: 0.9 });
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness,
+    roughness,
+    // Keep gear under the HDRI so plate reads worn, not chrome plastic.
+    envMapIntensity: metalness > 0.4 ? 0.55 : 0.3,
+  });
 }
 
 function disposeObject(root: THREE.Object3D): void {
