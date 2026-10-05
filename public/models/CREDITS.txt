@@ -3,6 +3,7 @@ https://github.com/KayKit-Game-Assets
 
 Characters: Knight, Rogue, Mage. Each figure keeps one weapon from that file (sword and badge, twin knives, or wand).
 Enemies: Skeleton Minion, Warrior, Rogue, and Mage, used as the ward's dead, holding a knife, sword, crossbow, or staff taken from the same character set.
+Additional wave-1 foes (wolf, slime, gargoyle, wisp, imp, spider, cultist, sprig, whelp, hillock, lurker, lumen, flicker) are original procedural kitbashes in-game — not third-party D&D assets.
 Floors, CC0, from Poly Haven: broken castle brick for levels 1–20, cracked red ground after that.
 https://polyhaven.com/a/castle_brick_broken_06
 https://polyhaven.com/a/cracked_red_ground

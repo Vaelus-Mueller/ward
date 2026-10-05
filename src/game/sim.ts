@@ -5,6 +5,7 @@ import {
   clamp,
   emptyMods,
   type Character,
+  type DamagePair,
   type Derived,
   type EnemyKind,
   type Mods,
@@ -12,7 +13,20 @@ import {
 import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
-import { passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import { MONSTER_ARCH, damageTakenMul, monsterOf } from "./monsters";
+import {
+  DESPAWN,
+  LEASH,
+  SIGHT,
+  SPAWN_IN,
+  levelToughness,
+  packKinds,
+  placeAt,
+  roadStart,
+  worldPacks,
+  type PackSpot,
+} from "./world";
 
 export interface Enemy {
   id: number;
@@ -37,6 +51,14 @@ export interface Enemy {
   gold: number;
   flash: number;
   level: number;
+  homeX: number;
+  homeY: number;
+  anchorX: number;
+  anchorY: number;
+  pack: string;
+  sight: number;
+  aggro: boolean;
+  elite: boolean;
 }
 
 export interface Shot {
@@ -53,6 +75,22 @@ export interface Shot {
   pierce: boolean;
   burn: number;
   bleed: boolean;
+  style: "spark" | "fire" | "knife" | "arrow";
+  /** Damage pair for resist/weak — never used for immunities. */
+  pair: DamagePair;
+}
+
+export type BurstKind = "slash" | "cleave" | "bleed" | "fire" | "frost" | "arcane" | "heal" | "ward" | "dash";
+
+export interface Burst {
+  x: number;
+  y: number;
+  facing: number;
+  t: number;
+  life: number;
+  kind: BurstKind;
+  color: string;
+  radius: number;
 }
 
 export interface Drop {
@@ -88,6 +126,12 @@ export interface TickResult {
   leveled: number;
   died: boolean;
   waveStarted: number;
+  townReady: boolean;
+  portalInterrupted: boolean;
+  eliteAggro: boolean;
+  uniqueFind: boolean;
+  maxCritDealt: boolean;
+  maxCritTaken: boolean;
 }
 
 interface Buff {
@@ -102,37 +146,32 @@ interface PlayerBody {
   y: number;
   facing: number;
   hp: number;
-  mana: number;
+  energy: number;
   attackCd: number;
   skillCd: [number, number, number];
   channel: { slot: number; t: number; total: number; healFrac: number; restoreMana: boolean } | null;
+  portal: { t: number; total: number } | null;
   auras: [boolean, boolean, boolean];
   buffs: Buff[];
   shield: number;
   iFrame: number;
+  stun: number;
   aimId: number | null;
   dest: { x: number; y: number } | null;
   swing: number;
 }
 
-const ARCH: Record<
-  EnemyKind,
-  { hp: number; dmg: number; def: number; armor: number; speed: number; range: number; cd: number; r: number; xp: number; gold: number }
-> = {
-  hound: { hp: 28, dmg: 7, def: 12, armor: 2, speed: 96, range: 46, cd: 0.95, r: 16, xp: 14, gold: 3 },
-  sentinel: { hp: 64, dmg: 10, def: 24, armor: 16, speed: 58, range: 52, cd: 1.2, r: 20, xp: 24, gold: 6 },
-  archer: { hp: 34, dmg: 8, def: 14, armor: 4, speed: 70, range: 270, cd: 1.75, r: 15, xp: 18, gold: 5 },
-  brute: { hp: 220, dmg: 18, def: 32, armor: 22, speed: 48, range: 78, cd: 2.4, r: 34, xp: 90, gold: 24 },
-};
+const ARCH = MONSTER_ARCH;
 
 export interface Snapshot {
   character: Character;
   wave: number;
   hp: number;
-  mana: number;
+  energy: number;
   x: number;
   y: number;
   starterGiven: boolean;
+  cleared?: string[];
 }
 
 export function emptyIntent(): Intent {
@@ -145,18 +184,6 @@ export function emptyIntent(): Intent {
     skills: [false, false, false],
     lootId: null,
   };
-}
-
-export function wavePlan(wave: number): EnemyKind[] {
-  const count = Math.min(9, 3 + Math.floor(wave * 0.65));
-  const kinds: EnemyKind[] = [];
-  for (let i = 0; i < count; i++) {
-    if (wave >= 4 && i % 5 === 4) kinds.push("archer");
-    else if (wave >= 3 && i % 4 === 3) kinds.push("sentinel");
-    else kinds.push("hound");
-  }
-  if (wave % 5 === 0) kinds.push("brute");
-  return kinds;
 }
 
 export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, id: number): Enemy {
@@ -188,6 +215,14 @@ export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, i
     gold: arch.gold + Math.floor((wave - 1) / 2),
     flash: 0,
     level: wave,
+    homeX: x,
+    homeY: y,
+    anchorX: x,
+    anchorY: y,
+    pack: `solo-${id}`,
+    sight: SIGHT[kind],
+    aggro: false,
+    elite: false,
   };
 }
 
@@ -197,6 +232,7 @@ export class Sim {
   enemies: Enemy[] = [];
   shots: Shot[] = [];
   drops: Drop[] = [];
+  bursts: Burst[] = [];
   itemStore = new Map<string, ReturnType<typeof starterBlade>>();
   floats: FloatText[] = [];
   wave = 1;
@@ -207,6 +243,10 @@ export class Sim {
   bannerT = 0;
   between = 0;
   killedTotal = 0;
+  placeLabel = "Level 1 · Threshold";
+  private cleared = new Set<string>();
+  private spawned = new Set<string>();
+  private roadNoted = false;
   private rng: () => number;
   private nextEnemy = 1;
   private nextDrop = 1;
@@ -219,25 +259,27 @@ export class Sim {
     this.rng = mulberry32(seed);
     this.derived = derive(character);
     this.player = {
-      x: ARENA.width / 2,
-      y: ARENA.height / 2,
+      x: roadStart().x,
+      y: roadStart().y,
       facing: -Math.PI / 2,
       hp: 1,
-      mana: 1,
+      energy: 1,
       attackCd: 0,
       skillCd: [0, 0, 0],
       channel: null,
+      portal: null,
       auras: [false, false, false],
       buffs: [],
       shield: 0,
       iFrame: 0,
+      stun: 0,
       aimId: null,
       dest: null,
       swing: 0,
     };
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
+    this.player.energy = this.derived.energy;
   }
 
   recompute(): void {
@@ -245,8 +287,8 @@ export class Sim {
     for (const [id, rank] of Object.entries(this.character.skillRanks)) {
       if (!rank) continue;
       const skill = skillById(id);
-      if (skill?.kind === "passive") {
-        const extra = passiveContribution(id, rank);
+      if (skill && (skill.kind === "passive" || skill.kind === "key" || (skill.kind === "capstone" && !ACTIVES[id]))) {
+        const extra = passiveContribution(id, rank, this.character.skillRanks);
         for (const key of Object.keys(extra) as (keyof Mods)[]) {
           const value = extra[key];
           if (typeof value === "number") mods[key] += value;
@@ -257,7 +299,7 @@ export class Sim {
       if (!this.player.auras[i]) continue;
       const id = this.character.slotted[i];
       if (!id) continue;
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (spec?.kind !== "aura") continue;
       for (const key of Object.keys(spec.aura) as (keyof Mods)[]) {
         const value = spec.aura[key];
@@ -267,30 +309,35 @@ export class Sim {
     this.mods = mods;
     this.derived = derive(this.character, mods);
     this.player.hp = Math.min(this.player.hp, this.derived.life);
-    this.player.mana = Math.min(this.player.mana, this.derived.mana);
+    this.player.energy = Math.min(this.player.energy, this.derived.energy);
   }
 
   begin(): void {
     this.phase = "play";
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
-    this.spawnWave();
+    this.player.energy = this.derived.energy;
+    this.trackPlace();
+    this.refreshPacks();
   }
 
   retry(): void {
     const loss = Math.floor(this.character.gold * 0.15);
     this.character.gold -= loss;
     this.player.channel = null;
+    this.player.portal = null;
     this.player.buffs = [];
     this.player.shield = 0;
     this.player.iFrame = 0;
+    this.player.stun = 0;
     this.shots = [];
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
+    this.player.energy = this.derived.energy;
     this.phase = "play";
-    this.spawnWave();
+    this.enemies = [];
+    this.spawned.clear();
+    this.refreshPacks();
     if (loss > 0) this.float(this.player.x, this.player.y - 30, `-${loss} gold`, "#e7c39a");
   }
 
@@ -299,10 +346,11 @@ export class Sim {
       character: this.character,
       wave: this.wave,
       hp: this.player.hp,
-      mana: this.player.mana,
+      energy: this.player.energy,
       x: this.player.x,
       y: this.player.y,
       starterGiven: this.starterGiven,
+      cleared: [...this.cleared],
     };
   }
 
@@ -312,39 +360,70 @@ export class Sim {
     this.starterGiven = data.starterGiven;
     this.recompute();
     this.player.hp = clamp(data.hp, 1, this.derived.life);
-    this.player.mana = clamp(data.mana, 0, this.derived.mana);
+    this.player.energy = clamp(
+      Number((data as Snapshot & { mana?: number }).energy ?? (data as Snapshot & { mana?: number }).mana ?? 0),
+      0,
+      this.derived.energy,
+    );
     this.player.x = data.x;
     this.player.y = data.y;
     this.phase = "title";
     this.enemies = [];
     this.shots = [];
+    this.cleared = new Set(Array.isArray(data.cleared) ? data.cleared : []);
+    this.spawned.clear();
+  }
+
+  rest(dt: number): void {
+    this.recompute();
+    this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.lifeRegen * dt);
+    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyRegen * dt);
   }
 
   update(intent: Intent, dt: number): TickResult {
-    const result: TickResult = { playerHit: false, enemyHit: false, killed: 0, leveled: 0, died: false, waveStarted: 0 };
+    const result: TickResult = {
+      playerHit: false,
+      enemyHit: false,
+      killed: 0,
+      leveled: 0,
+      died: false,
+      waveStarted: 0,
+      townReady: false,
+      portalInterrupted: false,
+      eliteAggro: false,
+      uniqueFind: false,
+      maxCritDealt: false,
+      maxCritTaken: false,
+    };
     this.bannerT = Math.max(0, this.bannerT - dt);
     this.decayFloats(dt);
     if (this.phase === "title" || this.phase === "dead") return result;
+    this.bursts = this.bursts.filter((burst) => {
+      burst.t -= dt;
+      return burst.t > 0;
+    });
 
-    if (this.phase === "between") {
-      this.tickTimers(dt);
-      this.applyIntent(intent, dt);
-      if (intent.lootId !== null) this.takeDrop(intent.lootId);
-      this.collectGold();
-      this.clampBodies();
-      this.between -= dt;
-      if (this.between <= 0) {
-        this.wave += 1;
-        this.phase = "play";
-        this.spawnWave();
-        result.waveStarted = this.wave;
-      }
-      return result;
-    }
+    if (this.phase === "between") this.phase = "play";
 
     this.hurtThisTick = false;
     this.tickTimers(dt);
     this.applyIntent(intent, dt);
+    if (this.player.portal) {
+      const stick = Math.hypot(intent.moveX, intent.moveY);
+      const busy =
+        stick > 0.18 ||
+        intent.attack ||
+        intent.skills.some(Boolean) ||
+        intent.dest !== null ||
+        intent.aimId !== null ||
+        this.hurtThisTick ||
+        this.player.stun > 0;
+      if (busy) {
+        this.breakPortal();
+        result.portalInterrupted = true;
+        this.float(this.player.x, this.player.y - 28, "Portal broken", "#9a8f9e");
+      }
+    }
     for (const edge of [0, 1, 2] as const) {
       if (intent.skills[edge]) this.trySkill(edge, result);
     }
@@ -358,6 +437,7 @@ export class Sim {
       !handsBusy;
     if (idle || intent.attack || this.player.aimId !== null) this.tryBasicAttack(result, idle);
     this.tickChannel(dt);
+    this.tickPortal(dt, result);
     this.tickAuras(dt);
     this.tickEnemies(dt, result);
     this.tickShots(dt, result);
@@ -366,12 +446,14 @@ export class Sim {
     this.clampBodies();
     if (intent.lootId !== null) this.takeDrop(intent.lootId);
     this.collectGold();
-    if (this.hurtThisTick) this.breakChannel();
+    if (this.player.stun > 0) this.breakChannel();
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.phase = "dead";
       result.died = true;
     }
+    this.refreshPacks();
+    this.trackPlace();
     return result;
   }
 
@@ -407,13 +489,14 @@ export class Sim {
     p.attackCd = Math.max(0, p.attackCd - dt);
     p.swing = Math.max(0, p.swing - dt);
     p.iFrame = Math.max(0, p.iFrame - dt);
+    p.stun = Math.max(0, p.stun - dt);
     for (let i = 0; i < 3; i++) p.skillCd[i] = Math.max(0, p.skillCd[i]! - dt);
     p.buffs = p.buffs.filter((buff) => {
       buff.t -= dt;
       return buff.t > 0;
     });
     p.hp = Math.min(this.derived.life, p.hp + this.derived.lifeRegen * dt);
-    p.mana = Math.min(this.derived.mana, p.mana + this.derived.manaRegen * dt);
+    p.energy = Math.min(this.derived.energy, p.energy + this.derived.energyRegen * dt);
     for (const enemy of this.enemies) enemy.flash = Math.max(0, enemy.flash - dt);
   }
 
@@ -435,27 +518,25 @@ export class Sim {
       p.aimId = intent.aimId;
       p.dest = null;
     }
+    // Town portal is a standing cast — movement is held until it finishes or breaks.
+    if (p.portal) return;
     const stick = Math.hypot(intent.moveX, intent.moveY);
     let vx = 0;
     let vy = 0;
-    if (stick > 0.18) {
+    if (p.stun > 0) {
+      p.dest = null;
+    } else if (stick > 0.18) {
       p.dest = null;
       p.aimId = null;
       vx = intent.moveX / stick;
       vy = intent.moveY / stick;
-      if (stick > 0.55 && p.channel) this.breakChannel();
     } else if (p.aimId !== null) {
       const enemy = this.enemies.find((entry) => entry.id === p.aimId);
       if (!enemy) p.aimId = null;
       else {
         const dx = enemy.x - p.x;
         const dy = enemy.y - p.y;
-        const dist = Math.hypot(dx, dy) || 1;
         p.facing = Math.atan2(dy, dx);
-        if (dist > this.derived.weaponRange * 0.92) {
-          vx = dx / dist;
-          vy = dy / dist;
-        }
       }
     } else if (p.dest) {
       const dx = p.dest.x - p.x;
@@ -478,20 +559,44 @@ export class Sim {
 
   private tryBasicAttack(result: TickResult, anyFacing = false): void {
     const p = this.player;
-    if (p.attackCd > 0 || p.channel) return;
+    if (p.attackCd > 0 || p.channel || p.portal) return;
     const style = this.derived.weaponStyle;
     const range = this.derived.weaponRange;
+    const ranged = style === "bow" || style === "thrown" || style === "handbow";
     const target = this.nearestEnemy(range, style === "melee" && !anyFacing);
     if (!target && style === "melee") return;
     if (!target && style !== "melee" && p.aimId === null) return;
     if (target) p.facing = Math.atan2(target.y - p.y, target.x - p.x);
     p.attackCd = this.derived.attackPeriod;
     p.swing = 0.16;
+    const burn = gearNumber(this.character, "burn");
+    const frost = gearNumber(this.character, "frost");
+    const lightning = gearNumber(this.character, "lightning");
     if (style === "melee") {
-      if (target) this.hitEnemy(target, this.rollWeapon(), false, 0, result);
-    } else {
-      const damage = style === "focus" ? this.rollSpell(1) : this.rollWeapon();
-      this.fire(p.facing, 0, 1, damage, style === "focus" ? "#d8ccff" : "#e7d3a1", 0, false, range);
+      this.burst("slash", burn > 0 ? "#ff8a3d" : "#e7c39a", 1);
+      if (target) {
+        this.hitEnemy(
+          target,
+          this.rollWeapon() + lightning,
+          false,
+          burn,
+          result,
+          0,
+          frost,
+          frost > 0 ? 1.4 : 0,
+          0,
+          "bleed",
+        );
+      }
+    } else if (style === "focus") {
+      const damage = this.rollSpell(1) + lightning;
+      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark");
+      this.burst("arcane", "#c9b6ff", 0.7);
+    } else if (ranged) {
+      const damage = this.rollWeapon() + lightning;
+      const color = style === "thrown" ? "#d8c4a0" : "#f0e2c4";
+      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow");
+      this.burst("slash", color, 0.7);
     }
   }
 
@@ -499,28 +604,30 @@ export class Sim {
     const id = this.character.slotted[index];
     if (!id) return;
     const rank = this.character.skillRanks[id] ?? 0;
-    const spec = scaledActive(id, rank);
+    const spec = scaledActive(id, rank, this.character.skillRanks);
     if (!spec) return;
     if (spec.kind === "aura") {
       this.player.auras[index] = !this.player.auras[index];
-      if (this.player.auras[index] && this.player.mana <= 1) {
+      if (this.player.auras[index] && this.player.energy <= 1) {
         this.player.auras[index] = false;
-        this.float(this.player.x, this.player.y - 28, "No mana", "#9ebed0");
+        this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
         return;
       }
       this.recompute();
+      this.burst("ward", spec.color, 1.1);
       return;
     }
     if (this.player.skillCd[index] > 0) return;
-    if (this.player.mana < spec.mana) {
-      this.float(this.player.x, this.player.y - 28, "No mana", "#9ebed0");
+    if (this.player.energy < spec.energyCost) {
+      this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
       return;
     }
-    this.player.mana -= spec.mana;
+    this.player.energy -= spec.energyCost;
     const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr"), 0, 0.4);
     this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
     this.player.swing = 0.18;
+    this.castFx(spec);
     if (spec.kind === "channel") {
       this.breakChannel();
       this.player.channel = {
@@ -532,10 +639,11 @@ export class Sim {
       };
       return;
     }
-    this.cast(spec, result);
+    const pair = skillById(id)?.sector ?? "bleed";
+    this.cast(spec, result, pair);
   }
 
-  private cast(spec: ActiveSpec, result: TickResult): void {
+  private cast(spec: ActiveSpec, result: TickResult, pair: DamagePair = "bleed"): void {
     const p = this.player;
     const critAdd = spec.kind === "dash" && spec.bleed ? 0.45 : 0;
     if (spec.kind === "buff") {
@@ -554,7 +662,7 @@ export class Sim {
       p.y += Math.sin(p.facing) * spec.dash;
       for (const enemy of this.enemies) {
         if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= spec.range) {
-          this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, critAdd);
+          this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, critAdd, pair);
         }
       }
       return;
@@ -564,27 +672,66 @@ export class Sim {
       let hits = 0;
       for (const enemy of this.enemies) {
         if (!this.inArc(enemy, spec.range, arc)) continue;
-        this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+        this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
         hits += 1;
       }
       if (hits === 0 && spec.kind === "melee") {
         const target = this.nearestEnemy(spec.range, false);
-        if (target) this.hitEnemy(target, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+        if (target) this.hitEnemy(target, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
       }
       return;
     }
     if (spec.kind === "nova") {
       for (const enemy of this.enemies) {
         if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= spec.range) {
-          this.hitEnemy(enemy, this.rollScaled(spec), false, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+          this.hitEnemy(enemy, this.rollScaled(spec), false, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
         }
       }
       return;
     }
     if (spec.kind === "projectile") {
       const damage = this.rollScaled(spec) * (spec.scaling === "melee" ? 1 + this.mods.projectileMult : 1);
-      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range);
+      const style = spec.burn > 0 ? "fire" : spec.scaling === "spell" ? "spark" : "knife";
+      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range, style, pair);
     }
+  }
+
+  private castFx(spec: ActiveSpec): void {
+    if (spec.kind === "buff") {
+      this.burst(spec.shieldFrac > 0 ? "ward" : "dash", spec.color, 1.15);
+      return;
+    }
+    if (spec.kind === "dash") {
+      this.burst("dash", spec.color, 1.45);
+      if (spec.bleed > 0) this.burst("bleed", "#e15b4c", 0.95);
+      return;
+    }
+    if (spec.kind === "channel") {
+      this.burst("heal", spec.color, 1);
+      return;
+    }
+    if (spec.kind === "nova") {
+      const kind = spec.burn > 0 ? "fire" : spec.slow > 0 ? "frost" : "arcane";
+      this.burst(kind, spec.color, spec.range / 90);
+      return;
+    }
+    if (spec.kind === "melee" || spec.kind === "arc") {
+      const kind = spec.bleed > 0 ? "bleed" : spec.slow > 0 ? "frost" : spec.kind === "arc" ? "cleave" : spec.stun > 0 ? "ward" : "slash";
+      this.burst(kind, spec.color, spec.kind === "arc" ? 1.3 : 1.05);
+    }
+  }
+
+  private burst(kind: BurstKind, color: string, radius = 1): void {
+    this.bursts.push({
+      x: this.player.x,
+      y: this.player.y,
+      facing: this.player.facing,
+      t: 0.46,
+      life: 0.46,
+      kind,
+      color,
+      radius,
+    });
   }
 
   private fire(
@@ -596,6 +743,8 @@ export class Sim {
     burn: number,
     radial: boolean,
     speed: number,
+    style: Shot["style"],
+    pair: DamagePair = "bleed",
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -615,6 +764,8 @@ export class Sim {
         pierce: count === 1 && speed >= 400,
         burn,
         bleed: false,
+        style,
+        pair,
       });
     }
   }
@@ -625,10 +776,45 @@ export class Sim {
     const rate = channel.healFrac / channel.total;
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * rate * dt);
     if (channel.restoreMana) {
-      this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.mana * 0.18 * dt);
+      this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.18 * dt);
     }
     channel.t -= dt;
     if (channel.t <= 0) this.player.channel = null;
+  }
+
+  /** Begin a 3s interruptible town portal cast. */
+  startPortal(): string | null {
+    if (this.phase !== "play") return "The gate will not open here.";
+    if (this.player.stun > 0) return "You cannot open a portal while stunned.";
+    if (this.player.portal) return null;
+    this.breakChannel();
+    this.player.dest = null;
+    this.player.aimId = null;
+    this.player.portal = { t: 3, total: 3 };
+    this.float(this.player.x, this.player.y - 30, "Opening portal…", "#c9a56a");
+    this.burst("ward", "#7a1c24", 1.2);
+    return null;
+  }
+
+  portalProgress(): number {
+    const portal = this.player.portal;
+    if (!portal) return 0;
+    return 1 - portal.t / portal.total;
+  }
+
+  private tickPortal(dt: number, result: TickResult): void {
+    const portal = this.player.portal;
+    if (!portal) return;
+    portal.t -= dt;
+    if (portal.t > 0) return;
+    this.player.portal = null;
+    result.townReady = true;
+    this.burst("ward", "#e0c078", 1.4);
+    this.float(this.player.x, this.player.y - 32, "Ashgate", "#e0c078");
+  }
+
+  private breakPortal(): void {
+    this.player.portal = null;
   }
 
   private breakChannel(): void {
@@ -644,17 +830,17 @@ export class Sim {
         this.player.auras[i] = false;
         continue;
       }
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (!spec || spec.kind !== "aura") {
         this.player.auras[i] = false;
         continue;
       }
-      drain += spec.manaPerSec;
+      drain += spec.energyPerSec;
     }
     if (drain <= 0) return;
-    this.player.mana -= drain * dt;
-    if (this.player.mana <= 0) {
-      this.player.mana = 0;
+    this.player.energy -= drain * dt;
+    if (this.player.energy <= 0) {
+      this.player.energy = 0;
       this.player.auras = [false, false, false];
       this.recompute();
       this.float(this.player.x, this.player.y - 24, "Aura fades", "#9ebed0");
@@ -662,6 +848,7 @@ export class Sim {
   }
 
   private tickEnemies(dt: number, result: TickResult): void {
+    this.refreshAggro(result);
     for (const enemy of this.enemies) {
       enemy.cd = Math.max(0, enemy.cd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
@@ -672,14 +859,26 @@ export class Sim {
         if (enemy.dot.t <= 0) enemy.dot = null;
       }
       if (enemy.hp <= 0 || enemy.stun > 0) continue;
+      if (!enemy.aggro) {
+        enemy.telegraph = 0;
+        const hx = enemy.homeX - enemy.x;
+        const hy = enemy.homeY - enemy.y;
+        const home = Math.hypot(hx, hy);
+        if (home > 10) {
+          const step = Math.min(enemy.speed * (enemy.slow > 0 ? 0.55 : 1) * dt, home);
+          enemy.x += (hx / home) * step;
+          enemy.y += (hy / home) * step;
+        }
+        continue;
+      }
       const dx = this.player.x - enemy.x;
       const dy = this.player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
       const slowMul = enemy.slow > 0 ? 0.55 : 1;
-      if (enemy.kind === "brute" && enemy.telegraph > 0) {
+      if ((enemy.kind === "brute" || enemy.kind === "hillock" || enemy.kind === "whelp") && enemy.telegraph > 0) {
         enemy.telegraph -= dt;
         if (enemy.telegraph <= 0) {
-          if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result);
+          if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result, { knockback: true, stun: 0.6 });
           enemy.cd = enemy.maxCd;
         }
         continue;
@@ -691,7 +890,7 @@ export class Sim {
         continue;
       }
       if (enemy.cd > 0) continue;
-      if (enemy.kind === "brute") {
+      if (enemy.kind === "brute" || enemy.kind === "hillock" || enemy.kind === "whelp") {
         enemy.telegraph = 0.85;
         continue;
       }
@@ -707,11 +906,36 @@ export class Sim {
           life: 1.4,
           damage: enemy.damage,
           fromPlayer: false,
-          color: "#e0b15a",
+          color: "#e7c39a",
           hit: [],
           pierce: false,
           burn: 0,
           bleed: false,
+          style: "arrow",
+          pair: "bleed",
+        });
+        enemy.cd = enemy.maxCd;
+        continue;
+      }
+      if (enemy.kind === "cultist" || enemy.kind === "wisp") {
+        const angle = Math.atan2(dy, dx);
+        const speed = enemy.kind === "wisp" ? 200 : 230;
+        this.shots.push({
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 5,
+          life: 1.3,
+          damage: enemy.damage,
+          fromPlayer: false,
+          color: enemy.kind === "wisp" ? "#ffb060" : "#a894e6",
+          hit: [],
+          pierce: false,
+          burn: enemy.kind === "wisp" ? 2 : 0,
+          bleed: false,
+          style: "spark",
+          pair: enemy.kind === "wisp" ? "fire" : "unholy",
         });
         enemy.cd = enemy.maxCd;
         continue;
@@ -736,7 +960,7 @@ export class Sim {
       for (const enemy of this.enemies) {
         if (shot.hit.includes(enemy.id)) continue;
         if (Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <= enemy.radius + shot.radius) {
-          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result);
+          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair);
           shot.hit.push(enemy.id);
           if (!shot.pierce) shot.life = 0;
           break;
@@ -746,23 +970,62 @@ export class Sim {
     this.shots = this.shots.filter((shot) => shot.life > 0);
   }
 
-  private hurtPlayer(amount: number, sourceLevel: number, attacker: Enemy | null, result: TickResult): void {
-    if (this.iframeLeft() > 0) return;
+  private hurtPlayer(
+    amount: number,
+    sourceLevel: number,
+    attacker: Enemy | null,
+    result: TickResult,
+    blow: { knockback?: boolean; stun?: number } = {},
+  ): void {
+    // Dodge / i-frames and shield absorb resolve as defense layers.
+    // They must never clear swing / attackCd — committed attacks stay committed.
+    if (this.iframeLeft() > 0) {
+      this.float(this.player.x, this.player.y - 20, "dodge", "#c8d5cf");
+      return;
+    }
     if (this.rng() < this.derived.evasion) {
       this.float(this.player.x, this.player.y - 20, "evade", "#c8d5cf");
       return;
     }
-    let damage = mitigate(amount, this.derived.armor, sourceLevel, this.derived.damageReduction);
+    let damage = amount;
+    let crit = false;
+    // Elites and brutes can land crushing criticals; ordinary foes rarely.
+    const critChance = attacker?.elite || attacker?.kind === "brute" || attacker?.kind === "whelp" || attacker?.kind === "hillock" ? 0.18 : 0.06;
+    if (this.rng() < critChance) {
+      damage *= 1.65;
+      crit = true;
+    }
+    const maxHit = crit; // enemy damage is flat; a crit is their max-damage critical
+    damage = mitigate(damage, this.derived.armor, sourceLevel, this.derived.damageReduction);
     if (this.player.shield > 0) {
       const absorbed = Math.min(this.player.shield, damage);
       this.player.shield -= absorbed;
       damage -= absorbed;
+      if (absorbed > 0) this.float(this.player.x, this.player.y - 18, "block", "#e7c39a");
+      // Full shield absorb: no HP loss, do not interrupt swing/attack animation.
+      if (damage <= 0) return;
     }
     if (damage <= 0) return;
     this.player.hp -= damage;
     this.hurtThisTick = true;
     result.playerHit = true;
-    this.float(this.player.x, this.player.y - 22, `${Math.round(damage)}`, "#e15a4a");
+    if (maxHit) result.maxCritTaken = true;
+    this.float(this.player.x, this.player.y - 22, `${Math.round(damage)}${maxHit ? "!" : ""}`, maxHit ? "#ff6a4a" : "#e15a4a");
+    if (this.player.portal) {
+      this.breakPortal();
+      result.portalInterrupted = true;
+      this.float(this.player.x, this.player.y - 34, "Portal broken", "#9a8f9e");
+    }
+    if (blow.stun && blow.stun > 0) this.player.stun = Math.max(this.player.stun, blow.stun);
+    if (blow.knockback && attacker) {
+      const dx = this.player.x - attacker.x;
+      const dy = this.player.y - attacker.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      this.player.x += (dx / dist) * 78;
+      this.player.y += (dy / dist) * 78;
+      this.float(this.player.x, this.player.y - 28, "knocked back", "#e7c39a");
+    }
+    if ((blow.stun && blow.stun > 0) || blow.knockback) this.breakChannel();
     if (attacker && this.derived.thorns > 0) attacker.hp -= this.derived.thorns;
   }
 
@@ -776,23 +1039,31 @@ export class Sim {
     slow = 0,
     slowDur = 0,
     critAdd = 0,
+    pair: DamagePair = "bleed",
   ): void {
     if (this.rng() > hitChance(this.derived.attackRating, enemy.defense)) {
       this.float(enemy.x, enemy.y - 18, "miss", "#b7b1a8");
       return;
     }
     let damage = raw;
+    const preCrit = raw;
     const critChance = clamp(this.derived.crit + critAdd + this.player.buffs.reduce((sum, buff) => sum + buff.critAdd, 0), 0, 0.85);
     let crit = false;
     if (this.rng() < critChance) {
       damage *= 1.65;
       crit = true;
     }
+    // Resist/weak only — clampDamageMul inside damageTakenMul enforces no immunities.
+    damage *= damageTakenMul(monsterOf(enemy.kind), pair);
     damage = mitigate(damage, enemy.armor, this.character.level, 0);
     enemy.hp -= damage;
     enemy.flash = 0.12;
     result.enemyHit = true;
-    this.float(enemy.x, enemy.y - enemy.radius - 8, `${Math.round(damage)}`, crit ? "#ffd27a" : "#f4efe6");
+    if (crit && (preCrit >= this.derived.meleeMax * 0.995 || preCrit >= this.derived.spellMax * 0.995)) {
+      result.maxCritDealt = true;
+    }
+    const tint = burn > 0 ? "#ff8a3d" : forceBleed ? "#e15b4c" : slow > 0 ? "#8ec8ff" : stun > 0 ? "#ffe0a0" : crit ? "#ffd27a" : "#f4efe6";
+    this.float(enemy.x, enemy.y - enemy.radius - 8, `${Math.round(damage)}${result.maxCritDealt ? "!" : ""}`, tint);
     if (forceBleed || this.rng() < this.derived.bleedChance) {
       const dps = 2 + this.derived.meleeMax * 0.12;
       enemy.dot = { dps: Math.max(enemy.dot?.dps ?? 0, dps), t: 3 };
@@ -812,6 +1083,8 @@ export class Sim {
     for (let i = 0; i < 3; i++) {
       if (this.player.skillCd[i]! > 0) this.player.skillCd[i] = Math.max(0, this.player.skillCd[i]! - 0.16);
     }
+    // Basic and skill hits charge skill energy.
+    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyOnHit);
   }
 
   private resolveDeaths(result: TickResult): void {
@@ -829,18 +1102,18 @@ export class Sim {
       this.drops.push({ id: this.nextDrop++, x: enemy.x, y: enemy.y, gold, itemUid: null });
       if (!this.starterGiven) {
         this.starterGiven = true;
-        this.placeItem(enemy.x + 18, enemy.y, starterBlade(`item-${this.nextUid++}`));
+        this.placeItem(enemy.x + 18, enemy.y, starterBlade(`item-${this.nextUid++}`), result);
       } else if (this.rng() < 0.22) {
-        this.placeItem(enemy.x + 16, enemy.y + 10, rollItem(this.rng, this.wave, `item-${this.nextUid++}`, this.character.level));
+        this.placeItem(enemy.x + 16, enemy.y + 10, rollItem(this.rng, this.wave, `item-${this.nextUid++}`, this.character.level), result);
       }
       if (this.rng() < 0.06) {
-        this.placeItem(enemy.x - 14, enemy.y + 8, rollGem(this.rng, `gem-${this.nextUid++}`));
+        this.placeItem(enemy.x - 14, enemy.y + 8, rollGem(this.rng, `gem-${this.nextUid++}`), result);
       }
       const ranks = gain.levels + gain.paragons;
       if (ranks > 0) {
         this.recompute();
         this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * 0.28 * ranks);
-        this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.mana * 0.28 * ranks);
+        this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.28 * ranks);
         if (gain.paragons > 0) {
           const skills = Math.floor(this.character.paragon / 5) - Math.floor((this.character.paragon - gain.paragons) / 5);
           const skillLine = skills > 0 ? `  ·  +${skills} skill point${skills > 1 ? "s" : ""}` : "";
@@ -855,18 +1128,20 @@ export class Sim {
         result.leveled += ranks;
       }
     }
+    const before = this.enemies;
     this.enemies = living;
-    if (this.enemies.length === 0 && this.phase === "play") {
-      this.phase = "between";
-      this.between = 2.2;
-      this.banner = this.wave % 5 === 0 ? "The champion falls." : "The ward is quiet… more are coming.";
-      this.bannerT = 2.2;
+    this.markCleared(before, living);
+    if (!this.roadNoted && this.roadClear()) {
+      this.roadNoted = true;
+      this.banner = "The tenth ward falls quiet.";
+      this.bannerT = 4.5;
     }
   }
 
-  private placeItem(x: number, y: number, item: ReturnType<typeof starterBlade>): void {
+  private placeItem(x: number, y: number, item: ReturnType<typeof starterBlade>, result?: TickResult): void {
     this.itemStore.set(item.uid, item);
     this.drops.push({ id: this.nextDrop++, x, y, gold: 0, itemUid: item.uid });
+    if (item.uniqueId && result) result.uniqueFind = true;
   }
 
   private collectGold(): void {
@@ -897,18 +1172,92 @@ export class Sim {
     this.float(this.player.x, this.player.y - 26, item.name, item.uniqueId ? "#d4b15a" : rarityColor(item.rarity));
   }
 
-  private spawnWave(): void {
-    this.enemies = [];
-    this.shots = [];
-    const plan = wavePlan(this.wave);
-    plan.forEach((kind, index) => {
-      const angle = (index / plan.length) * Math.PI * 2 + this.rng() * 0.15;
-      const x = clamp(ARENA.width / 2 + Math.cos(angle) * ARENA.width * 0.36, ARENA.margin, ARENA.width - ARENA.margin);
-      const y = clamp(ARENA.height / 2 + Math.sin(angle) * ARENA.height * 0.34, ARENA.margin, ARENA.height - ARENA.margin);
-      this.enemies.push(makeEnemy(kind, this.wave, x, y, this.nextEnemy++));
+  private refreshAggro(result?: TickResult): void {
+    const wasAggro = new Set<string>();
+    for (const enemy of this.enemies) {
+      if (enemy.aggro) wasAggro.add(enemy.pack);
+    }
+    const seen = new Set<string>();
+    for (const enemy of this.enemies) {
+      if (Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y) <= enemy.sight) seen.add(enemy.pack);
+    }
+    const leashed = new Set<string>();
+    for (const enemy of this.enemies) {
+      if (Math.hypot(this.player.x - enemy.anchorX, this.player.y - enemy.anchorY) > LEASH) leashed.add(enemy.pack);
+    }
+    for (const enemy of this.enemies) enemy.aggro = seen.has(enemy.pack) && !leashed.has(enemy.pack);
+    if (result) {
+      for (const enemy of this.enemies) {
+        if (enemy.elite && enemy.aggro && !wasAggro.has(enemy.pack)) {
+          result.eliteAggro = true;
+          break;
+        }
+      }
+    }
+  }
+
+  private markCleared(before: Enemy[], living: Enemy[]): void {
+    const alive = new Set(living.map((enemy) => enemy.pack));
+    for (const enemy of before) {
+      if (!alive.has(enemy.pack) && this.spawned.has(enemy.pack)) this.cleared.add(enemy.pack);
+    }
+  }
+
+  private roadClear(): boolean {
+    return worldPacks().filter((pack) => !pack.branch).every((pack) => this.cleared.has(pack.id));
+  }
+
+  private trackPlace(): void {
+    const place = placeAt(this.player.x, this.player.y);
+    this.wave = place.level;
+    const label = `Level ${place.level} · ${place.name}`;
+    if (label === this.placeLabel) return;
+    this.placeLabel = label;
+    if (this.bannerT <= 0) {
+      this.banner = place.name;
+      this.bannerT = 2.2;
+    }
+  }
+
+  private refreshPacks(): void {
+    const keep: Enemy[] = [];
+    for (const enemy of this.enemies) {
+      if (this.cleared.has(enemy.pack)) continue;
+      const dist = Math.hypot(enemy.anchorX - this.player.x, enemy.anchorY - this.player.y);
+      if (dist > DESPAWN) continue;
+      keep.push(enemy);
+    }
+    this.enemies = keep;
+    this.spawned = new Set(keep.map((enemy) => enemy.pack));
+    for (const pack of worldPacks()) {
+      if (this.cleared.has(pack.id) || this.spawned.has(pack.id)) continue;
+      if (Math.hypot(pack.x - this.player.x, pack.y - this.player.y) > SPAWN_IN) continue;
+      this.spawnPack(pack);
+      this.spawned.add(pack.id);
+    }
+  }
+
+  private spawnPack(pack: PackSpot): void {
+    const tough = levelToughness(pack);
+    const kinds = packKinds(pack);
+    kinds.forEach((kind, index) => {
+      const angle = (index / kinds.length) * Math.PI * 2;
+      const radius = 28 + kinds.length * 2.2;
+      const x = pack.x + Math.cos(angle) * radius;
+      const y = pack.y + Math.sin(angle) * radius;
+      const enemy = makeEnemy(kind, pack.level, x, y, this.nextEnemy++);
+      enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * tough));
+      enemy.hp = enemy.maxHp;
+      enemy.homeX = x;
+      enemy.homeY = y;
+      enemy.anchorX = pack.x;
+      enemy.anchorY = pack.y;
+      enemy.pack = pack.id;
+      enemy.sight = SIGHT[kind];
+      enemy.aggro = false;
+      enemy.elite = pack.boss && (kind === "brute" || index === kinds.length - 1);
+      this.enemies.push(enemy);
     });
-    this.banner = this.wave % 5 === 0 ? `Wave ${this.wave} — a champion enters` : `Wave ${this.wave}`;
-    this.bannerT = 2.4;
   }
 
   private nearestEnemy(range: number, preferFront: boolean): Enemy | null {

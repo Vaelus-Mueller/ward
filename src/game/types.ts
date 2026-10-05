@@ -1,4 +1,4 @@
-export const ARENA = { width: 2400, height: 1600, margin: 78 };
+export const ARENA = { width: 3600, height: 60000, margin: 160 };
 export const BASE_ATTR = 10;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;
@@ -7,33 +7,129 @@ export const PARAGON_SKILL_EVERY = 5;
 export const MAX_LEVEL = 100;
 export const PARAGON_CAP = 200;
 export const INVENTORY_CAP = 16;
+export const GEM_QUALITIES = 20;
 
-export type Attr = "strength" | "agility" | "endurance" | "wisdom";
-export type SlotName = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring1" | "ring2" | "neck";
-export type ItemSlot = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring" | "neck" | "gem";
-export type ArmorType = "cloth" | "leather" | "mail" | "plate";
-export type Rarity = "grey" | "white" | "green" | "blue" | "purple" | "orange" | "yellow" | "gold" | "red" | "rainbow";
-export type GemKind = "ruby" | "sapphire" | "topaz" | "emerald" | "diamond" | "amethyst" | "skull";
-export type WeaponStyle = "melee" | "bow" | "focus";
-export type SectorId = "bulwark" | "shade" | "rite";
-export type SkillKind = "passive" | "active" | "aura" | "channel";
-export type EnemyKind = "hound" | "sentinel" | "archer" | "brute";
+export type Attr = "strength" | "agility" | "stamina" | "luck" | "spirit";
+export type DamagePair =
+  | "air"
+  | "water"
+  | "fire"
+  | "holy"
+  | "poison"
+  | "bleed"
+  | "unholy";
+/** Skill-wheel cones map 1:1 onto damage pairs. */
+export type SectorId = DamagePair;
+export type SkillKind = "passive" | "active" | "aura" | "channel" | "key" | "capstone";
+export type EnemyKind =
+  | "hound"
+  | "sentinel"
+  | "archer"
+  | "brute"
+  | "wolf"
+  | "slime"
+  | "gargoyle"
+  | "wisp"
+  | "imp"
+  | "spider"
+  | "cultist"
+  | "sprig"
+  | "whelp"
+  | "hillock"
+  | "lurker"
+  | "lumen"
+  | "flicker";
 
-export const ATTRS: Attr[] = ["strength", "agility", "endurance", "wisdom"];
+export const ATTRS: Attr[] = ["strength", "agility", "stamina", "luck", "spirit"];
 
 export const ATTR_LABEL: Record<Attr, string> = {
   strength: "Strength",
   agility: "Agility",
-  endurance: "Endurance",
-  wisdom: "Wisdom",
+  stamina: "Stamina",
+  luck: "Luck",
+  spirit: "Spirit",
 };
 
 export const ATTR_HINT: Record<Attr, string> = {
-  strength: "Melee damage and armor.",
-  agility: "Hit chance, evasion, bows, and speed.",
-  endurance: "Life. Four life per point, and 1 health each second for every 10 points.",
-  wisdom: "Mana and spell damage.",
+  strength: "Damage dealt for every class.",
+  agility: "Minor dodge, minor crit, and extra damage for swift classes.",
+  stamina: "Life total and a little armor.",
+  luck: "Crit rate, gold find, magic find, and better vendor deals.",
+  spirit: "Energy regen and a little more energy storage.",
 };
+
+export const DAMAGE_PAIR_LABEL: Record<DamagePair, { primary: string; secondary: string; blurb: string }> = {
+  air: { primary: "Air", secondary: "Lightning", blurb: "Gales and lightning." },
+  water: { primary: "Water", secondary: "Ice", blurb: "Tides and frost." },
+  fire: { primary: "Fire", secondary: "Magma", blurb: "Flame and molten stone." },
+  holy: { primary: "Holy", secondary: "True", blurb: "Sacred light and true damage." },
+  poison: { primary: "Poison", secondary: "Venom", blurb: "Toxins and venom." },
+  bleed: { primary: "Bleed", secondary: "Physical", blurb: "Steel and opened veins." },
+  unholy: { primary: "Unholy", secondary: "Darkness", blurb: "Blight and shadow." },
+};
+
+export type SlotName =
+  | "weapon"
+  | "offhand"
+  | "weapon3"
+  | "weapon4"
+  | "head"
+  | "chest"
+  | "belt"
+  | "boots"
+  | "gloves"
+  | "ring1"
+  | "ring2"
+  | "neck"
+  | "ear1"
+  | "ear2";
+export type ItemSlot =
+  | "weapon"
+  | "shield"
+  | "head"
+  | "chest"
+  | "belt"
+  | "boots"
+  | "gloves"
+  | "ring"
+  | "neck"
+  | "earring"
+  | "gem";
+export type ArmorType = "cloth" | "leather" | "mail" | "plate";
+export type Rarity = "grey" | "white" | "green" | "blue" | "purple" | "orange" | "yellow" | "gold" | "red" | "rainbow";
+export type GemKind = "ruby" | "sapphire" | "topaz" | "emerald" | "diamond" | "amethyst" | "skull";
+export type MaterialId = "weave" | "hide" | "rings" | "plate" | "steel" | "dust";
+export type WeaponStyle = "melee" | "bow" | "focus" | "thrown" | "handbow";
+export type WeaponHands = 1 | 2;
+
+export const RARITIES: Rarity[] = ["grey", "white", "green", "blue", "purple", "orange", "yellow", "gold", "red", "rainbow"];
+
+export const MATERIAL_LABEL: Record<MaterialId, string> = {
+  weave: "Cloth Weave",
+  hide: "Hide",
+  rings: "Mail Rings",
+  plate: "Plate Shards",
+  steel: "Weapon Steel",
+  dust: "Jewel Dust",
+};
+
+export const MATERIAL_ORDER: MaterialId[] = ["weave", "hide", "rings", "plate", "steel", "dust"];
+
+export interface SocketGem {
+  kind: GemKind;
+  quality: number;
+}
+
+export interface GemStack {
+  kind: GemKind;
+  quality: number;
+  count: number;
+}
+
+export interface MaterialStack {
+  id: MaterialId;
+  count: number;
+}
 
 export interface Affix {
   key: string;
@@ -41,7 +137,22 @@ export interface Affix {
   label: string;
 }
 
-export const GEAR_SLOTS: SlotName[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring1", "ring2", "neck"];
+export const GEAR_SLOTS: SlotName[] = [
+  "weapon",
+  "offhand",
+  "weapon3",
+  "weapon4",
+  "head",
+  "chest",
+  "belt",
+  "boots",
+  "gloves",
+  "ring1",
+  "ring2",
+  "neck",
+  "ear1",
+  "ear2",
+];
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   grey: "Grey",
@@ -66,6 +177,9 @@ export const ARMOR_LABEL: Record<ArmorType, string> = {
 export function emptyEquipment(): Record<SlotName, Item | null> {
   return {
     weapon: null,
+    offhand: null,
+    weapon3: null,
+    weapon4: null,
     head: null,
     chest: null,
     belt: null,
@@ -74,6 +188,8 @@ export function emptyEquipment(): Record<SlotName, Item | null> {
     ring1: null,
     ring2: null,
     neck: null,
+    ear1: null,
+    ear2: null,
   };
 }
 
@@ -86,6 +202,7 @@ export interface Item {
   ethereal: boolean;
   uniqueId: string | null;
   style: WeaponStyle;
+  hands: WeaponHands;
   damageMin: number;
   damageMax: number;
   armor: number;
@@ -98,11 +215,16 @@ export interface Item {
   bornLevel: number;
   ilvl: number;
   dye: number;
+  quality: number;
   sockets: number;
-  gems: (GemKind | null)[];
+  gems: (SocketGem | null)[];
 }
 
+export type RaceId = "human" | "elf" | "dwarf" | "gnome" | "hobbit" | "insectoid" | "minotaur" | "golem";
+
 export interface Character {
+  name: string;
+  race: RaceId;
   level: number;
   xp: number;
   gold: number;
@@ -113,13 +235,19 @@ export interface Character {
   slotted: [string | null, string | null, string | null];
   equipment: Record<SlotName, Item | null>;
   inventory: Item[];
+  gems: GemStack[];
+  materials: MaterialStack[];
+  salvageMarks: Rarity[];
   retrains: number;
   paragon: number;
 }
 
 export interface Mods {
   life: number;
-  mana: number;
+  energy: number;
+  energyMax: number;
+  energyOnHit: number;
+  chargeMax: number;
   armor: number;
   armorPct: number;
   meleeMult: number;
@@ -131,21 +259,26 @@ export interface Mods {
   attackRating: number;
   thorns: number;
   lifeRegen: number;
-  manaRegen: number;
+  energyRegen: number;
   cdr: number;
   damageReduction: number;
   bleedChance: number;
   goldFind: number;
+  magicFind: number;
   projectileMult: number;
+  vendorPrice: number;
+  vendorQuality: number;
 }
 
 export interface Derived {
   strength: number;
   agility: number;
-  endurance: number;
-  wisdom: number;
+  stamina: number;
+  luck: number;
+  spirit: number;
   life: number;
-  mana: number;
+  energy: number;
+  energyOnHit: number;
   armor: number;
   attackRating: number;
   evasion: number;
@@ -159,17 +292,23 @@ export interface Derived {
   weaponStyle: WeaponStyle;
   weaponRange: number;
   lifeRegen: number;
-  manaRegen: number;
+  energyRegen: number;
   thorns: number;
   damageReduction: number;
   bleedChance: number;
   goldFind: number;
+  magicFind: number;
+  vendorPrice: number;
+  vendorQuality: number;
 }
 
 export function emptyMods(): Mods {
   return {
     life: 0,
-    mana: 0,
+    energy: 0,
+    energyMax: 0,
+    energyOnHit: 0,
+    chargeMax: 0,
     armor: 0,
     armorPct: 0,
     meleeMult: 0,
@@ -181,12 +320,15 @@ export function emptyMods(): Mods {
     attackRating: 0,
     thorns: 0,
     lifeRegen: 0,
-    manaRegen: 0,
+    energyRegen: 0,
     cdr: 0,
     damageReduction: 0,
     bleedChance: 0,
     goldFind: 0,
+    magicFind: 0,
     projectileMult: 0,
+    vendorPrice: 0,
+    vendorQuality: 0,
   };
 }
 

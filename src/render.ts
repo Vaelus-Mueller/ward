@@ -1,9 +1,15 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { classTitle } from "./game/character";
 import { ARENA, type Item } from "./game/types";
-import type { Enemy, FloatText, Shot, Sim } from "./game/sim";
+import { ROAD_X, roadSpine, worldPacks } from "./game/world";
+import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
+import { buildHero, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { syncHeroGear } from "./render/gear";
+import { AdaptiveQuality } from "./render/quality";
+import { AtmosphereFx } from "./render/atmosphere";
+import { buildMonster, isProceduralMonster } from "./render/monsters";
 
 const SCALE = 0.045;
 const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
@@ -31,6 +37,19 @@ const HEIGHT: Record<string, number> = {
   sentinel: 1.8,
   archer: 1.72,
   brute: 2.55,
+  wolf: 1.05,
+  slime: 0.95,
+  gargoyle: 1.55,
+  wisp: 0.7,
+  imp: 0.95,
+  spider: 0.7,
+  cultist: 1.65,
+  sprig: 1.35,
+  whelp: 1.45,
+  hillock: 2.35,
+  lurker: 1.5,
+  lumen: 1.7,
+  flicker: 0.85,
 };
 
 interface ClipSet {
@@ -76,7 +95,8 @@ export class Renderer {
   private readonly enemyRoots: THREE.Object3D[] = [];
   private player: Actor | null = null;
   private playerKind = "";
-  private readonly shots: THREE.Mesh[] = [];
+  private readonly shots: THREE.Group[] = [];
+  private readonly bursts: { kind: string; group: THREE.Group }[] = [];
   private readonly rings: THREE.Mesh[] = [];
   private readonly drops: THREE.Mesh[] = [];
   private readonly floatLayer: HTMLElement;
@@ -89,19 +109,37 @@ export class Renderer {
   private hemi!: THREE.HemisphereLight;
   private moon!: THREE.DirectionalLight;
   private fill!: THREE.DirectionalLight;
+  private rim!: THREE.DirectionalLight;
   private ember!: THREE.PointLight;
   private stone?: THREE.Texture;
   private stoneRough?: THREE.Texture;
   private lava?: THREE.Texture;
   private lavaRough?: THREE.Texture;
+  private roadMat: THREE.MeshStandardMaterial | null = null;
+  private readonly readyPromise: Promise<void>;
+  private resolveReady!: () => void;
+  private readonly quality = new AdaptiveQuality();
+  private atmosphere: AtmosphereFx | null = null;
+  private lastLevel = -1;
 
   constructor(private canvas: HTMLCanvasElement) {
-    this.webgl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    this.readyPromise = new Promise((resolve) => {
+      this.resolveReady = resolve;
+    });
+    const q = this.quality.current();
+    this.webgl = new THREE.WebGLRenderer({
+      canvas,
+      antialias: q.antialias,
+      alpha: false,
+      powerPreference: "high-performance",
+      stencil: false,
+    });
     this.webgl.setClearColor(0x3a342e);
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 1.28;
-    this.webgl.shadowMap.enabled = true;
+    // 1.12 with RoomEnvironment IBL + rim reads cleaner than PR #1's 1.28 (IBL adds fill).
+    this.webgl.toneMappingExposure = 1.12;
+    this.webgl.shadowMap.enabled = q.shadows;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.camera = new THREE.PerspectiveCamera(44, 1, 0.1, 200);
     this.scene.fog = new THREE.Fog(0x6d6256, 36, 110);
@@ -110,40 +148,56 @@ export class Renderer {
     this.moon = new THREE.DirectionalLight(0xfff8f0, 2.1);
     this.moon.position.set(-8, 20, 12);
     this.moon.castShadow = true;
-    this.moon.shadow.mapSize.set(1024, 1024);
-    this.moon.shadow.bias = -0.0006;
+    this.moon.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+    this.moon.shadow.bias = -0.00035;
+    this.moon.shadow.normalBias = 0.028;
     this.moon.shadow.camera.near = 1;
-    this.moon.shadow.camera.far = 36;
+    this.moon.shadow.camera.far = 42;
     const shadow = this.moon.shadow.camera;
-    shadow.left = -12;
-    shadow.right = 12;
-    shadow.top = 12;
-    shadow.bottom = -12;
+    shadow.left = -14;
+    shadow.right = 14;
+    shadow.top = 14;
+    shadow.bottom = -14;
+    this.moon.shadow.radius = q.level === "high" ? 2.5 : 1.5;
     this.scene.add(this.moon);
     this.scene.add(this.moon.target);
     this.fill = new THREE.DirectionalLight(0xc9d4e4, 0.45);
     this.fill.position.set(12, 8, -8);
     this.scene.add(this.fill);
+    this.rim = new THREE.DirectionalLight(0x9bb4d4, 0.38);
+    this.rim.position.set(6, 5, -8);
+    this.scene.add(this.rim);
     this.ember = new THREE.PointLight(0xffb56a, 22, 40, 2);
     this.ember.position.set((ARENA.width * SCALE) / 2, 3.2, (ARENA.height * SCALE) / 2);
     this.scene.add(this.ember);
-    this.groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 });
+    this.groundMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.9,
+      metalness: 0.04,
+      envMapIntensity: 0.4,
+    });
+    this.installEnvironment();
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE), this.groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((ARENA.width * SCALE) / 2, -0.02, (ARENA.height * SCALE) / 2);
     ground.receiveShadow = true;
     this.scene.add(ground);
+    this.atmosphere = new AtmosphereFx(this.scene, this.webgl, () => this.quality.current());
     this.floatLayer = document.createElement("div");
     this.floatLayer.id = "float-layer";
     canvas.parentElement?.appendChild(this.floatLayer);
-    void this.loadModels();
-    void this.loadFloors();
+    void Promise.all([this.loadModels(), this.loadFloors()]).finally(() => this.resolveReady());
+  }
+
+  whenReady(): Promise<void> {
+    return this.readyPromise;
   }
 
   resize(): void {
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    const q = this.quality.current();
+    const dpr = Math.min(q.dpr, window.devicePixelRatio || 1);
     this.webgl.setPixelRatio(dpr);
     this.webgl.setSize(width, height, false);
     this.camera.aspect = width / height;
@@ -153,11 +207,13 @@ export class Renderer {
   lookAt(sim: Sim): void {
     const x = sim.player.x * SCALE;
     const z = sim.player.y * SCALE;
-    this.camera.position.set(x, 8.6, z + 7.6);
+    this.camera.position.set(x, 12.79, z + 11.88);
     this.camera.lookAt(x, 1.15, z);
     this.moon.position.set(x - 5, 14, z + 6);
+    this.rim.position.set(x + 7, 6, z - 5);
     this.moon.target.position.set(x, 0, z);
     this.moon.target.updateMatrixWorld();
+    this.ember.position.set(x, 2.6, z);
   }
 
   pick(clientX: number, clientY: number): { x: number; y: number; enemyId: number | null } | null {
@@ -184,15 +240,70 @@ export class Renderer {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    if (this.quality.sample(dt) || this.quality.consumeDirty()) this.applyQuality();
     if (!this.propsBuilt && this.templates.has("wall")) this.buildDungeon();
-    this.applyRealm(sim.character.level > 20 ? "hell" : "dungeon");
+    const realm = sim.character.level > 20 ? "hell" : "dungeon";
+    this.applyRealm(realm);
+    if (sim.character.level !== this.lastLevel) {
+      this.lastLevel = sim.character.level;
+      this.atmosphere?.onLevelChange(sim.character.level, realm);
+    }
     this.syncPlayer(sim, dt);
     this.syncEnemies(sim, dt);
     this.syncShots(sim.shots);
+    this.syncBursts(sim.bursts);
     this.syncRings(sim.enemies);
     this.syncDrops(sim);
     this.syncFloats(sim.floats);
+    const px = sim.player.x * SCALE;
+    const pz = sim.player.y * SCALE;
+    this.atmosphere?.update(dt, {
+      playerX: px,
+      playerZ: pz,
+      moon: this.moon,
+      hemi: this.hemi,
+      fill: this.fill,
+      rim: this.rim,
+      ember: this.ember,
+      fog: this.scene.fog as THREE.Fog,
+      groundMat: this.groundMat,
+      roadMat: this.roadMat,
+      renderer: this.webgl,
+      realm,
+    });
     this.webgl.render(this.scene, this.camera);
+  }
+
+  private applyQuality(): void {
+    const q = this.quality.current();
+    this.webgl.shadowMap.enabled = q.shadows;
+    this.moon.castShadow = q.shadows;
+    if (this.moon.shadow.mapSize.x !== q.shadowMap) {
+      this.moon.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+      this.moon.shadow.map?.dispose();
+      this.moon.shadow.map = null;
+    }
+    // Keep ambient IBL soft on low so fill rate stays for gameplay FX.
+    this.scene.environmentIntensity = q.level === "low" ? 0.28 : q.level === "balanced" ? 0.38 : 0.48;
+    this.moon.shadow.radius = q.level === "high" ? 2.5 : q.level === "balanced" ? 1.75 : 1;
+    this.atmosphere?.applyQuality(q);
+    this.resize();
+  }
+
+  private installEnvironment(): void {
+    const pmrem = new THREE.PMREMGenerator(this.webgl);
+    const room = new RoomEnvironment();
+    const target = pmrem.fromScene(room, 0.04);
+    this.scene.environment = target.texture;
+    this.scene.environmentIntensity = 0.45;
+    room.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) material.dispose();
+    });
+    pmrem.dispose();
   }
 
   private async loadFloors(): Promise<void> {
@@ -205,10 +316,11 @@ export class Renderer {
         loader.loadAsync(url("hell_diff.jpg")),
         loader.loadAsync(url("hell_rough.jpg")),
       ]);
-      this.stone = prepFloor(stone, true);
-      this.stoneRough = prepFloor(stoneRough, false);
-      this.lava = prepFloor(lava, true);
-      this.lavaRough = prepFloor(lavaRough, false);
+      const anisotropy = Math.min(8, this.webgl.capabilities.getMaxAnisotropy());
+      this.stone = prepFloor(stone, true, anisotropy);
+      this.stoneRough = prepFloor(stoneRough, false, anisotropy);
+      this.lava = prepFloor(lava, true, anisotropy);
+      this.lavaRough = prepFloor(lavaRough, false, anisotropy);
       this.realm = "";
     } catch {
       // The colored floor remains if a texture is missing.
@@ -224,65 +336,94 @@ export class Renderer {
       this.groundMat.emissiveMap = null;
       this.groundMat.emissive.set(0x000000);
       this.groundMat.emissiveIntensity = 0;
-      this.groundMat.color.set(0xffffff);
-      this.groundMat.roughness = 0.95;
-      this.webgl.setClearColor(0x4c463e);
-      fog.color.set(0x8d8478);
-      fog.near = 34;
-      fog.far = 120;
-      this.hemi.color.set(0xfff4e6);
-      this.hemi.groundColor.set(0x6e6254);
-      this.hemi.intensity = 1.35;
-      this.moon.color.set(0xfff7ee);
-      this.moon.intensity = 1.85;
-      this.fill.color.set(0xc5d0de);
-      this.fill.intensity = 0.4;
-      this.ember.color.set(0xffb56a);
-      this.ember.intensity = 18;
-      this.tintScenery(0xd5ddd8);
+      this.groundMat.color.set(0xe8e2d6);
+      this.groundMat.roughness = 0.92;
+      this.groundMat.metalness = 0.05;
+      this.groundMat.envMapIntensity = 0.42;
+      this.webgl.setClearColor(0x2e2a26);
+      fog.color.set(0x6f675c);
+      fog.near = 22;
+      fog.far = 88;
+      this.hemi.color.set(0xffe8d2);
+      this.hemi.groundColor.set(0x4a4034);
+      this.hemi.intensity = 1.05;
+      this.moon.color.set(0xfff1de);
+      this.moon.intensity = 2.05;
+      this.fill.color.set(0x9aabbc);
+      this.fill.intensity = 0.32;
+      this.rim.color.set(0x8ea6c0);
+      this.rim.intensity = 0.42;
+      this.ember.color.set(0xffa45a);
+      this.ember.intensity = 28;
+      this.ember.distance = 28;
+      this.tintScenery(0xb8b0a4, 0.88, 0.08, 0.55);
+      if (this.roadMat) {
+        this.roadMat.color.set(0x8a7f6e);
+        this.roadMat.roughness = 0.9;
+        this.roadMat.metalness = 0.06;
+        this.roadMat.envMapIntensity = 0.35;
+      }
     } else {
       this.groundMat.map = this.lava ?? null;
       this.groundMat.roughnessMap = this.lavaRough ?? null;
       this.groundMat.emissiveMap = this.lava ?? null;
       this.groundMat.emissive.set(0xff4a16);
-      this.groundMat.emissiveIntensity = 0.85;
-      this.groundMat.color.set(0xfff2ea);
-      this.groundMat.roughness = 0.72;
-      this.webgl.setClearColor(0x3a140e);
-      fog.color.set(0x6a2414);
-      fog.near = 18;
-      fog.far = 78;
-      this.hemi.color.set(0xffc09a);
-      this.hemi.groundColor.set(0x6a1c0c);
-      this.hemi.intensity = 1.15;
-      this.moon.color.set(0xff7a42);
-      this.moon.intensity = 1.7;
+      this.groundMat.emissiveIntensity = 0.72;
+      this.groundMat.color.set(0xffebe0);
+      this.groundMat.roughness = 0.68;
+      this.groundMat.metalness = 0.1;
+      this.groundMat.envMapIntensity = 0.5;
+      this.webgl.setClearColor(0x2a0e0a);
+      fog.color.set(0x5a1e12);
+      fog.near = 14;
+      fog.far = 64;
+      this.hemi.color.set(0xffb088);
+      this.hemi.groundColor.set(0x4a1408);
+      this.hemi.intensity = 0.95;
+      this.moon.color.set(0xff6a38);
+      this.moon.intensity = 1.85;
       this.fill.color.set(0xff3c16);
-      this.fill.intensity = 0.85;
+      this.fill.intensity = 0.7;
+      this.rim.color.set(0xff7a4a);
+      this.rim.intensity = 0.48;
       this.ember.color.set(0xff4a12);
-      this.ember.intensity = 55;
-      this.tintScenery(0xffb090);
+      this.ember.intensity = 48;
+      this.ember.distance = 36;
+      this.tintScenery(0xc4886e, 0.72, 0.14, 0.65);
+      if (this.roadMat) {
+        this.roadMat.color.set(0x6a3a28);
+        this.roadMat.roughness = 0.78;
+        this.roadMat.metalness = 0.08;
+        this.roadMat.envMapIntensity = 0.4;
+      }
     }
     this.groundMat.needsUpdate = true;
     this.realm = next;
   }
 
-  private tintScenery(hex: number): void {
+  private tintScenery(hex: number, roughness: number, metalness: number, envMapIntensity: number): void {
     for (const key of ["wall", "wall-broken", "pillar", "column"]) {
       const piece = this.templates.get(key);
       if (!piece) continue;
       piece.scene.traverse((node: THREE.Object3D) => {
         const mesh = node as THREE.Mesh;
         if (!mesh.isMesh) return;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         for (const material of materials) {
           const standard = material as THREE.MeshStandardMaterial;
-          standard.color?.set(hex);
+          if (!standard.color) continue;
+          standard.color.set(hex);
+          if ("roughness" in standard) standard.roughness = roughness;
+          if ("metalness" in standard) standard.metalness = metalness;
+          if ("envMapIntensity" in standard) standard.envMapIntensity = envMapIntensity;
         }
       });
     }
   }
-    private async loadModels(): Promise<void> {
+
+  private async loadModels(): Promise<void> {
     const loader = new GLTFLoader();
     await Promise.all(
       Object.entries(FILES).map(async ([key, file]) => {
@@ -303,7 +444,6 @@ export class Renderer {
     const maxX = (ARENA.width - ARENA.margin) * SCALE;
     const minZ = ARENA.margin * SCALE;
     const maxZ = (ARENA.height - ARENA.margin) * SCALE;
-    const span = 4;
     const place = (key: string, x: number, z: number, rot: number, width: number) => {
       const piece = this.templates.get(key);
       if (!piece) return;
@@ -323,28 +463,62 @@ export class Renderer {
       group.rotation.y = rot;
       this.scene.add(group);
     };
-    for (let x = minX; x <= maxX; x += span) {
-      const broken = Math.round(x) % 12 === 0;
-      place(broken ? "wall-broken" : "wall", x, minZ, 0, span);
-      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, span);
+    const step = 22;
+    for (let x = minX; x <= maxX; x += step) {
+      const broken = Math.round(x) % 44 === 0;
+      place(broken ? "wall-broken" : "wall", x, minZ, 0, step);
+      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, step);
     }
-    for (let z = minZ + span; z <= maxZ - span; z += span) {
-      place("wall", minX, z, Math.PI / 2, span);
-      place("wall", maxX, z, -Math.PI / 2, span);
+    for (let z = minZ + step; z <= maxZ - step; z += step) {
+      place("wall", minX, z, Math.PI / 2, step);
+      place("wall", maxX, z, -Math.PI / 2, step);
     }
-    for (let x = minX + 10; x < maxX; x += 16) {
-      for (let z = minZ + 10; z < maxZ; z += 16) {
-        place((x + z) % 32 === 0 ? "column" : "pillar", x, z, 0, 1.6);
-      }
+    const spine = roadSpine();
+    this.roadMat = new THREE.MeshStandardMaterial({
+      color: 0x8a7f6e,
+      roughness: 0.9,
+      metalness: 0.06,
+      envMapIntensity: 0.35,
+    });
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE)),
+      this.roadMat,
+    );
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
+    road.receiveShadow = true;
+    this.scene.add(road);
+    // Sparse emissive torch bowls at pack columns (no extra lights — AdaptiveQuality budget).
+    const torchMat = new THREE.MeshStandardMaterial({
+      color: 0x2a1c12,
+      roughness: 0.8,
+      metalness: 0.2,
+      envMapIntensity: 0.4,
+      emissive: 0xff6a28,
+      emissiveIntensity: 0.55,
+    });
+    const seen = new Set<string>();
+    for (const pack of worldPacks()) {
+      const key = pack.branch ? pack.id : `${pack.level}`;
+      if (!pack.branch && pack.id !== `${pack.level}-0`) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const markX = (pack.branch ? pack.x : ROAD_X + 220) * SCALE;
+      place("column", markX, pack.y * SCALE, 0, 2.4);
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), torchMat);
+      bowl.position.set(markX, 2.1, pack.y * SCALE);
+      bowl.castShadow = false;
+      bowl.receiveShadow = false;
+      this.scene.add(bowl);
     }
   }
 
   private syncPlayer(sim: Sim, dt: number): void {
-    const kind = heroKind(sim);
-    const ready = this.templates.has(kind);
-    if (!this.player || this.playerKind !== kind || (this.player.placeholder && ready)) {
+    const kind = sim.character.race || "human";
+    const height = HERO_HEIGHT[kind] ?? 1.78;
+    if (!this.player || this.playerKind !== kind) {
       if (this.player) this.scene.remove(this.player.root);
-      this.player = this.makeActor(kind, HEIGHT[kind] ?? 1.7, false);
+      this.player = this.makeActor(kind, height, false);
       this.playerKind = kind;
       if (this.player) this.scene.add(this.player.root);
     }
@@ -360,7 +534,7 @@ export class Renderer {
         new THREE.MeshBasicMaterial({ color: 0xe7c39a, transparent: true, opacity: 0.18 }),
       );
       shell.name = "ward-shell";
-      shell.position.y = 0.9;
+      shell.position.y = height * 0.55;
       this.player.root.add(shell);
     } else if (ward && sim.player.shield <= 0) {
       this.player.root.remove(ward);
@@ -410,17 +584,25 @@ export class Renderer {
   }
 
   private makeActor(kind: string, height: number, enemy: boolean): Actor {
-    const loaded = this.templates.get(kind);
-    const template = loaded ?? fallbackFigure(kind, height);
-    const model = cloneSkinned(template.scene);
+    const hero = isHeroRace(kind);
+    const procedural = !hero && isProceduralMonster(kind);
+    const loaded = hero || procedural ? null : this.templates.get(kind);
+    const template = hero
+      ? { scene: buildHero(kind), clips: [] as THREE.AnimationClip[] }
+      : procedural
+        ? { scene: buildMonster(kind as import("./game/types").EnemyKind), clips: [] as THREE.AnimationClip[] }
+        : loaded ?? fallbackFigure(kind, height);
+    const model = hero || procedural ? template.scene : cloneSkinned(template.scene);
     if (loaded) this.dress(model, kind);
     cloneMaterials(model);
-    fitFeet(model, height);
+    if (!hero && !procedural) fitFeet(model, height);
     const root = new THREE.Group();
     root.add(model);
-    const marker = markerFor(kind);
+    const marker = markerFor(hero ? "knight" : kind);
+    const big = kind === "brute" || kind === "hillock";
+    const small = kind === "hound" || kind === "wolf";
     const ring = new THREE.Mesh(
-      new THREE.CircleGeometry(kind === "brute" ? 0.62 : kind === "hound" ? 0.36 : 0.46, 24),
+      new THREE.CircleGeometry(big ? 0.62 : small ? 0.36 : hero ? 0.4 : 0.46, 24),
       new THREE.MeshBasicMaterial({ color: marker.ring, transparent: true, opacity: 0.4, depthWrite: false }),
     );
     ring.rotation.x = -Math.PI / 2;
@@ -455,14 +637,14 @@ export class Renderer {
       attack: exactAction(mixer, template.clips, pose.attack, true),
       hit: exactAction(mixer, template.clips, "Hit_A", true),
       mode: "",
-      placeholder: !loaded,
+      placeholder: !hero && !procedural && !loaded,
       kind,
       attackLeft: 0,
       attackDur: 0.5,
       held: false,
       hitLeft: 0,
       hurt: false,
-      armed: !GEAR[kind],
+      armed: hero || procedural || !GEAR[kind],
       slash,
       blade,
       bar,
@@ -506,15 +688,12 @@ export class Renderer {
     rememberMaterials(model);
     restoreMaterials(model);
     const eq = sim.character.equipment;
+    // Soft body dye under the handcrafted armor shells.
     tintHead(model, eq.head);
     tintNamed(model, ["Body"], eq.chest);
     tintNamed(model, ["ArmLeft", "ArmRight"], eq.gloves);
     tintNamed(model, ["LegLeft", "LegRight"], eq.boots);
-    showAddon(model, "hips", "gear-belt", "belt", eq.belt);
-    showAddon(model, "hand.r", "gear-ring-r", "ring", eq.ring1);
-    showAddon(model, "hand.l", "gear-ring-l", "ring", eq.ring2);
-    if (!showAddon(model, "chest", "gear-neck", "neck", eq.neck)) showAddon(model, "spine", "gear-neck", "neck", eq.neck);
-    if (eq.weapon?.ethereal) ghostWeapon(model);
+    syncHeroGear(model, eq, performance.now());
   }
 
   private placeActor(
@@ -533,7 +712,6 @@ export class Renderer {
     actor.root.position.set(wx, 0, wz);
     this.look.set(wx + Math.cos(facing), 0, wz + Math.sin(facing));
     actor.root.lookAt(this.look);
-    if (hitPulse && actor.hitLeft <= 0) actor.hitLeft = 0.28;
     if (attackPulse && !actor.held) {
       actor.attackLeft = attackSeconds;
       actor.attackDur = attackSeconds;
@@ -541,8 +719,12 @@ export class Renderer {
     }
     actor.held = attackPulse;
     if (actor.attackLeft > 0) actor.attackLeft = Math.max(0, actor.attackLeft - dt);
+    // Josh rule: dodge / shield-block / flinch must NOT cancel a committed attack.
+    // Only start a hit react when not mid-strike; tint can still flash while attacking.
+    if (hitPulse && actor.hitLeft <= 0 && actor.attackLeft <= 0) actor.hitLeft = 0.28;
     if (actor.hitLeft > 0) actor.hitLeft = Math.max(0, actor.hitLeft - dt);
-    const next = actor.hitLeft > 0 ? "hit" : actor.attackLeft > 0 ? "attack" : moving ? "walk" : "idle";
+    const next =
+      actor.attackLeft > 0 ? "attack" : actor.hitLeft > 0 ? "hit" : moving ? "walk" : "idle";
     if (actor.mode !== next) {
       const action = next === "hit" ? actor.hit : next === "attack" ? actor.attack : next === "walk" ? actor.walk : actor.idle;
       if (next === "hit") replay(actor.hit, 0.28);
@@ -552,7 +734,7 @@ export class Renderer {
       if (previous !== action) previous?.fadeOut(0.08);
       actor.mode = next;
     }
-    const swinging = actor.attackLeft > 0 && actor.hitLeft <= 0;
+    const swinging = actor.attackLeft > 0;
     const elapsed = swinging ? 1 - actor.attackLeft / Math.max(0.001, actor.attackDur) : 0;
     if (actor.slash) actor.slash.visible = swinging;
     if (actor.blade) {
@@ -571,19 +753,53 @@ export class Renderer {
 
   private syncShots(shots: Shot[]): void {
     while (this.shots.length < shots.length) {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 12, 10),
-        new THREE.MeshBasicMaterial({ color: 0xffe2b0 }),
-      );
-      this.shots.push(mesh);
-      this.scene.add(mesh);
+      const group = shotVisual();
+      this.shots.push(group);
+      this.scene.add(group);
     }
-    this.shots.forEach((mesh, index) => {
+    this.shots.forEach((group, index) => {
       const shot = shots[index];
-      mesh.visible = !!shot;
+      group.visible = !!shot;
       if (!shot) return;
-      (mesh.material as THREE.MeshBasicMaterial).color.set(shot.color);
-      mesh.position.set(shot.x * SCALE, 1.05, shot.y * SCALE);
+      group.position.set(shot.x * SCALE, shot.style === "arrow" || shot.style === "knife" ? 1.15 : 1.25, shot.y * SCALE);
+      group.rotation.y = Math.atan2(shot.vx, shot.vy);
+      group.children.forEach((child) => {
+        child.visible = child.name === shot.style;
+        const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        material.color.set(shot.color);
+        material.opacity = shot.style === "fire" ? 0.92 : 0.95;
+      });
+    });
+  }
+
+  private syncBursts(bursts: Burst[]): void {
+    const q = this.quality.current();
+    const shown = bursts.length > q.maxBursts ? bursts.slice(bursts.length - q.maxBursts) : bursts;
+    while (this.bursts.length < shown.length) {
+      const group = new THREE.Group();
+      this.scene.add(group);
+      this.bursts.push({ kind: "", group });
+    }
+    this.bursts.forEach((entry, index) => {
+      const burst = shown[index];
+      entry.group.visible = !!burst;
+      if (!burst) return;
+      if (entry.kind !== burst.kind) {
+        entry.group.clear();
+        buildBurst(entry.group, burst.kind, burst.color, q.fxScale);
+        entry.kind = burst.kind;
+      }
+      const age = 1 - burst.t / Math.max(0.001, burst.life);
+      entry.group.position.set(burst.x * SCALE, burst.kind === "heal" ? age * 1.5 : 0, burst.y * SCALE);
+      entry.group.rotation.y = Math.atan2(Math.cos(burst.facing), Math.sin(burst.facing));
+      const spread = burst.kind === "fire" || burst.kind === "frost" || burst.kind === "arcane" ? 0.55 + age * burst.radius : 1;
+      entry.group.scale.setScalar(spread);
+      entry.group.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        if (material?.opacity !== undefined) material.opacity = 0.9 * (1 - age);
+      });
     });
   }
 
@@ -654,23 +870,19 @@ export class Renderer {
   }
 }
 
-function heroKind(sim: Sim): string {
-  const title = classTitle(sim.character);
-  if (title === "Shade" || title === "Cutpurse" || title === "Marksman") return "rogue";
-  if (title === "Rite" || title === "Pyre" || title === "Cantor") return "mage";
-  return "knight";
-}
-
 function facingOf(enemy: Enemy, sim: Sim): number {
   return Math.atan2(sim.player.y - enemy.y, sim.player.x - enemy.x);
 }
 
-function prepFloor(texture: THREE.Texture, color: boolean): THREE.Texture {
+function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number): THREE.Texture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(16, 11);
   texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-  texture.anisotropy = 4;
+  texture.anisotropy = anisotropy;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   return texture;
 }
 
@@ -711,25 +923,96 @@ const GEAR: Record<string, { source: string; name: string }> = {
 
 function markerFor(kind: string): { ring: number; swing: number; melee: boolean } {
   if (kind === "rogue") return { ring: 0xd7dde6, swing: 0xf4f7fb, melee: true };
-  if (kind === "mage" || kind === "brute") return { ring: 0xb9a4e8, swing: 0xd8c8ff, melee: false };
-  if (kind === "hound") return { ring: 0xd2563a, swing: 0xff8a62, melee: true };
-  if (kind === "archer") return { ring: 0x7eb6d6, swing: 0xb7e4ff, melee: false };
-  if (kind === "sentinel") return { ring: 0xd7b56a, swing: 0xffe0a0, melee: true };
+  if (kind === "mage" || kind === "brute" || kind === "cultist" || kind === "lumen") return { ring: 0xb9a4e8, swing: 0xd8c8ff, melee: false };
+  if (kind === "hound" || kind === "wolf" || kind === "imp") return { ring: 0xd2563a, swing: 0xff8a62, melee: true };
+  if (kind === "archer" || kind === "wisp" || kind === "flicker") return { ring: 0x7eb6d6, swing: 0xb7e4ff, melee: false };
+  if (kind === "sentinel" || kind === "gargoyle" || kind === "hillock") return { ring: 0xd7b56a, swing: 0xffe0a0, melee: true };
+  if (kind === "slime" || kind === "sprig") return { ring: 0x6ecf7a, swing: 0xa8ef9a, melee: true };
+  if (kind === "spider" || kind === "lurker") return { ring: 0x8a6a9a, swing: 0xc8a0e0, melee: true };
+  if (kind === "whelp") return { ring: 0xff6a2a, swing: 0xffa060, melee: true };
   return { ring: 0xe7c39a, swing: 0xffe2b0, melee: true };
 }
 
 function swingMesh(color: number, melee: boolean): THREE.Mesh {
-  const geo = melee
-    ? new THREE.RingGeometry(0.55, 1.05, 28, 1, Math.PI / 2 - 0.7, 1.4)
-    : new THREE.RingGeometry(0.2, 0.62, 24);
+  const geo = melee ? new THREE.RingGeometry(0.4, 1.02, 28, 1, -1.15, 2.3) : new THREE.RingGeometry(0.18, 0.55, 22);
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthWrite: false }),
   );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.06;
+  mesh.position.set(0, melee ? 1.22 : 1.05, -0.58);
+  mesh.renderOrder = 2;
   mesh.visible = false;
   return mesh;
+}
+
+function shotVisual(): THREE.Group {
+  const group = new THREE.Group();
+  const material = () => new THREE.MeshBasicMaterial({ color: 0xffe2b0, transparent: true, depthWrite: false });
+  const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), material());
+  spark.name = "spark";
+  const fire = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.48, 7), material());
+  fire.name = "fire";
+  fire.rotation.x = Math.PI / 2;
+  const knife = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.42), material());
+  knife.name = "knife";
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.4, 5), material());
+  arrow.name = "arrow";
+  arrow.rotation.x = Math.PI / 2;
+  group.add(spark, fire, knife, arrow);
+  return group;
+}
+
+function buildBurst(group: THREE.Group, kind: string, color: string, fxScale = 1): void {
+  const material = () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+  const detail = Math.max(0.35, fxScale);
+  if (kind === "fire" || kind === "frost" || kind === "arcane") {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.72, Math.max(12, Math.round(28 * detail))), material());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.08;
+    const inner = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.28, Math.max(10, Math.round(20 * detail))), material());
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.y = 0.12;
+    group.add(ring, inner);
+    const spikes = Math.max(3, Math.round((kind === "frost" ? 8 : 6) * detail));
+    for (let i = 0; i < spikes; i++) {
+      const spike = new THREE.Mesh(kind === "fire" ? new THREE.ConeGeometry(0.08, 0.42, 5) : new THREE.BoxGeometry(0.06, 0.36, 0.06), material());
+      const angle = (i / spikes) * Math.PI * 2;
+      spike.position.set(Math.cos(angle) * 0.7, 0.28, Math.sin(angle) * 0.7);
+      group.add(spike);
+    }
+    return;
+  }
+  if (kind === "heal") {
+    for (let i = 0; i < 3; i++) {
+      const disc = new THREE.Mesh(new THREE.RingGeometry(0.18 + i * 0.12, 0.28 + i * 0.12, 20), material());
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.4 + i * 0.35;
+      group.add(disc);
+    }
+    return;
+  }
+  if (kind === "ward") {
+    const shield = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 8, 18), material());
+    shield.position.set(0, 1.15, -0.45);
+    group.add(shield);
+    return;
+  }
+  if (kind === "dash") {
+    const streak = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.6), material());
+    streak.position.set(0, 0.9, -0.7);
+    group.add(streak);
+    return;
+  }
+  const wide = kind === "cleave";
+  const steps = wide ? 7 : 5;
+  const span = wide ? 1.7 : kind === "bleed" ? 0.7 : 1.15;
+  for (let i = 0; i < steps; i++) {
+    const angle = -span / 2 + (span * i) / Math.max(1, steps - 1);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(kind === "bleed" ? 0.05 : 0.1, kind === "bleed" ? 0.72 : 0.58, 0.08), material());
+    blade.position.set(Math.sin(angle) * 0.82, 1.15, -Math.cos(angle) * 0.82);
+    blade.rotation.y = angle;
+    group.add(blade);
+  }
 }
 
 function bladeMesh(color: number): THREE.Mesh {
@@ -855,22 +1138,11 @@ function tintNamed(root: THREE.Object3D, parts: string[], item: Item | null): vo
   const finish = ARMOR_FINISH[item.armorType] ?? ARMOR_FINISH.cloth!;
   root.traverse((node) => {
     if (!parts.some((part) => node.name.includes(part))) return;
+    if (node.name.startsWith("gear-")) return;
     const material = standardMaterial(node as THREE.Mesh);
     if (!material) return;
     applyFinish(material, item.dye, finish.metalness, finish.roughness, item.ethereal, true);
   });
-}
-
-function ghostWeapon(root: THREE.Object3D): void {
-  for (const name of ["1H_Sword", "Knife", "Knife_Offhand", "1H_Wand"]) {
-    const node = root.getObjectByName(name);
-    if (!node?.visible) continue;
-    node.traverse((child) => {
-      const material = standardMaterial(child as THREE.Mesh);
-      if (!material) return;
-      applyFinish(material, 0xd5e6f5, 0.45, 0.22, true, false);
-    });
-  }
 }
 
 function applyFinish(
@@ -885,36 +1157,12 @@ function applyFinish(
   material.color.setHex(dye);
   material.metalness = metalness;
   material.roughness = roughness;
-  material.transparent = false;
-  material.opacity = 1;
+  material.transparent = ethereal;
+  material.opacity = ethereal ? 0.55 : 1;
+  material.depthWrite = !ethereal;
   material.emissive.setHex(ethereal ? 0xb7d4ea : 0x000000);
-  material.emissiveIntensity = ethereal ? 0.55 : 0;
+  material.emissiveIntensity = ethereal ? 0.4 : 0;
   if (ethereal) material.color.lerp(new THREE.Color(0xd7e8f6), 0.45);
-}
-
-function showAddon(root: THREE.Object3D, boneName: string, addonName: string, shape: "belt" | "ring" | "neck", item: Item | null): boolean {
-  const bone = root.getObjectByName(boneName);
-  if (!bone) return false;
-  let mesh = bone.getObjectByName(addonName) as THREE.Mesh | undefined;
-  if (!mesh) {
-    const geometry = shape === "belt" ? new THREE.TorusGeometry(0.22, 0.045, 8, 18) : shape === "ring" ? new THREE.TorusGeometry(0.045, 0.012, 6, 12) : new THREE.OctahedronGeometry(0.07, 0);
-    mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: 0.4, metalness: 0.6 }));
-    mesh.name = addonName;
-    if (shape === "belt") {
-      mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = 0.05;
-    }
-    if (shape === "neck") mesh.position.set(0, 0.12, 0.08);
-    if (shape === "ring") mesh.rotation.z = Math.PI / 2;
-    bone.add(mesh);
-  }
-  mesh.visible = !!item;
-  if (!item) return true;
-  const material = mesh.material as THREE.MeshStandardMaterial;
-  const metal = item.armorType ? (ARMOR_FINISH[item.armorType]?.metalness ?? 0.7) : 0.82;
-  const rough = item.armorType ? (ARMOR_FINISH[item.armorType]?.roughness ?? 0.35) : 0.28;
-  applyFinish(material, item.dye || 0xe4c37a, metal, rough, item.ethereal, true);
-  return true;
 }
 
 function standardMaterial(node: THREE.Mesh): THREE.MeshStandardMaterial | null {

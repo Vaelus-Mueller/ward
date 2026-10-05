@@ -1,4 +1,4 @@
-import type { Affix, ArmorType, GemKind, Item, ItemSlot, Rarity, WeaponStyle } from "./types";
+import { GEM_QUALITIES, type Affix, type ArmorType, type GemKind, type Item, type ItemSlot, type Rarity, type WeaponStyle } from "./types";
 
 /**
  * Reminder for later — do not implement yet.
@@ -18,7 +18,7 @@ const GEM_WEAPON: Record<GemKind, Affix> = {
 
 const GEM_HELM: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 8, label: "Ruby: +8 life" },
-  sapphire: { key: "mana", value: 6, label: "Sapphire: +6 mana" },
+  sapphire: { key: "energy", value: 6, label: "Sapphire: +6 energy" },
   topaz: { key: "goldFind", value: 0.04, label: "Topaz: +4% gold find" },
   emerald: { key: "agility", value: 2, label: "Emerald: +2 Agility" },
   diamond: { key: "armor", value: 4, label: "Diamond: +4 armor" },
@@ -28,7 +28,7 @@ const GEM_HELM: Record<GemKind, Affix> = {
 
 const GEM_ARMOR: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 12, label: "Ruby: +12 life" },
-  sapphire: { key: "mana", value: 8, label: "Sapphire: +8 mana" },
+  sapphire: { key: "energy", value: 8, label: "Sapphire: +8 energy" },
   topaz: { key: "goldFind", value: 0.05, label: "Topaz: +5% gold find" },
   emerald: { key: "agility", value: 3, label: "Emerald: +3 Agility" },
   diamond: { key: "armor", value: 6, label: "Diamond: +6 armor" },
@@ -36,17 +36,25 @@ const GEM_ARMOR: Record<GemKind, Affix> = {
   skull: { key: "lifeRegen", value: 0.4, label: "Skull: +0.40 life regeneration" },
 };
 
+export function gemSocketAffix(slot: "weapon" | "head" | "chest", kind: GemKind, quality: number): Affix {
+  const base = (slot === "weapon" ? GEM_WEAPON : slot === "head" ? GEM_HELM : GEM_ARMOR)[kind];
+  const rank = Math.min(GEM_QUALITIES, Math.max(1, Math.round(quality) || 1));
+  const value = roundAffix(base.key, base.value * (1 + (rank - 1) * 0.2));
+  return { key: base.key, value, label: affixLabel(base.key, value) };
+}
+
 export function gemAffixes(item: Item): Affix[] {
-  const table = item.slot === "weapon" ? GEM_WEAPON : item.slot === "head" ? GEM_HELM : GEM_ARMOR;
   if (item.slot !== "weapon" && item.slot !== "head" && item.slot !== "chest") return [];
-  return item.gems.filter((gem): gem is GemKind => gem !== null).map((gem) => table[gem]);
+  const slot = item.slot;
+  return item.gems.flatMap((gem) => (gem ? [gemSocketAffix(slot, gem.kind, gem.quality)] : []));
 }
 
 export function socketCap(slot: ItemSlot, armorType: ArmorType | null, style: WeaponStyle, ilvl: number): number {
   if (slot !== "weapon" && slot !== "head" && slot !== "chest") return 0;
   let base = 2;
-  if (slot === "weapon") base = style === "focus" ? 2 : style === "bow" ? 4 : 3;
-  else if (slot === "head") base = armorType === "plate" ? 3 : armorType === "cloth" ? 1 : 2;
+  if (slot === "weapon") {
+    base = style === "focus" ? 2 : style === "bow" ? 4 : style === "handbow" ? 3 : style === "thrown" ? 2 : 3;
+  } else if (slot === "head") base = armorType === "plate" ? 3 : armorType === "cloth" ? 1 : 2;
   else base = armorType === "plate" ? 4 : armorType === "mail" ? 3 : 2;
   const byLevel = ilvl <= 25 ? 3 : ilvl <= 40 ? 4 : 6;
   return Math.min(base, byLevel);
@@ -78,7 +86,7 @@ export function rollSocketCount(rng: () => number, rarity: Rarity, cap: number):
 function roundAffix(key: string, value: number): number {
   if (
     key === "crit" ||
-    key === "manaRegen" ||
+    key === "energyRegen" ||
     key === "lifeRegen" ||
     key === "goldFind" ||
     key === "meleeMult" ||
@@ -107,7 +115,7 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Wisdom`;
     case "life":
       return `+${value} Life`;
-    case "mana":
+    case "energy":
       return `+${value} Mana`;
     case "armor":
       return `+${value} Armor`;
@@ -117,7 +125,7 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Attack Rating`;
     case "crit":
       return `+${Math.round(value * 100)}% Critical Chance`;
-    case "manaRegen":
+    case "energyRegen":
       return `+${value.toFixed(2)} Mana Regeneration`;
     case "lifeRegen":
       return `+${value.toFixed(2)} Life Regeneration`;
@@ -141,6 +149,12 @@ function affixLabel(key: string, value: number): string {
       return `${Math.round(value * 100)}% cooldown reduction`;
     case "attackSpeed":
       return `${Math.round(value * 100)}% attack speed`;
+    case "burn":
+      return `+${value} Fire Burn on Hit`;
+    case "frost":
+      return `Chill: ${Math.round(value * 100)}% slow on Hit`;
+    case "lightning":
+      return `+${value} Lightning Damage`;
     default:
       return `+${value} ${key}`;
   }
