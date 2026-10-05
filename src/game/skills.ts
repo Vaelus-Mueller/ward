@@ -123,50 +123,50 @@ function node(
 }
 
 export const SKILLS: SkillNode[] = [
-  node({ id: "iron-oath", name: "Iron Oath", kind: "passive", sector: "bulwark", offset: 0, radius: 0.28, ring: 1, maxRank: 1, hub: true, blurb: "Swear to the gate. Armor and melee blows thicken." }),
+  node({ id: "iron-oath", name: "Iron Oath", kind: "passive", sector: "bulwark", offset: 0, radius: 0.28, ring: 1, hub: true, blurb: "Swear to the gate. Armor and melee blows thicken." }),
   node({ id: "braced-guard", name: "Braced Guard", kind: "passive", sector: "bulwark", offset: -24, radius: 0.46, ring: 1, requires: ["iron-oath"], blurb: "Set your stance. Flat armor each rank." }),
   node({ id: "heavy-blow", name: "Heavy Blow", kind: "active", sector: "bulwark", offset: 0, radius: 0.48, ring: 1, requires: ["iron-oath"], blurb: "A committed strike that staggers." }),
   node({ id: "stone-skin", name: "Stone Skin", kind: "passive", sector: "bulwark", offset: 24, radius: 0.46, ring: 1, requires: ["iron-oath"], blurb: "Hide hardens. More armor and life." }),
   node({ id: "cleave", name: "Cleave", kind: "active", sector: "bulwark", offset: -18, radius: 0.64, ring: 1, requires: ["heavy-blow"], blurb: "A wide cut in front of you." }),
   node({ id: "bulwark-aura", name: "Bulwark", kind: "aura", sector: "bulwark", offset: 18, radius: 0.64, ring: 1, requires: ["stone-skin"], blurb: "Hold a warding stance. Drains mana." }),
-  node({ id: "bastion", name: "Bastion", kind: "passive", sector: "bulwark", spec: "bastion", offset: -26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["cleave", "braced-guard"], blurb: "The specialization of walls. Armor and slow mending." }),
-  node({ id: "ravager", name: "Ravager", kind: "passive", sector: "bulwark", spec: "ravager", offset: 26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["heavy-blow", "cleave"], blurb: "The specialization of breaking. Melee hits harder." }),
+  node({ id: "bastion", name: "Bastion", kind: "passive", sector: "bulwark", spec: "bastion", offset: -26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["cleave", "braced-guard"], blurb: "The specialization of walls. Armor and slow mending." }),
+  node({ id: "ravager", name: "Ravager", kind: "passive", sector: "bulwark", spec: "ravager", offset: 26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["heavy-blow", "cleave"], blurb: "The specialization of breaking. Melee hits harder." }),
   node({ id: "iron-blood", name: "Iron Blood", kind: "passive", sector: "bulwark", spec: "bastion", offset: -34, radius: 0.92, ring: 2, requires: ["bastion"], blurb: "Life pooled behind the wall." }),
   node({ id: "shield-bash", name: "Shield Bash", kind: "active", sector: "bulwark", spec: "bastion", offset: -16, radius: 0.92, ring: 2, requires: ["bastion"], blurb: "A short arc that stuns." }),
-  node({ id: "aegis", name: "Aegis", kind: "active", sector: "bulwark", spec: "bastion", offset: -26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["iron-blood", "shield-bash"], blurb: "A shell of life that soaks the next blows." }),
+  node({ id: "aegis", name: "Aegis", kind: "active", sector: "bulwark", spec: "bastion", offset: -26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["iron-blood", "shield-bash"], blurb: "A shell of life that soaks the next blows." }),
   node({ id: "wrath-speed", name: "Wrath Pace", kind: "passive", sector: "bulwark", spec: "ravager", offset: 16, radius: 0.92, ring: 2, requires: ["ravager"], blurb: "Faster swings." }),
   node({ id: "ruin-strike", name: "Ruin Strike", kind: "active", sector: "bulwark", spec: "ravager", offset: 34, radius: 0.92, ring: 2, requires: ["ravager"], blurb: "One heavy blow. Long recovery." }),
-  node({ id: "breaker", name: "Breaker", kind: "active", sector: "bulwark", spec: "ravager", offset: 26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["wrath-speed", "ruin-strike"], blurb: "A shockwave around you." }),
+  node({ id: "breaker", name: "Breaker", kind: "active", sector: "bulwark", spec: "ravager", offset: 26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["wrath-speed", "ruin-strike"], blurb: "A shockwave around you." }),
 
-  node({ id: "keen-edge", name: "Keen Edge", kind: "passive", sector: "shade", offset: 0, radius: 0.28, ring: 1, maxRank: 1, hub: true, blurb: "The first cut is the true one. Critical chance and a lighter step." }),
+  node({ id: "keen-edge", name: "Keen Edge", kind: "passive", sector: "shade", offset: 0, radius: 0.28, ring: 1, hub: true, blurb: "The first cut is the true one. Critical chance and a lighter step." }),
   node({ id: "fleet-step", name: "Fleet Step", kind: "passive", sector: "shade", offset: -24, radius: 0.46, ring: 1, requires: ["keen-edge"], blurb: "Move faster each rank." }),
   node({ id: "lunge", name: "Lunge", kind: "active", sector: "shade", offset: 0, radius: 0.48, ring: 1, requires: ["keen-edge"], blurb: "Dash and strike along your facing." }),
   node({ id: "open-vein", name: "Open Vein", kind: "passive", sector: "shade", offset: 24, radius: 0.46, ring: 1, requires: ["keen-edge"], blurb: "Hits can bleed." }),
   node({ id: "knife-fan", name: "Knife Fan", kind: "active", sector: "shade", offset: -18, radius: 0.64, ring: 1, requires: ["lunge"], blurb: "Three knives in a spread." }),
   node({ id: "slip", name: "Slip", kind: "active", sector: "shade", offset: 18, radius: 0.64, ring: 1, requires: ["fleet-step"], blurb: "A brief step out of harm and a burst of speed." }),
-  node({ id: "cutpurse", name: "Cutpurse", kind: "passive", sector: "shade", spec: "cutpurse", offset: -26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["open-vein", "knife-fan"], blurb: "The specialization of bleeding targets and found coin." }),
-  node({ id: "marksman", name: "Marksman", kind: "passive", sector: "shade", spec: "marksman", offset: 26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["knife-fan", "lunge"], blurb: "The specialization of thrown and shot weapons." }),
+  node({ id: "cutpurse", name: "Cutpurse", kind: "passive", sector: "shade", spec: "cutpurse", offset: -26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["open-vein", "knife-fan"], blurb: "The specialization of bleeding targets and found coin." }),
+  node({ id: "marksman", name: "Marksman", kind: "passive", sector: "shade", spec: "marksman", offset: 26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["knife-fan", "lunge"], blurb: "The specialization of thrown and shot weapons." }),
   node({ id: "deep-cut", name: "Deep Cut", kind: "passive", sector: "shade", spec: "cutpurse", offset: -34, radius: 0.92, ring: 2, requires: ["cutpurse"], blurb: "Bleeds land more often." }),
   node({ id: "tendon-cut", name: "Tendon Cut", kind: "active", sector: "shade", spec: "cutpurse", offset: -16, radius: 0.92, ring: 2, requires: ["cutpurse"], blurb: "A cut that slows." }),
-  node({ id: "veiled-strike", name: "Veiled Strike", kind: "active", sector: "shade", spec: "cutpurse", offset: -26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["deep-cut", "tendon-cut"], blurb: "Dash through them. The hit is far more likely to critical." }),
+  node({ id: "veiled-strike", name: "Veiled Strike", kind: "active", sector: "shade", spec: "cutpurse", offset: -26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["deep-cut", "tendon-cut"], blurb: "Dash through them. The hit is far more likely to critical." }),
   node({ id: "keen-eye", name: "Keen Eye", kind: "passive", sector: "shade", spec: "marksman", offset: 16, radius: 0.92, ring: 2, requires: ["marksman"], blurb: "Attack rating, so fewer swings miss." }),
   node({ id: "piercing-throw", name: "Piercing Throw", kind: "active", sector: "shade", spec: "marksman", offset: 34, radius: 0.92, ring: 2, requires: ["marksman"], blurb: "A hard thrown blade." }),
-  node({ id: "ash-rain", name: "Ash Rain", kind: "active", sector: "shade", spec: "marksman", offset: 26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["keen-eye", "piercing-throw"], blurb: "Blades outward in a ring." }),
+  node({ id: "ash-rain", name: "Ash Rain", kind: "active", sector: "shade", spec: "marksman", offset: 26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["keen-eye", "piercing-throw"], blurb: "Blades outward in a ring." }),
 
-  node({ id: "first-rite", name: "First Rite", kind: "passive", sector: "rite", offset: 0, radius: 0.28, ring: 1, maxRank: 1, hub: true, blurb: "The opening verse. Spell power and a deeper well of mana." }),
+  node({ id: "first-rite", name: "First Rite", kind: "passive", sector: "rite", offset: 0, radius: 0.28, ring: 1, hub: true, blurb: "The opening verse. Spell power and a deeper well of mana." }),
   node({ id: "reservoir", name: "Reservoir", kind: "passive", sector: "rite", offset: -24, radius: 0.46, ring: 1, requires: ["first-rite"], blurb: "Maximum mana." }),
   node({ id: "spark", name: "Spark", kind: "active", sector: "rite", offset: 0, radius: 0.48, ring: 1, requires: ["first-rite"], blurb: "A fast bolt." }),
   node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "rite", offset: 24, radius: 0.46, ring: 1, requires: ["first-rite"], blurb: "Mana returns faster." }),
   node({ id: "frost-ring", name: "Rime Ring", kind: "active", sector: "rite", offset: -18, radius: 0.64, ring: 1, requires: ["spark"], blurb: "A cold ring that slows." }),
   node({ id: "mend", name: "Mend", kind: "channel", sector: "rite", offset: 18, radius: 0.64, ring: 1, requires: ["ember-flow"], blurb: "Channel to knit wounds. A stun or a knockback breaks it." }),
-  node({ id: "pyre", name: "Pyre", kind: "passive", sector: "rite", spec: "pyre", offset: -26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["spark", "frost-ring"], blurb: "The specialization of fire." }),
-  node({ id: "cantor", name: "Cantor", kind: "passive", sector: "rite", spec: "cantor", offset: 26, radius: 0.8, ring: 2, maxRank: 1, levelGate: 6, sectorPoints: 4, requiresAny: ["mend", "reservoir"], blurb: "The specialization of chants, wards, and breath." }),
+  node({ id: "pyre", name: "Pyre", kind: "passive", sector: "rite", spec: "pyre", offset: -26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["spark", "frost-ring"], blurb: "The specialization of fire." }),
+  node({ id: "cantor", name: "Cantor", kind: "passive", sector: "rite", spec: "cantor", offset: 26, radius: 0.8, ring: 2, levelGate: 6, sectorPoints: 4, requiresAny: ["mend", "reservoir"], blurb: "The specialization of chants, wards, and breath." }),
   node({ id: "kindling", name: "Kindling", kind: "passive", sector: "rite", spec: "pyre", offset: -34, radius: 0.92, ring: 2, requires: ["pyre"], blurb: "Spells burn hotter." }),
   node({ id: "cinder-lance", name: "Cinder Lance", kind: "active", sector: "rite", spec: "pyre", offset: -16, radius: 0.92, ring: 2, requires: ["pyre"], blurb: "A burning lance." }),
-  node({ id: "conflagration", name: "Conflagration", kind: "active", sector: "rite", spec: "pyre", offset: -26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["kindling", "cinder-lance"], blurb: "Fire in every direction." }),
+  node({ id: "conflagration", name: "Conflagration", kind: "active", sector: "rite", spec: "pyre", offset: -26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["kindling", "cinder-lance"], blurb: "Fire in every direction." }),
   node({ id: "breath", name: "Breath", kind: "passive", sector: "rite", spec: "cantor", offset: 16, radius: 0.92, ring: 2, requires: ["cantor"], blurb: "A steadier return of mana." }),
   node({ id: "ward-chant", name: "Ward Chant", kind: "aura", sector: "rite", spec: "cantor", offset: 34, radius: 0.92, ring: 2, requires: ["cantor"], blurb: "A sung ward. Drains mana while it holds." }),
-  node({ id: "litany", name: "Litany", kind: "channel", sector: "rite", spec: "cantor", offset: 26, radius: 1, ring: 3, maxRank: 1, levelGate: 10, specPoints: 4, requiresAny: ["breath", "ward-chant"], blurb: "Channel a restoration of life and mana. A stun or a knockback breaks it." }),
+  node({ id: "litany", name: "Litany", kind: "channel", sector: "rite", spec: "cantor", offset: 26, radius: 1, ring: 3, levelGate: 10, specPoints: 4, requiresAny: ["breath", "ward-chant"], blurb: "Channel a restoration of life and mana. A stun or a knockback breaks it." }),
   node({ id: "citadel", name: "Citadel", kind: "passive", sector: "bulwark", spec: "bastion", offset: -26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["aegis"], blurb: "The outer wall. Armor and a share of incoming blows turned aside." }),
   node({ id: "sundering", name: "Sundering", kind: "active", sector: "bulwark", spec: "ravager", offset: 26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["breaker"], blurb: "A wider shock that staggers everything close." }),
   node({ id: "hemorrhage", name: "Hemorrhage", kind: "passive", sector: "shade", spec: "cutpurse", offset: -26, radius: 1.16, ring: 4, levelGate: 16, specPoints: 6, requires: ["veiled-strike"], blurb: "Opened wounds bleed harder and more often." }),
@@ -182,32 +182,36 @@ export function skillById(id: string): SkillNode | undefined {
 }
 
 export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
-  "iron-oath": { armor: 12, meleeMult: 0.05 },
+  // Former 1-rank hubs/specs are diluted so rank 10 ≈ old power and rank 20 ≈ 2×.
+  "iron-oath": { armor: 1.2, meleeMult: 0.005 },
   "braced-guard": { armor: 6 },
   "stone-skin": { armorPct: 0.04, life: 5 },
-  bastion: { armor: 16, lifeRegen: 0.55 },
+  bastion: { armor: 1.6, lifeRegen: 0.055 },
   "iron-blood": { life: 12 },
-  ravager: { meleeMult: 0.1 },
+  ravager: { meleeMult: 0.01 },
   "wrath-speed": { attackSpeed: 0.045 },
-  "keen-edge": { crit: 0.04, moveSpeed: 0.04 },
+  "keen-edge": { crit: 0.004, moveSpeed: 0.004 },
   "fleet-step": { moveSpeed: 0.05 },
   "open-vein": { bleedChance: 0.07 },
-  cutpurse: { crit: 0.03, goldFind: 0.12 },
+  cutpurse: { crit: 0.003, goldFind: 0.012 },
   "deep-cut": { bleedChance: 0.06 },
-  marksman: { projectileMult: 0.1 },
+  marksman: { projectileMult: 0.01 },
   "keen-eye": { attackRating: 10 },
-  "first-rite": { spellMult: 0.1, mana: 10 },
+  "first-rite": { spellMult: 0.01, mana: 1 },
   reservoir: { mana: 8 },
   "ember-flow": { manaRegen: 0.4 },
-  pyre: { spellMult: 0.1 },
+  pyre: { spellMult: 0.01 },
   kindling: { spellMult: 0.035 },
-  cantor: { mana: 12, cdr: 0.04 },
+  cantor: { mana: 1.2, cdr: 0.004 },
   breath: { manaRegen: 0.45 },
   citadel: { armor: 10, damageReduction: 0.01 },
   hemorrhage: { bleedChance: 0.02 },
   deadeye: { projectileMult: 0.04, crit: 0.01 },
   benediction: { lifeRegen: 0.35, manaRegen: 0.2 },
 };
+
+/** Target (mult × shots / cooldown) for damaging actives at rank 1, before CDR. */
+export const SKILL_DPS_TARGET = 0.5;
 
 function act(partial: Partial<ActiveSpec> & Pick<ActiveSpec, "kind" | "color">): ActiveSpec {
   return {
@@ -237,27 +241,32 @@ function act(partial: Partial<ActiveSpec> & Pick<ActiveSpec, "kind" | "color">):
   };
 }
 
+/** Rank-1 damage multiplier so (mult × shots / cooldown) ≈ SKILL_DPS_TARGET. */
+function dpsMult(cooldown: number, shots = 1): number {
+  return Math.round((SKILL_DPS_TARGET * cooldown) / Math.max(1, shots) * 100) / 100;
+}
+
 export const ACTIVES: Record<string, ActiveSpec> = {
-  "heavy-blow": act({ kind: "melee", color: "#e08a4f", mana: 4, cooldown: 3.1, mult: 1.75, range: 82, stun: 0.4 }),
-  cleave: act({ kind: "arc", color: "#e08a4f", mana: 8, cooldown: 4.2, mult: 1.15, range: 96 }),
+  "heavy-blow": act({ kind: "melee", color: "#e08a4f", mana: 4, cooldown: 3.1, mult: dpsMult(3.1), range: 82, stun: 0.4 }),
+  cleave: act({ kind: "arc", color: "#e08a4f", mana: 8, cooldown: 4.2, mult: dpsMult(4.2), range: 96 }),
   "bulwark-aura": act({
     kind: "aura",
     color: "#e08a4f",
     manaPerSec: 2,
     aura: { armor: 18, damageReduction: 0.08 },
   }),
-  "shield-bash": act({ kind: "arc", color: "#e7c39a", mana: 8, cooldown: 5, mult: 0.75, range: 88, stun: 0.75 }),
+  "shield-bash": act({ kind: "arc", color: "#e7c39a", mana: 8, cooldown: 5, mult: dpsMult(5), range: 88, stun: 0.75 }),
   aegis: act({ kind: "buff", color: "#f0e2cf", mana: 16, cooldown: 14, shieldFrac: 0.3, buffTime: 6 }),
-  "ruin-strike": act({ kind: "melee", color: "#c4532a", mana: 10, cooldown: 6, mult: 2.55, range: 84 }),
-  breaker: act({ kind: "nova", color: "#e08a4f", mana: 18, cooldown: 12, mult: 1.65, range: 150, stun: 0.3 }),
-  lunge: act({ kind: "dash", color: "#3ecfb0", mana: 6, cooldown: 3.6, mult: 1.25, dash: 128, range: 70 }),
+  "ruin-strike": act({ kind: "melee", color: "#c4532a", mana: 10, cooldown: 6, mult: dpsMult(6), range: 84 }),
+  breaker: act({ kind: "nova", color: "#e08a4f", mana: 18, cooldown: 12, mult: dpsMult(12), range: 150, stun: 0.3 }),
+  lunge: act({ kind: "dash", color: "#3ecfb0", mana: 6, cooldown: 3.6, mult: dpsMult(3.6), dash: 128, range: 70 }),
   "knife-fan": act({
     kind: "projectile",
     color: "#d7fff4",
     mana: 8,
     cooldown: 4,
     scaling: "melee",
-    mult: 0.72,
+    mult: dpsMult(4, 3),
     shots: 3,
     range: 340,
   }),
@@ -267,7 +276,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     color: "#3ecfb0",
     mana: 6,
     cooldown: 4,
-    mult: 1.1,
+    mult: dpsMult(4),
     range: 78,
     slow: 0.45,
     slowDur: 2.2,
@@ -277,7 +286,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     color: "#effffb",
     mana: 12,
     cooldown: 8,
-    mult: 1.85,
+    mult: dpsMult(8),
     dash: 150,
     range: 74,
     bleed: 1,
@@ -288,7 +297,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     mana: 7,
     cooldown: 3.2,
     scaling: "melee",
-    mult: 1.5,
+    mult: dpsMult(3.2),
     shots: 1,
     range: 420,
   }),
@@ -298,19 +307,19 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     mana: 16,
     cooldown: 10,
     scaling: "melee",
-    mult: 0.68,
+    mult: dpsMult(10, 6),
     shots: 6,
     radial: true,
     range: 300,
   }),
-  spark: act({ kind: "projectile", color: "#d8ccff", mana: 5, cooldown: 1.55, scaling: "spell", mult: 1.3, shots: 1, range: 380 }),
+  spark: act({ kind: "projectile", color: "#d8ccff", mana: 5, cooldown: 1.55, scaling: "spell", mult: dpsMult(1.55), shots: 1, range: 380 }),
   "frost-ring": act({
     kind: "nova",
     color: "#b9d4ff",
     mana: 12,
     cooldown: 6,
     scaling: "spell",
-    mult: 0.9,
+    mult: dpsMult(6),
     range: 192,
     slow: 0.4,
     slowDur: 2.4,
@@ -322,7 +331,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     mana: 10,
     cooldown: 3.4,
     scaling: "spell",
-    mult: 1.85,
+    mult: dpsMult(3.4),
     shots: 1,
     range: 400,
     burn: 4,
@@ -333,7 +342,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     mana: 20,
     cooldown: 11,
     scaling: "spell",
-    mult: 2,
+    mult: dpsMult(11),
     range: 156,
     burn: 5,
   }),
@@ -344,8 +353,8 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     aura: { damageReduction: 0.12, armor: 10 },
   }),
   litany: act({ kind: "channel", color: "#f3e9ff", mana: 0, cooldown: 12, channelTime: 2.4, healFrac: 0.16 }),
-  sundering: act({ kind: "nova", color: "#c4532a", mana: 22, cooldown: 14, mult: 2.1, range: 180, stun: 0.45 }),
-  inferno: act({ kind: "nova", color: "#ff5a1f", mana: 24, cooldown: 13, scaling: "spell", mult: 2.4, range: 210, burn: 7 }),
+  sundering: act({ kind: "nova", color: "#c4532a", mana: 22, cooldown: 14, mult: dpsMult(14), range: 180, stun: 0.45 }),
+  inferno: act({ kind: "nova", color: "#ff5a1f", mana: 24, cooldown: 13, scaling: "spell", mult: dpsMult(13), range: 210, burn: 7 }),
 };
 
 export function passiveContribution(id: string, rank: number): Partial<Mods> {
@@ -359,14 +368,23 @@ export function passiveContribution(id: string, rank: number): Partial<Mods> {
   return out;
 }
 
+/** Base cast DPS before rank/gear cooldown modifiers: (mult × shots) / cooldown. */
+export function activeBaseDps(spec: ActiveSpec): number | null {
+  if (spec.kind === "aura" || spec.kind === "buff" || spec.kind === "channel") return null;
+  if (spec.mult <= 0 || spec.cooldown <= 0) return null;
+  return (spec.mult * Math.max(1, spec.shots)) / spec.cooldown;
+}
+
 export function scaledActive(id: string, rank: number): ActiveSpec | null {
   const spec = ACTIVES[id];
   if (!spec || rank <= 0) return null;
   const steps = rank - 1;
+  // Damage climbs with ranks; cooldown trim stays mild so base DPS balance still holds.
+  const cdScale = Math.max(0.7, 1 - 0.015 * steps);
   return {
     ...spec,
     mult: spec.mult * (1 + 0.12 * steps),
-    cooldown: spec.cooldown * (1 - 0.05 * steps),
+    cooldown: spec.cooldown * cdScale,
     mana: spec.kind === "aura" ? spec.mana : spec.mana,
     healFrac: spec.healFrac * (1 + 0.1 * steps),
     burn: spec.burn * (1 + 0.12 * steps),
@@ -457,6 +475,6 @@ export function describeSkill(id: string, rank: number): string {
     if (spec.burn) bits.push("Burns.");
     if (spec.dash) bits.push("Dashes along your facing.");
   }
-  if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise damage and trim the cooldown.");
+  if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise power; damage skills keep pace with their cooldown.");
   return bits.join(" ");
 }

@@ -5,7 +5,7 @@ import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, scaledActive, skillById, SKILLS } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, activeBaseDps, scaledActive, skillById, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
@@ -531,10 +531,22 @@ describe("the ward", () => {
   });
 
   it("caps ranked skills at 20 and keeps the per-rank scaling", () => {
-    expect(skillById("heavy-blow")?.maxRank).toBe(20);
-    expect(skillById("iron-oath")?.maxRank).toBe(1);
+    for (const skill of SKILLS) {
+      expect(skill.maxRank).toBe(20);
+    }
     const base = ACTIVES["heavy-blow"]!.mult;
     expect(scaledActive("heavy-blow", 20)?.mult).toBeCloseTo(base * (1 + 0.12 * 19));
+    const cd20 = scaledActive("heavy-blow", 20)!.cooldown;
+    expect(cd20).toBeGreaterThan(ACTIVES["heavy-blow"]!.cooldown * 0.65);
+    expect(cd20).toBeLessThan(ACTIVES["heavy-blow"]!.cooldown);
+  });
+
+  it("balances damaging actives to the same base DPS before cooldown modifiers", () => {
+    for (const [id, spec] of Object.entries(ACTIVES)) {
+      const dps = activeBaseDps(spec);
+      if (dps === null) continue;
+      expect(dps, id).toBeCloseTo(SKILL_DPS_TARGET, 2);
+    }
   });
 
   it("gives one life per endurance and five life per level, and half a mana per wisdom", () => {
