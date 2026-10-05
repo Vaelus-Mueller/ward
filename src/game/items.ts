@@ -1,3 +1,4 @@
+import { raceWeaponSlots } from "./races";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { meetsRequirements } from "./formulas";
 import type {
@@ -114,15 +115,16 @@ const DYES: Record<ArmorType, number[]> = {
 const AFFIXES: { affix: Affix; prefix: string; weight: number }[] = [
   { prefix: "Oak", affix: { key: "strength", value: 3, label: "+3 Strength" }, weight: 4 },
   { prefix: "Lynx", affix: { key: "agility", value: 3, label: "+3 Agility" }, weight: 4 },
-  { prefix: "Hart", affix: { key: "endurance", value: 3, label: "+3 Endurance" }, weight: 4 },
-  { prefix: "Sage", affix: { key: "wisdom", value: 3, label: "+3 Wisdom" }, weight: 3 },
+  { prefix: "Hart", affix: { key: "stamina", value: 3, label: "+3 Stamina" }, weight: 4 },
+  { prefix: "Sage", affix: { key: "spirit", value: 3, label: "+3 Spirit" }, weight: 3 },
+  { prefix: "Lucky", affix: { key: "luck", value: 3, label: "+3 Luck" }, weight: 3 },
   { prefix: "Stalwart", affix: { key: "life", value: 14, label: "+14 Life" }, weight: 4 },
-  { prefix: "Well", affix: { key: "mana", value: 10, label: "+10 Mana" }, weight: 3 },
+  { prefix: "Well", affix: { key: "energy", value: 10, label: "+10 Energy" }, weight: 3 },
   { prefix: "Plated", affix: { key: "armor", value: 8, label: "+8 Armor" }, weight: 3 },
   { prefix: "Keen", affix: { key: "damage", value: 2, label: "+2 Weapon Damage" }, weight: 3 },
   { prefix: "True", affix: { key: "attackRating", value: 12, label: "+12 Attack Rating" }, weight: 2 },
   { prefix: "Cruel", affix: { key: "crit", value: 0.03, label: "+3% Critical Chance" }, weight: 2 },
-  { prefix: "Flowing", affix: { key: "manaRegen", value: 0.35, label: "+0.35 Mana Regeneration" }, weight: 2 },
+  { prefix: "Flowing", affix: { key: "energyRegen", value: 0.35, label: "+0.35 Energy Regeneration" }, weight: 2 },
   { prefix: "Ember", affix: { key: "burn", value: 2.5, label: "+2.5 Fire Burn on Hit" }, weight: 2 },
   { prefix: "Rime", affix: { key: "frost", value: 0.2, label: "Chill: 20% slow on Hit" }, weight: 2 },
   { prefix: "Storm", affix: { key: "lightning", value: 4, label: "+4 Lightning Damage" }, weight: 2 },
@@ -291,9 +293,9 @@ const UNIQUES: UniqueDef[] = [
     dye: 0x9a7ad4,
     affixes: [
       { key: "spellMult", value: 0.14, label: "Rite: 14% more spell damage" },
-      { key: "wisdom", value: 4, label: "+4 Wisdom" },
-      { key: "mana", value: 12, label: "+12 Mana" },
-      { key: "manaRegen", value: 0.4, label: "+0.40 Mana Regeneration" },
+      { key: "spirit", value: 4, label: "+4 Spirit" },
+      { key: "energy", value: 12, label: "+12 Energy" },
+      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
     ],
   },
   {
@@ -316,7 +318,7 @@ const UNIQUES: UniqueDef[] = [
     affixes: [
       { key: "evasion", value: 0.05, label: "Watchful: 5% dodge" },
       { key: "life", value: 18, label: "+18 Life" },
-      { key: "endurance", value: 3, label: "+3 Endurance" },
+      { key: "stamina", value: 3, label: "+3 Stamina" },
       { key: "armor", value: 6, label: "+6 Armor" },
     ],
   },
@@ -340,7 +342,7 @@ const UNIQUES: UniqueDef[] = [
     affixes: [
       { key: "damageReduction", value: 0.06, label: "Bulwark: 6% damage reduction" },
       { key: "thorns", value: 5, label: "Ward Spikes: 5 thorns" },
-      { key: "endurance", value: 4, label: "+4 Endurance" },
+      { key: "stamina", value: 4, label: "+4 Stamina" },
       { key: "life", value: 20, label: "+20 Life" },
     ],
   },
@@ -411,8 +413,8 @@ const UNIQUES: UniqueDef[] = [
     dye: 0x3d4a78,
     affixes: [
       { key: "cdr", value: 0.08, label: "Measured Cast: 8% cooldown reduction" },
-      { key: "wisdom", value: 3, label: "+3 Wisdom" },
-      { key: "mana", value: 10, label: "+10 Mana" },
+      { key: "spirit", value: 3, label: "+3 Spirit" },
+      { key: "energy", value: 10, label: "+10 Energy" },
       { key: "crit", value: 0.03, label: "+3% Critical Chance" },
     ],
   },
@@ -459,9 +461,9 @@ const UNIQUES: UniqueDef[] = [
     dye: 0x3d7a8a,
     affixes: [
       { key: "lifeRegen", value: 1.2, label: "Ward Pulse: +1.20 life regeneration" },
-      { key: "mana", value: 14, label: "+14 Mana" },
-      { key: "manaRegen", value: 0.4, label: "+0.40 Mana Regeneration" },
-      { key: "wisdom", value: 3, label: "+3 Wisdom" },
+      { key: "energy", value: 14, label: "+14 Energy" },
+      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
+      { key: "spirit", value: 3, label: "+3 Spirit" },
     ],
   },
 ];
@@ -630,7 +632,7 @@ function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: num
   });
 }
 
-const ATTRIBUTE_KEYS = new Set(["strength", "agility", "endurance", "wisdom"]);
+const ATTRIBUTE_KEYS = new Set(["strength", "agility", "stamina", "luck", "spirit"]);
 
 export function rolledAffixAmount(key: string, base: number, power: number): number {
   const scale = ATTRIBUTE_KEYS.has(key) ? 0.5 : 1;
@@ -638,20 +640,21 @@ export function rolledAffixAmount(key: string, base: number, power: number): num
 }
 
 function roundStored(key: string, value: number): number {
-  if (key === "crit" || key === "manaRegen") return Math.round(value * 100) / 100;
+  if (key === "crit" || key === "energyRegen") return Math.round(value * 100) / 100;
   return Math.max(1, Math.round(value));
 }
 
 function storedLabel(key: string, value: number): string {
   if (key === "crit") return `+${Math.round(value * 100)}% Critical Chance`;
-  if (key === "manaRegen") return `+${value.toFixed(2)} Mana Regeneration`;
+  if (key === "energyRegen") return `+${value.toFixed(2)} Energy Regeneration`;
   const names: Record<string, string> = {
     strength: "Strength",
     agility: "Agility",
-    endurance: "Endurance",
-    wisdom: "Wisdom",
+    stamina: "Stamina",
+    luck: "Luck",
+    spirit: "Spirit",
     life: "Life",
-    mana: "Mana",
+    energy: "Energy",
     armor: "Armor",
     damage: "Weapon Damage",
     attackRating: "Attack Rating",
@@ -713,15 +716,37 @@ function destination(c: Character, item: Item): SlotName | null {
   if (item.slot === "shield") return "offhand";
   if (item.slot === "weapon") {
     const main = c.equipment.weapon;
-    // Dual wield / Bull Grip: a second one-hand melee fills the off-hand when allowed.
-    if (isOffhandWeapon(item) && !c.equipment.offhand && main) {
-      if (canPairOffhand(c, main)) return "offhand";
-      // Still route to off-hand so equip can refuse a two-hander that isn't Bull Gripped.
-      if (itemHands(main) === 2) return "offhand";
+    if (itemHands(item) === 2) return "weapon";
+    // Fill the next free weapon hand (insectoids have four).
+    for (const slot of weaponHandSlots(c)) {
+      if (c.equipment[slot]) continue;
+      if (slot === "weapon") return "weapon";
+      if (canFillWeaponHand(c, item, slot)) return slot;
     }
+    // Dual wield fallback for two-hander refusal messaging.
+    if (isOffhandWeapon(item) && !c.equipment.offhand && main && itemHands(main) === 2) return "offhand";
     return "weapon";
   }
   return item.slot as SlotName;
+}
+
+/** Hands available for weapons for this race (2 normally, 4 for insectoid). */
+export function weaponHandSlots(c: Character): SlotName[] {
+  const count = raceWeaponSlots(c.race);
+  if (count >= 4) return ["weapon", "offhand", "weapon3", "weapon4"];
+  return ["weapon", "offhand"];
+}
+
+function canFillWeaponHand(c: Character, item: Item, slot: SlotName): boolean {
+  if (itemHands(item) === 2) return false;
+  if (slot === "weapon3" || slot === "weapon4") {
+    return c.race === "insectoid" && item.slot === "weapon";
+  }
+  if (slot === "offhand") {
+    if (c.race === "insectoid" && item.slot === "weapon") return true;
+    return isOffhandWeapon(item) && canPairOffhand(c, c.equipment.weapon);
+  }
+  return true;
 }
 
 /** One-hand melee blades (not shields) that can sit in the off-hand. */
@@ -763,21 +788,35 @@ export function equipItem(c: Character, uid: string): string | null {
   const item = c.inventory[index]!;
   const slot = destination(c, item);
   if (!slot) return "Set a gem into an empty socket.";
-  if (slot === "offhand") {
-    if (!(isShield(item) || isOffhandWeapon(item))) {
+  if ((slot === "weapon3" || slot === "weapon4") && c.race !== "insectoid") {
+    return "Only insectoids can bind a third or fourth weapon.";
+  }
+  if (slot === "offhand" || slot === "weapon3" || slot === "weapon4") {
+    if (slot === "offhand" && isShield(item)) {
+      if (!canPairOffhand(c, c.equipment.weapon)) {
+        return c.race === "minotaur"
+          ? "That main-hand needs both hands."
+          : "Two-handed weapons leave no room for an off-hand. Minotaurs can Bull Grip melee two-handers.";
+      }
+    } else if (!(item.slot === "weapon" && itemHands(item) === 1)) {
+      return slot === "offhand"
+        ? "Only a shield or one-hand weapon fits the off-hand."
+        : "Only a one-hand weapon fits that arm.";
+    } else if (slot === "offhand" && c.race !== "insectoid" && !isOffhandWeapon(item)) {
       return "Only a shield or one-hand melee fits the off-hand.";
-    }
-    if (!canPairOffhand(c, c.equipment.weapon)) {
-      return c.race === "minotaur"
-        ? "That main-hand needs both hands."
-        : "Two-handed weapons leave no room for an off-hand. Minotaurs can Bull Grip melee two-handers.";
+    } else if (slot === "offhand" && c.race !== "insectoid" && !canPairOffhand(c, c.equipment.weapon)) {
+      return "Two-handed weapons leave no room for an off-hand. Minotaurs can Bull Grip melee two-handers.";
     }
   }
   if (!meetsRequirements(c, item)) return "You do not meet the attribute requirement.";
-  // Two-handers that cannot pair (bows, non-minotaur 2H melee) free the off-hand.
-  if (slot === "weapon" && !canPairOffhand(c, item) && c.equipment.offhand) {
-    const cleared = unequipItem(c, "offhand");
-    if (cleared) return cleared;
+  // Two-handers clear every extra weapon hand except Minotaur off-hand Bull Grip.
+  if (slot === "weapon" && itemHands(item) === 2) {
+    for (const hand of ["offhand", "weapon3", "weapon4"] as const) {
+      if (!c.equipment[hand]) continue;
+      if (hand === "offhand" && canPairOffhand(c, item)) continue;
+      const cleared = unequipItem(c, hand);
+      if (cleared) return cleared;
+    }
   }
   const freshIndex = c.inventory.findIndex((entry) => entry.uid === uid);
   if (freshIndex < 0) return "That item is not in the pack.";
@@ -862,7 +901,7 @@ const RARITY_YIELD: Record<Rarity, number> = {
 
 const FRACTION_AFFIX = new Set([
   "crit",
-  "manaRegen",
+  "energyRegen",
   "lifeRegen",
   "goldFind",
   "meleeMult",

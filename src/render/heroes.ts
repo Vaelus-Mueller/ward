@@ -197,6 +197,11 @@ export function buildHero(race: RaceId): THREE.Group {
   addLimb(hips, "LegRight", look.torso.w * 0.28, look.limb.leg, look.limb.thick, look.foot, skin, cloth, true);
   addLimb(chest, "ArmLeft", -look.torso.w * 0.55, look.limb.arm, look.limb.thick * 0.9, null, skin, cloth, false);
   addLimb(chest, "ArmRight", look.torso.w * 0.55, look.limb.arm, look.limb.thick * 0.9, null, skin, cloth, false);
+  if (race === "insectoid") {
+    // Lower blade-arms for the third and fourth weapons.
+    addLimb(chest, "ArmLeft2", -look.torso.w * 0.48, look.limb.arm * 0.88, look.limb.thick * 0.8, null, skin, cloth, false, "2", -0.12);
+    addLimb(chest, "ArmRight2", look.torso.w * 0.48, look.limb.arm * 0.88, look.limb.thick * 0.8, null, skin, cloth, false, "2", -0.12);
+  }
 
   // Plant feet on the ground after assembly.
   const box3 = new THREE.Box3().setFromObject(root);
@@ -311,10 +316,12 @@ function addLimb(
   skin: THREE.Material,
   cloth: THREE.Material,
   isLeg: boolean,
+  handSuffix = "",
+  yOffset = 0,
 ): void {
   const group = new THREE.Group();
   group.name = name;
-  group.position.set(x, isLeg ? 0 : 0.18, 0);
+  group.position.set(x, isLeg ? 0 : 0.18 + yOffset, 0);
   parent.add(group);
 
   const upper = part(name, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 4, 8), isLeg ? cloth : skin);
@@ -330,13 +337,13 @@ function addLimb(
     shoe.position.set(0, -length - foot.h * 0.2, foot.d * 0.15);
     group.add(shoe);
   } else {
-    const handName = name === "ArmLeft" ? "hand.l" : "hand.r";
+    const left = name.startsWith("ArmLeft");
+    const handName = left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`;
     const hand = part(handName, new THREE.SphereGeometry(thick * 1.15, 8, 6), skin);
     hand.position.y = -length * 0.95;
     group.add(hand);
-    // Also expose KayKit-style slots for gear addons.
     const slot = new THREE.Group();
-    slot.name = name === "ArmLeft" ? "handslot.l" : "handslot.r";
+    slot.name = left ? `handslot.l${handSuffix}` : `handslot.r${handSuffix}`;
     slot.position.copy(hand.position);
     group.add(slot);
   }

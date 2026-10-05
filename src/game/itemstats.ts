@@ -18,7 +18,7 @@ const GEM_WEAPON: Record<GemKind, Affix> = {
 
 const GEM_HELM: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 8, label: "Ruby: +8 life" },
-  sapphire: { key: "mana", value: 6, label: "Sapphire: +6 mana" },
+  sapphire: { key: "energy", value: 6, label: "Sapphire: +6 energy" },
   topaz: { key: "goldFind", value: 0.04, label: "Topaz: +4% gold find" },
   emerald: { key: "agility", value: 2, label: "Emerald: +2 Agility" },
   diamond: { key: "armor", value: 4, label: "Diamond: +4 armor" },
@@ -28,7 +28,7 @@ const GEM_HELM: Record<GemKind, Affix> = {
 
 const GEM_ARMOR: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 12, label: "Ruby: +12 life" },
-  sapphire: { key: "mana", value: 8, label: "Sapphire: +8 mana" },
+  sapphire: { key: "energy", value: 8, label: "Sapphire: +8 energy" },
   topaz: { key: "goldFind", value: 0.05, label: "Topaz: +5% gold find" },
   emerald: { key: "agility", value: 3, label: "Emerald: +3 Agility" },
   diamond: { key: "armor", value: 6, label: "Diamond: +6 armor" },
@@ -86,7 +86,7 @@ export function rollSocketCount(rng: () => number, rarity: Rarity, cap: number):
 function roundAffix(key: string, value: number): number {
   if (
     key === "crit" ||
-    key === "manaRegen" ||
+    key === "energyRegen" ||
     key === "lifeRegen" ||
     key === "goldFind" ||
     key === "meleeMult" ||
@@ -115,7 +115,7 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Wisdom`;
     case "life":
       return `+${value} Life`;
-    case "mana":
+    case "energy":
       return `+${value} Mana`;
     case "armor":
       return `+${value} Armor`;
@@ -125,7 +125,7 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Attack Rating`;
     case "crit":
       return `+${Math.round(value * 100)}% Critical Chance`;
-    case "manaRegen":
+    case "energyRegen":
       return `+${value.toFixed(2)} Mana Regeneration`;
     case "lifeRegen":
       return `+${value.toFixed(2)} Life Regeneration`;

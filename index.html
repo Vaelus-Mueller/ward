@@ -53,10 +53,6 @@
             <span id="hp-text">1</span>
             <small id="hp-max">1</small>
           </div>
-          <div id="mana-globe" class="globe mana" style="--fill: 1">
-            <span id="mana-text">1</span>
-            <small id="mana-max">1</small>
-          </div>
         </div>
         <div id="joy" aria-label="Move"><div id="joy-knob"></div></div>
         <div id="actions">
@@ -159,16 +155,22 @@
                 <button class="plus" type="button" data-attr="agility" aria-label="Spend Agility">+</button>
               </div>
               <div class="stat-row">
-                <div class="stat-name">Endurance</div>
-                <div id="stat-endurance" class="stat-val">10</div>
-                <button class="minus" type="button" data-attr="endurance" aria-label="Refund Endurance">−</button>
-                <button class="plus" type="button" data-attr="endurance" aria-label="Spend Endurance">+</button>
+                <div class="stat-name">Stamina</div>
+                <div id="stat-stamina" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="stamina" aria-label="Refund Stamina">−</button>
+                <button class="plus" type="button" data-attr="stamina" aria-label="Spend Stamina">+</button>
               </div>
               <div class="stat-row">
-                <div class="stat-name">Wisdom</div>
-                <div id="stat-wisdom" class="stat-val">10</div>
-                <button class="minus" type="button" data-attr="wisdom" aria-label="Refund Wisdom">−</button>
-                <button class="plus" type="button" data-attr="wisdom" aria-label="Spend Wisdom">+</button>
+                <div class="stat-name">Luck</div>
+                <div id="stat-luck" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="luck" aria-label="Refund Luck">−</button>
+                <button class="plus" type="button" data-attr="luck" aria-label="Spend Luck">+</button>
+              </div>
+              <div class="stat-row">
+                <div class="stat-name">Spirit</div>
+                <div id="stat-spirit" class="stat-val">10</div>
+                <button class="minus" type="button" data-attr="spirit" aria-label="Refund Spirit">−</button>
+                <button class="plus" type="button" data-attr="spirit" aria-label="Spend Spirit">+</button>
               </div>
               <p class="points">Points <strong id="unspent-stats">0</strong> · Skills <strong id="unspent-skills">0</strong></p>
               <p id="sheet-gear" class="muted">Fists and empty cloth.</p>
@@ -215,7 +217,7 @@
                 <div class="statline"><span>Skill Healing Bonus</span><b id="s-skillheal">0%</b></div>
                 <div class="statline"><span>Damage Reduction</span><b id="s-dr">0%</b></div>
                 <div class="statline"><span>Defence</span><b id="s-def">0</b></div>
-                <div class="statline"><span>Mana</span><b id="s-mana">0</b></div>
+                <div class="statline"><span>Energy</span><b id="s-mana">0</b></div>
                 <h3>Elemental resistance</h3>
                 <div class="statline"><span>Physical Resistance</span><b id="s-pres">0</b></div>
                 <div class="statline"><span>Fire Resistance</span><b id="s-fres">0</b></div>
@@ -335,8 +337,10 @@
               <button id="eq-weapon" class="gear-slot" type="button"></button>
               <button id="eq-chest" class="gear-slot" type="button"></button>
               <button id="eq-offhand" class="gear-slot" type="button"></button>
+              <button id="eq-weapon3" class="gear-slot insect-only hidden" type="button"></button>
               <button id="eq-gloves" class="gear-slot" type="button"></button>
               <button id="eq-belt" class="gear-slot" type="button"></button>
+              <button id="eq-weapon4" class="gear-slot insect-only hidden" type="button"></button>
               <button id="eq-ring1" class="gear-slot" type="button"></button>
               <button id="eq-ring2" class="gear-slot" type="button"></button>
               <button id="eq-boots" class="gear-slot" type="button"></button>

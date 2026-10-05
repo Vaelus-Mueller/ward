@@ -1,5 +1,5 @@
 import { liveItem } from "./itemstats";
-import { raceAttrs } from "./races";
+import { raceAttrs, raceGearArmorMul, raceInnateArmor } from "./races";
 import {
   ATTRS,
   GEAR_SLOTS,
@@ -9,6 +9,7 @@ import {
   type Derived,
   type Item,
   type Mods,
+  type SlotName,
   type WeaponStyle,
   BASE_ATTR,
   clamp,
@@ -32,8 +33,9 @@ export function attributes(c: Character): Record<Attr, number> {
   const totals: Record<Attr, number> = {
     strength: BASE_ATTR + c.spent.strength + racial.strength,
     agility: BASE_ATTR + c.spent.agility + racial.agility,
-    endurance: BASE_ATTR + c.spent.endurance + racial.endurance,
-    wisdom: BASE_ATTR + c.spent.wisdom + racial.wisdom,
+    stamina: BASE_ATTR + c.spent.stamina + racial.stamina,
+    luck: BASE_ATTR + c.spent.luck + racial.luck,
+    spirit: BASE_ATTR + c.spent.spirit + racial.spirit,
   };
   for (const item of lived(c)) {
     for (const affix of item.affixes) {
@@ -49,6 +51,16 @@ export function equipped(c: Character): Item[] {
   return GEAR_SLOTS.map((slot) => c.equipment[slot]).filter((item): item is Item => item !== null);
 }
 
+/** Weapon slots that contribute attack dice (main + extras). */
+export const WEAPON_SLOTS: SlotName[] = ["weapon", "offhand", "weapon3", "weapon4"];
+
+export function equippedWeapons(c: Character): Item[] {
+  return WEAPON_SLOTS.map((slot) => c.equipment[slot]).filter((item): item is Item => {
+    if (!item) return false;
+    return item.slot === "weapon" || (item.slot === "shield" ? false : item.damageMax > 0);
+  });
+}
+
 function lived(c: Character): Item[] {
   return equipped(c).map((item) => liveItem(item, c.level));
 }
@@ -56,12 +68,25 @@ function lived(c: Character): Item[] {
 export function gearNumber(c: Character, key: string): number {
   let total = 0;
   for (const item of lived(c)) {
-    if (key === "armor") total += item.armor;
+    // Base armor plates are handled by gearArmorValue (racial mul). Affix armor still counts here.
+    if (key === "armor") {
+      for (const affix of item.affixes) {
+        if (affix.key === "armor") total += affix.value;
+      }
+      continue;
+    }
     for (const affix of item.affixes) {
       if (affix.key === key) total += affix.value;
     }
   }
   return total;
+}
+
+/** Armor from gear pieces only (not affixes). Subject to racial gear-armor mul. */
+export function gearArmorValue(c: Character): number {
+  let total = 0;
+  for (const item of lived(c)) total += item.armor;
+  return total * raceGearArmorMul(c.race);
 }
 
 export function addMods(into: Mods, extra: Partial<Mods>): void {
@@ -74,42 +99,52 @@ export function addMods(into: Mods, extra: Partial<Mods>): void {
 export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const attr = attributes(c);
   const weapon = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
-  const offhand = c.equipment.offhand ? liveItem(c.equipment.offhand, c.level) : null;
   const style: WeaponStyle = weapon?.style ?? "melee";
-  const life = Math.round(c.level * 5 + attr.endurance + mods.life + gearNumber(c, "life"));
-  const mana = Math.round(16 + c.level + attr.wisdom * 0.5 + mods.mana + gearNumber(c, "mana"));
-  let armor =
-    attr.strength * 0.35 + gearNumber(c, "armor") + mods.armor;
-  armor *= 1 + mods.armorPct;
-  const attackRating = Math.round(
-    10 + c.level * 2 + attr.agility * 2 + mods.attackRating + gearNumber(c, "attackRating"),
+  const life = Math.round(c.level * 5 + attr.stamina + mods.life + gearNumber(c, "life"));
+  // Spirit feeds energy storage; passives/gear add more.
+  const energy = Math.round(
+    24 + c.level * 0.5 + attr.spirit * 0.4 + mods.energy + mods.energyMax + gearNumber(c, "energy") + gearNumber(c, "energyMax"),
   );
-  const evasion = clamp(attr.agility * 0.0035 + mods.evasion + gearNumber(c, "evasion"), 0, 0.4);
-  const crit = clamp(attr.agility * 0.002 + mods.crit + gearNumber(c, "crit"), 0, 0.55);
-  const scaler =
-    style === "bow" || style === "thrown" || style === "handbow"
-      ? attr.agility
-      : style === "focus"
-        ? attr.wisdom
-        : attr.strength;
-  const statMul = 1 + scaler * 0.015;
+  const energyOnHit = Math.max(1, 3 + mods.energyOnHit + gearNumber(c, "energyOnHit") + attr.spirit * 0.02);
+  let armor =
+    attr.stamina * 0.25 + raceInnateArmor(c.race) + gearArmorValue(c) + mods.armor + gearNumber(c, "armor");
+  armor *= 1 + mods.armorPct;
+
+  const attackRating = Math.round(
+    10 + c.level * 2 + attr.agility * 1.5 + mods.attackRating + gearNumber(c, "attackRating"),
+  );
+  const evasion = clamp(0.02 + attr.agility * 0.0025 + mods.evasion + gearNumber(c, "evasion"), 0, 0.45);
+  const crit = clamp(
+    0.02 + attr.agility * 0.001 + attr.luck * 0.0035 + mods.crit + gearNumber(c, "crit"),
+    0,
+    0.6,
+  );
+
+  // STR feeds all damage. AGI adds for swift/ranged styles.
+  const strMul = 1 + attr.strength * 0.015;
+  const agiClass =
+    style === "bow" || style === "thrown" || style === "handbow" || (style === "melee" && c.race === "insectoid")
+      ? 1 + attr.agility * 0.008
+      : style === "melee"
+        ? 1 + attr.agility * 0.002
+        : 1;
   const meleeMul = mods.meleeMult + gearNumber(c, "meleeMult");
   const spellMulGear = mods.spellMult + gearNumber(c, "spellMult");
   const skillMul = style === "focus" ? 1 + spellMulGear : 1 + meleeMul;
   const ranged = style === "bow" || style === "thrown" || style === "handbow";
   const bowMul = ranged ? 1 + mods.projectileMult * 0.5 : 1;
-  // Flat damage affixes (gems, etc.) from all gear including offhand apply in full.
-  // Off-hand weapon dice contribute half their rolled base damage; shields add none.
+
   const flat = gearNumber(c, "damage");
-  const offMin = offhand && offhand.damageMax > 0 ? offhand.damageMin * 0.5 : 0;
-  const offMax = offhand && offhand.damageMax > 0 ? offhand.damageMax * 0.5 : 0;
-  let meleeMin = ((weapon?.damageMin ?? 3) + offMin + flat) * statMul * skillMul * bowMul;
-  let meleeMax = ((weapon?.damageMax ?? 6) + offMax + flat) * statMul * skillMul * bowMul;
+  const dice = weaponDice(c);
+  let meleeMin = (dice.min + flat) * strMul * agiClass * skillMul * bowMul;
+  let meleeMax = (dice.max + flat) * strMul * agiClass * skillMul * bowMul;
   if (meleeMax < meleeMin) meleeMax = meleeMin;
+
   const focusBonus = style === "focus" ? 1.15 : 1;
-  const spellMul = (1 + spellMulGear) * focusBonus;
-  const spellMin = (4 + attr.wisdom * 0.4) * spellMul;
-  const spellMax = (7 + attr.wisdom * 0.65) * spellMul;
+  const spellMul = (1 + spellMulGear) * focusBonus * strMul;
+  const spellMin = (4 + attr.spirit * 0.15 + attr.strength * 0.25) * spellMul;
+  const spellMax = (7 + attr.spirit * 0.25 + attr.strength * 0.4) * spellMul;
+
   const speed = weapon?.speed ?? 1;
   const attackPeriod =
     0.58 / speed / (1 + mods.attackSpeed + gearNumber(c, "attackSpeed") + attr.agility * 0.002);
@@ -125,13 +160,20 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
             ? 230
             : 70) + (weapon?.rangeBonus ?? 0);
 
+  const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012;
+  const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01;
+  const vendorPrice = clamp(mods.vendorPrice + gearNumber(c, "vendorPrice") + attr.luck * 0.008, -0.35, 0.5);
+  const vendorQuality = mods.vendorQuality + gearNumber(c, "vendorQuality") + attr.luck * 0.006;
+
   return {
     strength: attr.strength,
     agility: attr.agility,
-    endurance: attr.endurance,
-    wisdom: attr.wisdom,
+    stamina: attr.stamina,
+    luck: attr.luck,
+    spirit: attr.spirit,
     life,
-    mana,
+    energy,
+    energyOnHit,
     armor,
     attackRating,
     evasion,
@@ -144,13 +186,35 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     moveSpeed,
     weaponStyle: style,
     weaponRange,
-    lifeRegen: c.level + attr.endurance / 10 + mods.lifeRegen + gearNumber(c, "lifeRegen"),
-    manaRegen: 1.15 + mods.manaRegen + gearNumber(c, "manaRegen"),
+    lifeRegen: c.level + attr.stamina / 10 + mods.lifeRegen + gearNumber(c, "lifeRegen"),
+    energyRegen: 0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen"),
     thorns: mods.thorns + gearNumber(c, "thorns"),
     damageReduction: clamp(mods.damageReduction + gearNumber(c, "damageReduction"), 0, 0.35),
     bleedChance: clamp(mods.bleedChance + gearNumber(c, "bleedChance"), 0, 0.75),
-    goldFind: mods.goldFind + gearNumber(c, "goldFind"),
+    goldFind,
+    magicFind,
+    vendorPrice,
+    vendorQuality,
   };
+}
+
+/**
+ * Main hand full dice; each extra weapon hand adds half its dice
+ * (insectoid arms 3–4 included). Shields add none.
+ */
+function weaponDice(c: Character): { min: number; max: number } {
+  const main = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
+  let min = main?.damageMin ?? 3;
+  let max = main?.damageMax ?? 6;
+  for (const slot of ["offhand", "weapon3", "weapon4"] as const) {
+    const piece = c.equipment[slot];
+    if (!piece) continue;
+    const live = liveItem(piece, c.level);
+    if (live.slot === "shield" || live.damageMax <= 0) continue;
+    min += live.damageMin * 0.5;
+    max += live.damageMax * 0.5;
+  }
+  return { min, max };
 }
 
 export function mitigate(raw: number, armor: number, attackerLevel: number, reduction = 0): number {
@@ -170,17 +234,17 @@ export function rollRange(min: number, max: number, rng: () => number): number {
 
 export function meetsRequirements(c: Character, item: Item): boolean {
   const attr = attributes(c);
-  return attr.strength >= item.reqStr && attr.agility >= item.reqDex && attr.wisdom >= item.reqEne;
+  return attr.strength >= item.reqStr && attr.agility >= item.reqDex && attr.spirit >= item.reqEne;
 }
 
 export function requirementText(item: Item): string | null {
   const parts: string[] = [];
   if (item.reqStr) parts.push(`${item.reqStr} Strength`);
   if (item.reqDex) parts.push(`${item.reqDex} Agility`);
-  if (item.reqEne) parts.push(`${item.reqEne} Wisdom`);
+  if (item.reqEne) parts.push(`${item.reqEne} Spirit`);
   return parts.length ? `Requires ${parts.join(", ")}` : null;
 }
 
-export function formatAffix(affix: Affix): string {
+export function summarizeAffix(affix: Affix): string {
   return affix.label;
 }

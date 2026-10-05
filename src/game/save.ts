@@ -138,8 +138,9 @@ function migrateAttributes(character: Character): void {
   character.spent = {
     strength: spent.strength ?? 0,
     agility: spent.agility ?? spent.dexterity ?? 0,
-    endurance: spent.endurance ?? spent.vitality ?? 0,
-    wisdom: spent.wisdom ?? spent.energy ?? 0,
+    stamina: spent.stamina ?? spent.endurance ?? spent.vitality ?? 0,
+    luck: spent.luck ?? 0,
+    spirit: spent.spirit ?? spent.wisdom ?? spent.energy ?? 0,
   };
   const gear = [...GEAR_SLOTS.map((slot) => character.equipment[slot]), ...character.inventory];
   for (const item of gear) {
@@ -148,16 +149,29 @@ function migrateAttributes(character: Character): void {
       if (affix.key === "dexterity") {
         affix.key = "agility";
         affix.label = affix.label.replace("Dexterity", "Agility");
-      } else if (affix.key === "vitality") {
-        affix.key = "endurance";
-        affix.label = affix.label.replace("Vitality", "Endurance");
-      } else if (affix.key === "energy") {
-        affix.key = "wisdom";
-        affix.label = affix.label.replace("Energy", "Wisdom");
+      } else if (affix.key === "vitality" || affix.key === "endurance") {
+        affix.key = "stamina";
+        affix.label = affix.label.replace(/Vitality|Endurance/g, "Stamina");
+      } else if (affix.key === "wisdom") {
+        affix.key = "spirit";
+        affix.label = affix.label.replace(/Wisdom/g, "Spirit");
+      } else if (affix.key === "mana") {
+        affix.key = "energy";
+        affix.label = affix.label.replace(/Mana/gi, "Energy");
+      } else if (affix.key === "manaRegen") {
+        affix.key = "energyRegen";
+        affix.label = affix.label.replace(/Mana/gi, "Energy");
+      } else if (affix.key === "energy" && /Wisdom/i.test(affix.label)) {
+        affix.key = "spirit";
+        affix.label = affix.label.replace(/Wisdom|Energy/g, "Spirit");
       }
     }
   }
+  const eq = character.equipment as Record<string, unknown>;
+  if (!("weapon3" in eq)) eq.weapon3 = null;
+  if (!("weapon4" in eq)) eq.weapon4 = null;
 }
+
 
 function validCharacter(character: Character): boolean {
   return (

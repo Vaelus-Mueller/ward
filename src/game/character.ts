@@ -22,7 +22,7 @@ export function createCharacter(name = "Exile", race: RaceId = "human"): Charact
     level: 1,
     xp: 0,
     gold: 0,
-    spent: { strength: 0, agility: 0, endurance: 0, wisdom: 0 },
+    spent: { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 },
     unspentStats: 0,
     unspentSkills: 0,
     skillRanks: {},

@@ -394,8 +394,24 @@ p { line-height: 1.5; }
   background: conic-gradient(rgba(0, 0, 0, 0.68) calc(var(--cd, 0) * 360deg), transparent 0);
   pointer-events: none;
 }
+.skill::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 10%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold), #9ad4c0);
+  transform-origin: left center;
+  transform: scaleX(var(--energy, 1));
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 1;
+}
 .skill.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 14px rgba(224, 192, 120, 0.3); }
 .skill.empty { color: var(--muted); }
+.skill.starved { opacity: 0.55; filter: saturate(0.7); }
 
 /* —— Boot splash —— */
 .splash {
@@ -859,11 +875,14 @@ p { line-height: 1.5; }
 #eq-weapon { grid-area: 3 / 1; }
 #eq-chest { grid-area: 3 / 3; }
 #eq-offhand { grid-area: 3 / 5; }
+#eq-weapon3 { grid-area: 4 / 1; }
 #eq-gloves { grid-area: 4 / 5; }
 #eq-belt { grid-area: 4 / 3; }
+#eq-weapon4 { grid-area: 5 / 3; }
 #eq-ring1 { grid-area: 5 / 1; }
 #eq-ring2 { grid-area: 5 / 5; }
 #eq-boots { grid-area: 6 / 3; }
+.gear-slot.insect-only { border-color: #6a8a3a; }
 .gear-slot {
   width: 44px;
   height: 44px;

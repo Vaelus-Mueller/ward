@@ -6,6 +6,7 @@ import { ROAD_X, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
 import { buildHero, HERO_HEIGHT, isHeroRace } from "./render/heroes";
 import { syncHeroGear } from "./render/gear";
+import { AdaptiveQuality } from "./render/quality";
 
 const SCALE = 0.045;
 const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
@@ -99,17 +100,25 @@ export class Renderer {
   private lavaRough?: THREE.Texture;
   private readonly readyPromise: Promise<void>;
   private resolveReady!: () => void;
+  private readonly quality = new AdaptiveQuality();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
-    this.webgl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    const q = this.quality.current();
+    this.webgl = new THREE.WebGLRenderer({
+      canvas,
+      antialias: q.antialias,
+      alpha: false,
+      powerPreference: "high-performance",
+      stencil: false,
+    });
     this.webgl.setClearColor(0x3a342e);
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
     this.webgl.toneMappingExposure = 1.28;
-    this.webgl.shadowMap.enabled = true;
+    this.webgl.shadowMap.enabled = q.shadows;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.camera = new THREE.PerspectiveCamera(44, 1, 0.1, 200);
     this.scene.fog = new THREE.Fog(0x6d6256, 36, 110);
@@ -118,7 +127,7 @@ export class Renderer {
     this.moon = new THREE.DirectionalLight(0xfff8f0, 2.1);
     this.moon.position.set(-8, 20, 12);
     this.moon.castShadow = true;
-    this.moon.shadow.mapSize.set(1024, 1024);
+    this.moon.shadow.mapSize.set(q.shadowMap, q.shadowMap);
     this.moon.shadow.bias = -0.0006;
     this.moon.shadow.camera.near = 1;
     this.moon.shadow.camera.far = 36;
@@ -154,7 +163,8 @@ export class Renderer {
   resize(): void {
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    const q = this.quality.current();
+    const dpr = Math.min(q.dpr, window.devicePixelRatio || 1);
     this.webgl.setPixelRatio(dpr);
     this.webgl.setSize(width, height, false);
     this.camera.aspect = width / height;
@@ -195,6 +205,7 @@ export class Renderer {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    if (this.quality.sample(dt) || this.quality.consumeDirty()) this.applyQuality();
     if (!this.propsBuilt && this.templates.has("wall")) this.buildDungeon();
     this.applyRealm(sim.character.level > 20 ? "hell" : "dungeon");
     this.syncPlayer(sim, dt);
@@ -205,6 +216,14 @@ export class Renderer {
     this.syncDrops(sim);
     this.syncFloats(sim.floats);
     this.webgl.render(this.scene, this.camera);
+  }
+
+  private applyQuality(): void {
+    const q = this.quality.current();
+    this.webgl.shadowMap.enabled = q.shadows;
+    this.moon.castShadow = q.shadows;
+    this.moon.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+    this.resize();
   }
 
   private async loadFloors(): Promise<void> {
@@ -616,18 +635,20 @@ export class Renderer {
   }
 
   private syncBursts(bursts: Burst[]): void {
-    while (this.bursts.length < bursts.length) {
+    const q = this.quality.current();
+    const shown = bursts.length > q.maxBursts ? bursts.slice(bursts.length - q.maxBursts) : bursts;
+    while (this.bursts.length < shown.length) {
       const group = new THREE.Group();
       this.scene.add(group);
       this.bursts.push({ kind: "", group });
     }
     this.bursts.forEach((entry, index) => {
-      const burst = bursts[index];
+      const burst = shown[index];
       entry.group.visible = !!burst;
       if (!burst) return;
       if (entry.kind !== burst.kind) {
         entry.group.clear();
-        buildBurst(entry.group, burst.kind, burst.color);
+        buildBurst(entry.group, burst.kind, burst.color, q.fxScale);
         entry.kind = burst.kind;
       }
       const age = 1 - burst.t / Math.max(0.001, burst.life);
@@ -797,17 +818,18 @@ function shotVisual(): THREE.Group {
   return group;
 }
 
-function buildBurst(group: THREE.Group, kind: string, color: string): void {
+function buildBurst(group: THREE.Group, kind: string, color: string, fxScale = 1): void {
   const material = () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+  const detail = Math.max(0.35, fxScale);
   if (kind === "fire" || kind === "frost" || kind === "arcane") {
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.72, 28), material());
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.72, Math.max(12, Math.round(28 * detail))), material());
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.08;
-    const inner = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.28, 20), material());
+    const inner = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.28, Math.max(10, Math.round(20 * detail))), material());
     inner.rotation.x = -Math.PI / 2;
     inner.position.y = 0.12;
     group.add(ring, inner);
-    const spikes = kind === "frost" ? 8 : 6;
+    const spikes = Math.max(3, Math.round((kind === "frost" ? 8 : 6) * detail));
     for (let i = 0; i < spikes; i++) {
       const spike = new THREE.Mesh(kind === "fire" ? new THREE.ConeGeometry(0.08, 0.42, 5) : new THREE.BoxGeometry(0.06, 0.36, 0.06), material());
       const angle = (i / spikes) * Math.PI * 2;

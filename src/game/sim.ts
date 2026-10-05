@@ -142,7 +142,7 @@ interface PlayerBody {
   y: number;
   facing: number;
   hp: number;
-  mana: number;
+  energy: number;
   attackCd: number;
   skillCd: [number, number, number];
   channel: { slot: number; t: number; total: number; healFrac: number; restoreMana: boolean } | null;
@@ -171,7 +171,7 @@ export interface Snapshot {
   character: Character;
   wave: number;
   hp: number;
-  mana: number;
+  energy: number;
   x: number;
   y: number;
   starterGiven: boolean;
@@ -267,7 +267,7 @@ export class Sim {
       y: roadStart().y,
       facing: -Math.PI / 2,
       hp: 1,
-      mana: 1,
+      energy: 1,
       attackCd: 0,
       skillCd: [0, 0, 0],
       channel: null,
@@ -283,7 +283,7 @@ export class Sim {
     };
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
+    this.player.energy = this.derived.energy;
   }
 
   recompute(): void {
@@ -292,7 +292,7 @@ export class Sim {
       if (!rank) continue;
       const skill = skillById(id);
       if (skill?.kind === "passive") {
-        const extra = passiveContribution(id, rank);
+        const extra = passiveContribution(id, rank, this.character.skillRanks);
         for (const key of Object.keys(extra) as (keyof Mods)[]) {
           const value = extra[key];
           if (typeof value === "number") mods[key] += value;
@@ -303,7 +303,7 @@ export class Sim {
       if (!this.player.auras[i]) continue;
       const id = this.character.slotted[i];
       if (!id) continue;
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (spec?.kind !== "aura") continue;
       for (const key of Object.keys(spec.aura) as (keyof Mods)[]) {
         const value = spec.aura[key];
@@ -313,14 +313,14 @@ export class Sim {
     this.mods = mods;
     this.derived = derive(this.character, mods);
     this.player.hp = Math.min(this.player.hp, this.derived.life);
-    this.player.mana = Math.min(this.player.mana, this.derived.mana);
+    this.player.energy = Math.min(this.player.energy, this.derived.energy);
   }
 
   begin(): void {
     this.phase = "play";
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
+    this.player.energy = this.derived.energy;
     this.trackPlace();
     this.refreshPacks();
   }
@@ -337,7 +337,7 @@ export class Sim {
     this.shots = [];
     this.recompute();
     this.player.hp = this.derived.life;
-    this.player.mana = this.derived.mana;
+    this.player.energy = this.derived.energy;
     this.phase = "play";
     this.enemies = [];
     this.spawned.clear();
@@ -350,7 +350,7 @@ export class Sim {
       character: this.character,
       wave: this.wave,
       hp: this.player.hp,
-      mana: this.player.mana,
+      energy: this.player.energy,
       x: this.player.x,
       y: this.player.y,
       starterGiven: this.starterGiven,
@@ -364,7 +364,11 @@ export class Sim {
     this.starterGiven = data.starterGiven;
     this.recompute();
     this.player.hp = clamp(data.hp, 1, this.derived.life);
-    this.player.mana = clamp(data.mana, 0, this.derived.mana);
+    this.player.energy = clamp(
+      Number((data as Snapshot & { mana?: number }).energy ?? (data as Snapshot & { mana?: number }).mana ?? 0),
+      0,
+      this.derived.energy,
+    );
     this.player.x = data.x;
     this.player.y = data.y;
     this.phase = "title";
@@ -377,7 +381,7 @@ export class Sim {
   rest(dt: number): void {
     this.recompute();
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.lifeRegen * dt);
-    this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.manaRegen * dt);
+    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyRegen * dt);
   }
 
   update(intent: Intent, dt: number): TickResult {
@@ -496,7 +500,7 @@ export class Sim {
       return buff.t > 0;
     });
     p.hp = Math.min(this.derived.life, p.hp + this.derived.lifeRegen * dt);
-    p.mana = Math.min(this.derived.mana, p.mana + this.derived.manaRegen * dt);
+    p.energy = Math.min(this.derived.energy, p.energy + this.derived.energyRegen * dt);
     for (const enemy of this.enemies) enemy.flash = Math.max(0, enemy.flash - dt);
   }
 
@@ -602,13 +606,13 @@ export class Sim {
     const id = this.character.slotted[index];
     if (!id) return;
     const rank = this.character.skillRanks[id] ?? 0;
-    const spec = scaledActive(id, rank);
+    const spec = scaledActive(id, rank, this.character.skillRanks);
     if (!spec) return;
     if (spec.kind === "aura") {
       this.player.auras[index] = !this.player.auras[index];
-      if (this.player.auras[index] && this.player.mana <= 1) {
+      if (this.player.auras[index] && this.player.energy <= 1) {
         this.player.auras[index] = false;
-        this.float(this.player.x, this.player.y - 28, "No mana", "#9ebed0");
+        this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
         return;
       }
       this.recompute();
@@ -616,11 +620,11 @@ export class Sim {
       return;
     }
     if (this.player.skillCd[index] > 0) return;
-    if (this.player.mana < spec.mana) {
-      this.float(this.player.x, this.player.y - 28, "No mana", "#9ebed0");
+    if (this.player.energy < spec.energyCost) {
+      this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
       return;
     }
-    this.player.mana -= spec.mana;
+    this.player.energy -= spec.energyCost;
     const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr"), 0, 0.4);
     this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
@@ -771,7 +775,7 @@ export class Sim {
     const rate = channel.healFrac / channel.total;
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * rate * dt);
     if (channel.restoreMana) {
-      this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.mana * 0.18 * dt);
+      this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.18 * dt);
     }
     channel.t -= dt;
     if (channel.t <= 0) this.player.channel = null;
@@ -825,17 +829,17 @@ export class Sim {
         this.player.auras[i] = false;
         continue;
       }
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (!spec || spec.kind !== "aura") {
         this.player.auras[i] = false;
         continue;
       }
-      drain += spec.manaPerSec;
+      drain += spec.energyPerSec;
     }
     if (drain <= 0) return;
-    this.player.mana -= drain * dt;
-    if (this.player.mana <= 0) {
-      this.player.mana = 0;
+    this.player.energy -= drain * dt;
+    if (this.player.energy <= 0) {
+      this.player.energy = 0;
       this.player.auras = [false, false, false];
       this.recompute();
       this.float(this.player.x, this.player.y - 24, "Aura fades", "#9ebed0");
@@ -1043,6 +1047,8 @@ export class Sim {
     for (let i = 0; i < 3; i++) {
       if (this.player.skillCd[i]! > 0) this.player.skillCd[i] = Math.max(0, this.player.skillCd[i]! - 0.16);
     }
+    // Basic and skill hits charge skill energy.
+    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyOnHit);
   }
 
   private resolveDeaths(result: TickResult): void {
@@ -1071,7 +1077,7 @@ export class Sim {
       if (ranks > 0) {
         this.recompute();
         this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * 0.28 * ranks);
-        this.player.mana = Math.min(this.derived.mana, this.player.mana + this.derived.mana * 0.28 * ranks);
+        this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.28 * ranks);
         if (gain.paragons > 0) {
           const skills = Math.floor(this.character.paragon / 5) - Math.floor((this.character.paragon - gain.paragons) / 5);
           const skillLine = skills > 0 ? `  ·  +${skills} skill point${skills > 1 ? "s" : ""}` : "";

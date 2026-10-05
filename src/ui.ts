@@ -3,6 +3,7 @@ import { derive, requirementText, xpGoal } from "./game/formulas";
 import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { appendSkillIcon } from "./game/skillIcons";
 import { readSlots } from "./game/save";
 import { RACES, raceById, raceName, type RaceId } from "./game/races";
 import { buyPrice, buyStockItem, gambleBlurb, gambleCost, gambleItem, merchantStock, sellItem, sellPrice, TOWN_NAME, VENDORS, type TownVendor } from "./game/town";
@@ -17,7 +18,7 @@ export class Ui {
   createRace: RaceId = "human";
   private createSlot = 0;
   private racePreview: RacePreview | null = null;
-  private session: Record<Attr, number> = { strength: 0, agility: 0, endurance: 0, wisdom: 0 };
+  private session: Record<Attr, number> = { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 };
   private treeKey = "";
   private packKey = "";
   private packTab: "gear" | "gems" = "gear";
@@ -168,12 +169,8 @@ export class Ui {
     bar.style.width = `${c.level >= MAX_LEVEL && c.paragon >= PARAGON_CAP ? 100 : Math.min(100, (c.xp / goal) * 100)}%`;
     text("hp-text", sim.player.shield > 0 ? `${Math.ceil(sim.player.hp)}+${Math.ceil(sim.player.shield)}` : `${Math.ceil(sim.player.hp)}`);
     text("hp-max", `${derived.life}`);
-    text("mana-text", `${Math.ceil(sim.player.mana)}`);
-    text("mana-max", `${derived.mana}`);
     const life = must("life-globe");
-    const mana = must("mana-globe");
-    life.style.setProperty("--fill", String(sim.player.hp / derived.life));
-    mana.style.setProperty("--fill", String(sim.player.mana / Math.max(1, derived.mana)));
+    life.style.setProperty("--fill", String(sim.player.hp / Math.max(1, derived.life)));
     must("btn-character").classList.toggle("attention", c.unspentStats > 0);
     must("btn-tree").classList.toggle("attention", c.unspentSkills > 0);
     const banner = must("banner");
@@ -191,14 +188,20 @@ export class Ui {
     for (let i = 0; i < 3; i++) {
       const button = must(`skill-${i}`);
       const id = c.slotted[i];
-      const spec = id ? scaledActive(id, c.skillRanks[id] ?? 0) : null;
+      const spec = id ? scaledActive(id, c.skillRanks[id] ?? 0, c.skillRanks) : null;
       const skill = id ? skillById(id) : undefined;
+      const cost = spec && spec.kind !== "aura" ? spec.energyCost : spec?.energyPerSec ?? 0;
+      const charged = !spec || spec.kind === "aura" || sim.player.energy >= (spec.energyCost || 0);
       button.textContent = skill ? skill.name : "Empty";
+      button.title = skill && cost ? `${skill.name} · ${Math.round(cost)}${spec?.kind === "aura" ? "/s" : ""} energy` : skill?.name ?? "Empty";
       const max = spec ? Math.max(0.2, spec.cooldown) : 1;
       const ratio = spec && spec.kind !== "aura" ? Math.min(1, sim.player.skillCd[i]! / max) : 0;
       button.style.setProperty("--cd", String(ratio));
       button.classList.toggle("on", !!sim.player.auras[i]);
       button.classList.toggle("empty", !skill);
+      button.classList.toggle("starved", !!skill && !charged && spec?.kind !== "aura");
+      const fill = Math.min(1, sim.player.energy / Math.max(1, derived.energy));
+      button.style.setProperty("--energy", String(fill));
     }
 
     if (this.open("sheet")) this.paintSheet(sim);
@@ -302,7 +305,7 @@ export class Ui {
   }
 
   private openSheet(): void {
-    this.session = { strength: 0, agility: 0, endurance: 0, wisdom: 0 };
+    this.session = { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 };
     this.show("sheet");
   }
 
@@ -336,7 +339,7 @@ export class Ui {
     const cost = retrainCost(sim.character);
     if (sim.character.gold < cost) return;
     if (!retrain(sim.character)) return;
-    this.session = { strength: 0, agility: 0, endurance: 0, wisdom: 0 };
+    this.session = { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 };
     sim.player.auras = [false, false, false];
     sim.recompute();
     this.treeKey = "";
@@ -425,11 +428,13 @@ export class Ui {
     text("s-hregen", d.lifeRegen.toFixed(1));
     text("s-dr", pct(d.damageReduction));
     text("s-def", `${Math.round(d.armor)}`);
-    text("s-mana", `${d.mana}`);
+    text("s-mana", `${d.energy}`);
     text("s-dodge", pct(d.evasion));
     text("s-ecdr", pct(sim.mods.cdr));
-    text("s-eregen", d.manaRegen.toFixed(1));
+    text("s-eregen", d.energyRegen.toFixed(1));
+    text("s-ehit", d.energyOnHit.toFixed(1));
     text("s-gf", pct(d.goldFind));
+    text("s-mf", pct(d.magicFind));
     text("s-ar", `${d.attackRating}`);
     text("s-move", `${Math.round(d.moveSpeed)}`);
     text("s-spell", `${d.spellMin.toFixed(1)}–${d.spellMax.toFixed(1)}`);
@@ -530,23 +535,37 @@ export class Ui {
       circle.setAttribute("stroke", this.selectedId === skill.id ? "#f4efe6" : gate.ok ? "#e7c39a" : "rgba(232,214,196,0.35)");
       circle.setAttribute("stroke-width", this.selectedId === skill.id ? "3" : "1.5");
       svg.append(circle);
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", String(at.x));
-      label.setAttribute("y", String(at.y + 4));
-      label.setAttribute("text-anchor", "middle");
-      label.setAttribute("fill", rank > 0 ? "#1a120c" : "#f0e2cf");
-      label.setAttribute("font-size", "11");
-      label.style.pointerEvents = "none";
-      label.textContent = rank > 0 ? String(rank) : gate.ok ? "+" : "";
-      svg.append(label);
+      appendSkillIcon(svg, skill.id, at.x, at.y - (rank > 0 ? 4 : 0), r * 1.15, rank > 0);
+      if (rank > 0) {
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", String(at.x));
+        label.setAttribute("y", String(at.y + r * 0.55));
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("fill", "#1a120c");
+        label.setAttribute("font-size", "12");
+        label.setAttribute("font-weight", "700");
+        label.style.pointerEvents = "none";
+        label.textContent = String(rank);
+        svg.append(label);
+      } else if (gate.ok) {
+        const plus = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        plus.setAttribute("x", String(at.x));
+        plus.setAttribute("y", String(at.y + r * 0.55));
+        plus.setAttribute("text-anchor", "middle");
+        plus.setAttribute("fill", "#f0e2cf");
+        plus.setAttribute("font-size", "13");
+        plus.style.pointerEvents = "none";
+        plus.textContent = "+";
+        svg.append(plus);
+      }
       const name = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        name.setAttribute("x", String(at.x));
-        name.setAttribute("y", String(at.y + r + 18));
-        name.setAttribute("text-anchor", "middle");
-        name.setAttribute("fill", "#f0e2cf");
-        name.setAttribute("font-size", "13");
-        name.style.pointerEvents = "none";
-        name.textContent = skill.name;
+      name.setAttribute("x", String(at.x));
+      name.setAttribute("y", String(at.y + r + 18));
+      name.setAttribute("text-anchor", "middle");
+      name.setAttribute("fill", "#f0e2cf");
+      name.setAttribute("font-size", "13");
+      name.style.pointerEvents = "none";
+      name.textContent = skill.name;
       svg.append(name);
     }
     this.paintCard(sim);
@@ -586,11 +605,11 @@ export class Ui {
     const gate = canSpendSkill(sim.character, skill.id);
     if (!gate.ok) this.confirmSpend = false;
     text("tree-name", `${skill.name}  ·  ${skill.kind}  ·  ${rank}/${skill.maxRank}`);
-    text("tree-blurb", describeSkill(skill.id, Math.max(1, rank)));
+    text("tree-blurb", describeSkill(skill.id, Math.max(1, rank), sim.character.skillRanks));
     text(
       "tree-next",
       rank > 0 && rank < skill.maxRank
-        ? `Next rank (${rank + 1}): ${describeSkill(skill.id, rank + 1)}`
+        ? `Next rank (${rank + 1}): ${describeSkill(skill.id, rank + 1, sim.character.skillRanks)}`
         : rank >= skill.maxRank
           ? "No further ranks."
           : "",
@@ -778,6 +797,8 @@ export class Ui {
     const labels: Record<SlotName, string> = {
       weapon: "Weapon",
       offhand: "Off-hand",
+      weapon3: "Third arm",
+      weapon4: "Fourth arm",
       head: "Head",
       chest: "Chest",
       belt: "Belt",
@@ -789,10 +810,15 @@ export class Ui {
       ear1: "Left earring",
       ear2: "Right earring",
     };
+    const insect = c.race === "insectoid";
+    for (const slot of ["weapon3", "weapon4"] as const) {
+      must(`eq-${slot}`).classList.toggle("hidden", !insect);
+    }
     for (const slot of GEAR_SLOTS) {
+      if ((slot === "weapon3" || slot === "weapon4") && !insect) continue;
       const item = c.equipment[slot];
       const el = must(`eq-${slot}`) as HTMLButtonElement;
-      el.className = `gear-slot${item ? ` ${rarityClass(item)}` : " empty"}${this.tip && "slot" in this.tip && this.tip.slot === slot ? " on" : ""}`;
+      el.className = `gear-slot${item ? ` ${rarityClass(item)}` : " empty"}${this.tip && "slot" in this.tip && this.tip.slot === slot ? " on" : ""}${slot === "weapon3" || slot === "weapon4" ? " insect-only" : ""}`;
       el.innerHTML = gearIcon(slot, item?.style ?? "melee");
       el.setAttribute("aria-label", item ? `${labels[slot]}, ${item.name}` : `${labels[slot]}, empty`);
     }

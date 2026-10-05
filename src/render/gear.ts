@@ -44,6 +44,8 @@ export function elementOf(item: Item | null | undefined): GearElement | null {
 export function syncHeroGear(root: THREE.Object3D, equipment: Record<SlotName, Item | null>, timeMs: number): void {
   attachWeapon(root, "handslot.r", "gear-main", equipment.weapon, false);
   attachWeapon(root, "handslot.l", "gear-off", equipment.offhand, true);
+  attachWeapon(root, "handslot.r2", "gear-arm3", equipment.weapon3, false, 0.85);
+  attachWeapon(root, "handslot.l2", "gear-arm4", equipment.weapon4, true, 0.85);
   attachArmor(root, "chest", "gear-chest-plate", equipment.chest, "chest");
   attachArmor(root, "head", "gear-helm-piece", equipment.head, "head");
   attachArmor(root, "ArmLeft", "gear-glove-l", equipment.gloves, "gloves");
@@ -61,8 +63,18 @@ export function syncHeroGear(root: THREE.Object3D, equipment: Record<SlotName, I
   animateGearFx(root, timeMs);
 }
 
-function attachWeapon(root: THREE.Object3D, boneName: string, nodeName: string, item: Item | null, offhand: boolean): void {
-  const bone = root.getObjectByName(boneName) ?? root.getObjectByName(offhand ? "hand.l" : "hand.r");
+function attachWeapon(
+  root: THREE.Object3D,
+  boneName: string,
+  nodeName: string,
+  item: Item | null,
+  offhand: boolean,
+  scaleMul = 1,
+): void {
+  const bone =
+    root.getObjectByName(boneName) ??
+    root.getObjectByName(offhand ? "hand.l" : "hand.r") ??
+    (boneName.endsWith("2") ? root.getObjectByName(offhand ? "hand.l" : "hand.r") : null);
   if (!bone) return;
   let holder = bone.getObjectByName(nodeName) as THREE.Group | undefined;
   const uid = item?.uid ?? "";
@@ -79,6 +91,7 @@ function attachWeapon(root: THREE.Object3D, boneName: string, nodeName: string, 
     holder = buildWeapon(item, offhand);
     holder.name = nodeName;
     holder.userData.itemUid = uid;
+    if (scaleMul !== 1) holder.scale.multiplyScalar(scaleMul);
     bone.add(holder);
   }
   holder.visible = true;

@@ -5,10 +5,11 @@ import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, activeBaseDps, scaledActive, skillById, SKILLS } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
+import { raceGearArmorMul, raceInnateArmor, raceWeaponSlots } from "./races";
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -61,19 +62,19 @@ describe("levels and attributes", () => {
     expect(hero.paragon).toBe(200);
   });
 
-  it("turns endurance into life and strength into melee damage", () => {
+  it("turns stamina into life and strength into melee damage", () => {
     const plain = createCharacter();
     const hearty = createCharacter();
     hearty.unspentStats = 3;
-    spendStat(hearty, "endurance");
-    spendStat(hearty, "endurance");
-    spendStat(hearty, "endurance");
+    spendStat(hearty, "stamina");
+    spendStat(hearty, "stamina");
+    spendStat(hearty, "stamina");
     expect(derive(hearty).life).toBe(derive(plain).life + 3);
+    expect(derive(hearty).armor).toBeGreaterThan(derive(plain).armor);
     const strong = createCharacter();
     strong.unspentStats = 5;
     for (let i = 0; i < 5; i++) spendStat(strong, "strength");
     expect(derive(strong).meleeMax).toBeGreaterThan(derive(plain).meleeMax);
-    expect(derive(strong).armor).toBeGreaterThan(derive(plain).armor);
   });
 
   it("keeps a channel through movement and ordinary hits, and drops it on a slam", () => {
@@ -109,13 +110,13 @@ describe("levels and attributes", () => {
     }
   });
 
-  it("heals one health each second per level, plus one for every ten endurance", () => {
+  it("heals one health each second per level, plus one for every ten stamina", () => {
     const hero = createCharacter();
-    // Human starts with +2 endurance → 12 total, so regen is 1 + 1.2.
+    // Human starts with +2 stamina → 12 total, so regen is 1 + 1.2.
     expect(derive(hero).lifeRegen).toBeCloseTo(2.2);
     hero.level = 8;
     hero.unspentStats = 20;
-    for (let i = 0; i < 20; i++) spendStat(hero, "endurance");
+    for (let i = 0; i < 20; i++) spendStat(hero, "stamina");
     expect(derive(hero).lifeRegen).toBeCloseTo(11.2);
   });
 
@@ -174,10 +175,10 @@ describe("skill wheel", () => {
     hero.level = 3;
     hero.unspentStats = 10;
     hero.unspentSkills = 2;
-    spendStat(hero, "wisdom");
+    spendStat(hero, "spirit");
     spendSkill(hero, "first-rite");
     expect(retrain(hero)).toBe(true);
-    expect(hero.spent.wisdom).toBe(0);
+    expect(hero.spent.spirit).toBe(0);
     expect(hero.skillRanks["first-rite"]).toBeUndefined();
     expect(hero.unspentStats).toBe(10);
     expect(hero.unspentSkills).toBe(2);
@@ -212,7 +213,7 @@ describe("gear and saving", () => {
   });
 
   it("applies each race’s attribute deltas on top of base", () => {
-    const attrs: Attr[] = ["strength", "agility", "endurance", "wisdom"];
+    const attrs: Attr[] = ["strength", "agility", "stamina", "luck", "spirit"];
     expect(RACES).toHaveLength(8);
     for (const race of RACES) {
       const hero = createCharacter("Exile", race.id);
@@ -225,8 +226,8 @@ describe("gear and saving", () => {
     const human = attributes(createCharacter("Exile", "human"));
     expect(human.strength).toBe(BASE_ATTR + 2);
     expect(human.agility).toBe(BASE_ATTR - 1);
-    expect(human.endurance).toBe(BASE_ATTR + 2);
-    expect(human.wisdom).toBe(BASE_ATTR - 1);
+    expect(human.stamina).toBe(BASE_ATTR + 2);
+    expect(human.spirit).toBe(BASE_ATTR - 1);
   });
 
   it("migrates missing race to human and round-trips a chosen race", () => {
@@ -421,7 +422,7 @@ describe("the ward", () => {
 
   it("rolls attributes at half the previous value", () => {
     expect(rolledAffixAmount("strength", 3, 2)).toBe(3);
-    expect(rolledAffixAmount("wisdom", 3, 1.5)).toBe(2);
+    expect(rolledAffixAmount("spirit", 3, 1.5)).toBe(2);
     expect(rolledAffixAmount("life", 14, 2)).toBe(28);
   });
 
@@ -549,15 +550,17 @@ describe("the ward", () => {
     }
   });
 
-  it("gives one life per endurance and five life per level, and half a mana per wisdom", () => {
+  it("gives one life per endurance and five life per level, and energy from spirit", () => {
     const hero = createCharacter();
     hero.level = 4;
-    hero.spent.endurance = 10;
-    hero.spent.wisdom = 20;
+    hero.spent.stamina = 10;
+    hero.spent.spirit = 20;
     const stats = derive(hero);
-    // Human: +2 endurance, −1 wisdom on top of base 10.
+    // Human: +2 stamina, −1 spirit on top of base 10.
     expect(stats.life).toBe(4 * 5 + (10 + 10 + 2));
-    expect(stats.mana).toBe(Math.round(16 + 4 + (10 + 20 - 1) * 0.5));
+    // 24 + level*0.5 + spirit*0.4
+    const spirit = 10 + 20 - 1;
+    expect(stats.energy).toBe(Math.round(24 + 4 * 0.5 + spirit * 0.4));
   });
 
   it("raises a piece by one item level and spends that many materials", () => {
@@ -651,7 +654,7 @@ describe("the ward", () => {
       character: hero,
       wave: 2,
       hp: 20,
-      mana: 10,
+      energy: 10,
       x: 10,
       y: 10,
       starterGiven: true,
@@ -680,5 +683,72 @@ describe("the ward", () => {
       sim.update(intent, 0.1);
     }
     expect(sim.killedTotal > 0 || hound.hp < before).toBe(true);
+  });
+
+  it("gives each non-hub skill 1–4 earlier synergies that boost the result", () => {
+    const hubs = new Set(SKILLS.filter((skill) => skill.hub).map((skill) => skill.id));
+    for (const skill of SKILLS) {
+      if (hubs.has(skill.id)) {
+        expect(SKILL_SYNERGIES[skill.id] ?? []).toHaveLength(0);
+        continue;
+      }
+      const links = SKILL_SYNERGIES[skill.id] ?? [];
+      expect(links.length, skill.id).toBeGreaterThanOrEqual(1);
+      expect(links.length, skill.id).toBeLessThanOrEqual(4);
+      for (const link of links) {
+        const feeder = skillById(link.from);
+        expect(feeder, `${skill.id}←${link.from}`).toBeTruthy();
+        expect(feeder!.radius).toBeLessThanOrEqual(skill.radius + 0.001);
+      }
+    }
+    const bare = scaledActive("breaker", 5)!;
+    const fed = scaledActive("breaker", 5, { "ruin-strike": 10, cleave: 10, "wrath-speed": 5, "heavy-blow": 10 })!;
+    expect(fed.mult).toBeGreaterThan(bare.mult);
+    expect(synergyPower("breaker", { "ruin-strike": 10, cleave: 10 })).toBeGreaterThan(0);
+  });
+
+  it("charges skill energy when attacks land", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    sim.player.energy = 0;
+    const hound = makeEnemy("hound", 1, sim.player.x + 30, sim.player.y, 40);
+    sim.enemies = [hound];
+    const intent = emptyIntent();
+    intent.attack = true;
+    for (let i = 0; i < 20; i++) sim.update(intent, 0.1);
+    expect(sim.player.energy).toBeGreaterThan(0);
+  });
+
+  it("lets insectoids wield four weapons with innate armor and thin gear plating", () => {
+    expect(raceWeaponSlots("insectoid")).toBe(4);
+    expect(raceInnateArmor("insectoid")).toBeGreaterThan(20);
+    expect(raceGearArmorMul("insectoid")).toBeCloseTo(0.15);
+    const bug = createCharacter("Chitin", "insectoid");
+    const bare = derive(bug).armor;
+    expect(bare).toBeGreaterThan(derive(createCharacter()).armor);
+    const plate = starterBlade("shell");
+    plate.slot = "chest";
+    plate.armorType = "plate";
+    plate.damageMin = 0;
+    plate.damageMax = 0;
+    plate.armor = 100;
+    plate.affixes = [];
+    bug.equipment.chest = plate;
+    expect(derive(bug).armor).toBeCloseTo(bare + 15, 0);
+    const a = starterBlade("a");
+    const b = starterBlade("b");
+    const c = starterBlade("c");
+    const d = starterBlade("d");
+    for (const blade of [a, b, c, d]) {
+      blade.hands = 1;
+      blade.damageMin = 10;
+      blade.damageMax = 10;
+    }
+    bug.equipment.weapon = a;
+    bug.equipment.offhand = b;
+    bug.equipment.weapon3 = c;
+    bug.equipment.weapon4 = d;
+    const fists = createCharacter("Fists", "insectoid");
+    expect(derive(bug).meleeMax).toBeGreaterThan(derive(fists).meleeMax);
   });
 });

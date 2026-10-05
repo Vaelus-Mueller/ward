@@ -84,7 +84,7 @@ export class RacePreview {
   private draw(): void {
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.85);
     if (this.canvas.width !== Math.floor(width * dpr) || this.canvas.height !== Math.floor(height * dpr)) {
       this.renderer.setPixelRatio(dpr);
       this.renderer.setSize(width, height, false);
