@@ -21,7 +21,24 @@ export type DamagePair =
 /** Skill-wheel cones map 1:1 onto damage pairs. */
 export type SectorId = DamagePair;
 export type SkillKind = "passive" | "active" | "aura" | "channel" | "key" | "capstone";
-export type EnemyKind = "hound" | "sentinel" | "archer" | "brute";
+export type EnemyKind =
+  | "hound"
+  | "sentinel"
+  | "archer"
+  | "brute"
+  | "wolf"
+  | "slime"
+  | "gargoyle"
+  | "wisp"
+  | "imp"
+  | "spider"
+  | "cultist"
+  | "sprig"
+  | "whelp"
+  | "hillock"
+  | "lurker"
+  | "lumen"
+  | "flicker";
 
 export const ATTRS: Attr[] = ["strength", "agility", "stamina", "luck", "spirit"];
 

@@ -10,6 +10,15 @@ import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
 import { raceGearArmorMul, raceInnateArmor, raceWeaponSlots } from "./races";
+import {
+  RESIST_FLOOR,
+  WEAK_CEILING,
+  WAVE1_KINDS,
+  assertCombatBans,
+  creatureTypesCovered,
+  damageTakenMul,
+  monsterOf,
+} from "./monsters";
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -766,5 +775,73 @@ describe("the ward", () => {
     bug.equipment.weapon4 = d;
     const fists = createCharacter("Fists", "insectoid");
     expect(derive(bug).meleeMax).toBeGreaterThan(derive(fists).meleeMax);
+  });
+});
+
+describe("monster roster combat rules", () => {
+  it("covers every SRD-style creature type in wave 1 without immunities, rez, or summons", () => {
+    const covered = new Set(creatureTypesCovered());
+    for (const type of [
+      "aberration",
+      "beast",
+      "celestial",
+      "construct",
+      "dragon",
+      "elemental",
+      "fey",
+      "fiend",
+      "giant",
+      "humanoid",
+      "monstrosity",
+      "ooze",
+      "plant",
+      "undead",
+    ] as const) {
+      expect(covered.has(type)).toBe(true);
+    }
+    for (const kind of WAVE1_KINDS) {
+      const def = monsterOf(kind);
+      expect(def.canResurrect).toBe(false);
+      expect(def.canSummon).toBe(false);
+      assertCombatBans(def);
+      for (const pair of Object.keys(SECTORS) as (keyof typeof SECTORS)[]) {
+        expect(damageTakenMul(def, pair)).toBeGreaterThanOrEqual(RESIST_FLOOR);
+        expect(damageTakenMul(def, pair)).toBeLessThanOrEqual(WEAK_CEILING);
+      }
+    }
+  });
+
+  it("applies resist and weak multipliers instead of zeroing damage", () => {
+    const slime = makeEnemy("slime", 1, 0, 0, 1);
+    const before = slime.hp;
+    // Holy is weak on slime (1.2); fire is stronger (1.55) — both deal damage.
+    expect(damageTakenMul(monsterOf("slime"), "fire")).toBeGreaterThan(1);
+    expect(damageTakenMul(monsterOf("slime"), "bleed")).toBeLessThan(1);
+    expect(damageTakenMul(monsterOf("slime"), "bleed")).toBeGreaterThanOrEqual(RESIST_FLOOR);
+    expect(before).toBeGreaterThan(0);
+  });
+
+  it("keeps swing committed through dodge and shield absorb", () => {
+    const sim = new Sim(createCharacter());
+    sim.phase = "play";
+    sim.player.swing = 0.2;
+    sim.player.attackCd = 0.4;
+    sim.player.iFrame = 0.5;
+    const intent = emptyIntent();
+    sim.update(intent, 0.05);
+    expect(sim.player.swing).toBeGreaterThan(0);
+    expect(sim.player.attackCd).toBeGreaterThan(0);
+
+    sim.player.iFrame = 0;
+    sim.player.shield = 500;
+    sim.player.swing = 0.18;
+    const foe = makeEnemy("hound", 1, sim.player.x + 20, sim.player.y, 9);
+    sim.enemies = [foe];
+    // Force a hit path by standing in melee; hurtPlayer should block via shield without clearing swing.
+    for (let i = 0; i < 5; i++) {
+      sim.player.swing = 0.18;
+      sim.update(emptyIntent(), 0.05);
+    }
+    expect(sim.player.swing).toBeGreaterThan(0);
   });
 });

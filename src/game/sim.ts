@@ -5,6 +5,7 @@ import {
   clamp,
   emptyMods,
   type Character,
+  type DamagePair,
   type Derived,
   type EnemyKind,
   type Mods,
@@ -13,6 +14,7 @@ import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
 import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import { MONSTER_ARCH, damageTakenMul, monsterOf } from "./monsters";
 import {
   DESPAWN,
   LEASH,
@@ -74,6 +76,8 @@ export interface Shot {
   burn: number;
   bleed: boolean;
   style: "spark" | "fire" | "knife" | "arrow";
+  /** Damage pair for resist/weak — never used for immunities. */
+  pair: DamagePair;
 }
 
 export type BurstKind = "slash" | "cleave" | "bleed" | "fire" | "frost" | "arcane" | "heal" | "ward" | "dash";
@@ -157,15 +161,7 @@ interface PlayerBody {
   swing: number;
 }
 
-const ARCH: Record<
-  EnemyKind,
-  { hp: number; dmg: number; def: number; armor: number; speed: number; range: number; cd: number; r: number; xp: number; gold: number }
-> = {
-  hound: { hp: 28, dmg: 7, def: 12, armor: 2, speed: 96, range: 46, cd: 0.95, r: 16, xp: 14, gold: 3 },
-  sentinel: { hp: 64, dmg: 10, def: 24, armor: 16, speed: 58, range: 52, cd: 1.2, r: 20, xp: 24, gold: 6 },
-  archer: { hp: 34, dmg: 8, def: 14, armor: 4, speed: 70, range: 270, cd: 1.75, r: 15, xp: 18, gold: 5 },
-  brute: { hp: 220, dmg: 18, def: 32, armor: 22, speed: 48, range: 78, cd: 2.4, r: 34, xp: 90, gold: 24 },
-};
+const ARCH = MONSTER_ARCH;
 
 export interface Snapshot {
   character: Character;
@@ -588,6 +584,8 @@ export class Sim {
           0,
           frost,
           frost > 0 ? 1.4 : 0,
+          0,
+          "bleed",
         );
       }
     } else if (style === "focus") {
@@ -641,10 +639,11 @@ export class Sim {
       };
       return;
     }
-    this.cast(spec, result);
+    const pair = skillById(id)?.sector ?? "bleed";
+    this.cast(spec, result, pair);
   }
 
-  private cast(spec: ActiveSpec, result: TickResult): void {
+  private cast(spec: ActiveSpec, result: TickResult, pair: DamagePair = "bleed"): void {
     const p = this.player;
     const critAdd = spec.kind === "dash" && spec.bleed ? 0.45 : 0;
     if (spec.kind === "buff") {
@@ -663,7 +662,7 @@ export class Sim {
       p.y += Math.sin(p.facing) * spec.dash;
       for (const enemy of this.enemies) {
         if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= spec.range) {
-          this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, critAdd);
+          this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, critAdd, pair);
         }
       }
       return;
@@ -673,19 +672,19 @@ export class Sim {
       let hits = 0;
       for (const enemy of this.enemies) {
         if (!this.inArc(enemy, spec.range, arc)) continue;
-        this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+        this.hitEnemy(enemy, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
         hits += 1;
       }
       if (hits === 0 && spec.kind === "melee") {
         const target = this.nearestEnemy(spec.range, false);
-        if (target) this.hitEnemy(target, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+        if (target) this.hitEnemy(target, this.rollScaled(spec), spec.bleed > 0, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
       }
       return;
     }
     if (spec.kind === "nova") {
       for (const enemy of this.enemies) {
         if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= spec.range) {
-          this.hitEnemy(enemy, this.rollScaled(spec), false, spec.burn, result, spec.stun, spec.slow, spec.slowDur);
+          this.hitEnemy(enemy, this.rollScaled(spec), false, spec.burn, result, spec.stun, spec.slow, spec.slowDur, 0, pair);
         }
       }
       return;
@@ -693,7 +692,7 @@ export class Sim {
     if (spec.kind === "projectile") {
       const damage = this.rollScaled(spec) * (spec.scaling === "melee" ? 1 + this.mods.projectileMult : 1);
       const style = spec.burn > 0 ? "fire" : spec.scaling === "spell" ? "spark" : "knife";
-      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range, style);
+      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range, style, pair);
     }
   }
 
@@ -745,6 +744,7 @@ export class Sim {
     radial: boolean,
     speed: number,
     style: Shot["style"],
+    pair: DamagePair = "bleed",
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -765,6 +765,7 @@ export class Sim {
         burn,
         bleed: false,
         style,
+        pair,
       });
     }
   }
@@ -874,7 +875,7 @@ export class Sim {
       const dy = this.player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
       const slowMul = enemy.slow > 0 ? 0.55 : 1;
-      if (enemy.kind === "brute" && enemy.telegraph > 0) {
+      if ((enemy.kind === "brute" || enemy.kind === "hillock" || enemy.kind === "whelp") && enemy.telegraph > 0) {
         enemy.telegraph -= dt;
         if (enemy.telegraph <= 0) {
           if (dist < enemy.radius + 62) this.hurtPlayer(enemy.damage * 1.35, enemy.level, enemy, result, { knockback: true, stun: 0.6 });
@@ -889,7 +890,7 @@ export class Sim {
         continue;
       }
       if (enemy.cd > 0) continue;
-      if (enemy.kind === "brute") {
+      if (enemy.kind === "brute" || enemy.kind === "hillock" || enemy.kind === "whelp") {
         enemy.telegraph = 0.85;
         continue;
       }
@@ -911,6 +912,30 @@ export class Sim {
           burn: 0,
           bleed: false,
           style: "arrow",
+          pair: "bleed",
+        });
+        enemy.cd = enemy.maxCd;
+        continue;
+      }
+      if (enemy.kind === "cultist" || enemy.kind === "wisp") {
+        const angle = Math.atan2(dy, dx);
+        const speed = enemy.kind === "wisp" ? 200 : 230;
+        this.shots.push({
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: 5,
+          life: 1.3,
+          damage: enemy.damage,
+          fromPlayer: false,
+          color: enemy.kind === "wisp" ? "#ffb060" : "#a894e6",
+          hit: [],
+          pierce: false,
+          burn: enemy.kind === "wisp" ? 2 : 0,
+          bleed: false,
+          style: "spark",
+          pair: enemy.kind === "wisp" ? "fire" : "unholy",
         });
         enemy.cd = enemy.maxCd;
         continue;
@@ -935,7 +960,7 @@ export class Sim {
       for (const enemy of this.enemies) {
         if (shot.hit.includes(enemy.id)) continue;
         if (Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <= enemy.radius + shot.radius) {
-          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result);
+          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair);
           shot.hit.push(enemy.id);
           if (!shot.pierce) shot.life = 0;
           break;
@@ -952,7 +977,12 @@ export class Sim {
     result: TickResult,
     blow: { knockback?: boolean; stun?: number } = {},
   ): void {
-    if (this.iframeLeft() > 0) return;
+    // Dodge / i-frames and shield absorb resolve as defense layers.
+    // They must never clear swing / attackCd — committed attacks stay committed.
+    if (this.iframeLeft() > 0) {
+      this.float(this.player.x, this.player.y - 20, "dodge", "#c8d5cf");
+      return;
+    }
     if (this.rng() < this.derived.evasion) {
       this.float(this.player.x, this.player.y - 20, "evade", "#c8d5cf");
       return;
@@ -960,7 +990,7 @@ export class Sim {
     let damage = amount;
     let crit = false;
     // Elites and brutes can land crushing criticals; ordinary foes rarely.
-    const critChance = attacker?.elite || attacker?.kind === "brute" ? 0.18 : 0.06;
+    const critChance = attacker?.elite || attacker?.kind === "brute" || attacker?.kind === "whelp" || attacker?.kind === "hillock" ? 0.18 : 0.06;
     if (this.rng() < critChance) {
       damage *= 1.65;
       crit = true;
@@ -971,6 +1001,9 @@ export class Sim {
       const absorbed = Math.min(this.player.shield, damage);
       this.player.shield -= absorbed;
       damage -= absorbed;
+      if (absorbed > 0) this.float(this.player.x, this.player.y - 18, "block", "#e7c39a");
+      // Full shield absorb: no HP loss, do not interrupt swing/attack animation.
+      if (damage <= 0) return;
     }
     if (damage <= 0) return;
     this.player.hp -= damage;
@@ -1006,6 +1039,7 @@ export class Sim {
     slow = 0,
     slowDur = 0,
     critAdd = 0,
+    pair: DamagePair = "bleed",
   ): void {
     if (this.rng() > hitChance(this.derived.attackRating, enemy.defense)) {
       this.float(enemy.x, enemy.y - 18, "miss", "#b7b1a8");
@@ -1019,6 +1053,8 @@ export class Sim {
       damage *= 1.65;
       crit = true;
     }
+    // Resist/weak only — clampDamageMul inside damageTakenMul enforces no immunities.
+    damage *= damageTakenMul(monsterOf(enemy.kind), pair);
     damage = mitigate(damage, enemy.armor, this.character.level, 0);
     enemy.hp -= damage;
     enemy.flash = 0.12;

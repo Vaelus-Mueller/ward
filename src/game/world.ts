@@ -1,4 +1,5 @@
 import type { EnemyKind } from "./types";
+import { MONSTER_ARCH } from "./monsters";
 
 export const PACK_GAP = 560;
 export const ROAD_X = 1800;
@@ -9,12 +10,9 @@ const MOVE = 172;
 const TARGET_SECONDS = 8 * 60;
 const LEVEL_SEAM = 180;
 
-export const SIGHT: Record<EnemyKind, number> = {
-  hound: 250,
-  sentinel: 230,
-  archer: 310,
-  brute: 240,
-};
+export const SIGHT: Record<EnemyKind, number> = Object.fromEntries(
+  (Object.keys(MONSTER_ARCH) as EnemyKind[]).map((kind) => [kind, MONSTER_ARCH[kind].sight]),
+) as Record<EnemyKind, number>;
 
 interface LevelSpec {
   id: number;
@@ -167,13 +165,24 @@ export function placeAt(x: number, y: number): { level: number; name: string } {
 
 export function packKinds(pack: PackSpot): EnemyKind[] {
   const kinds: EnemyKind[] = [];
+  // Wave-1 roster mix by depth — keep KayKit undead as the spine, sprinkle archetypes.
+  const deep: EnemyKind[] = ["wolf", "spider", "slime", "imp", "sprig", "gargoyle", "wisp", "cultist", "flicker", "lurker", "lumen"];
   for (let i = 0; i < pack.size; i++) {
-    if (pack.archers) kinds.push(i % 5 === 0 ? "hound" : "archer");
-    else if (pack.level <= 2) kinds.push("hound");
-    else if (pack.level <= 4) kinds.push(i % 4 === 3 ? "sentinel" : "hound");
-    else kinds.push(i % 5 === 4 ? "archer" : i % 3 === 2 ? "sentinel" : "hound");
+    if (pack.archers) {
+      kinds.push(i % 5 === 0 ? "cultist" : i % 3 === 0 ? "wisp" : "archer");
+    } else if (pack.level <= 2) {
+      kinds.push(i % 4 === 0 ? "wolf" : "hound");
+    } else if (pack.level <= 4) {
+      kinds.push(i % 5 === 0 ? "spider" : i % 4 === 3 ? "sentinel" : "hound");
+    } else if (pack.level <= 6) {
+      kinds.push(i % 5 === 4 ? "archer" : i % 3 === 2 ? "sentinel" : deep[i % deep.length]!);
+    } else {
+      kinds.push(i % 6 === 5 ? "gargoyle" : i % 4 === 0 ? deep[(i + pack.level) % deep.length]! : i % 3 === 2 ? "sentinel" : "hound");
+    }
   }
-  if (pack.boss) kinds[kinds.length - 1] = "brute";
+  if (pack.boss) {
+    kinds[kinds.length - 1] = pack.level >= 9 ? (pack.level >= 10 ? "whelp" : "hillock") : "brute";
+  }
   return kinds;
 }
 

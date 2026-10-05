@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { RaceId } from "../game/types";
 
 export const HERO_HEIGHT: Record<RaceId, number> = {
@@ -185,7 +186,7 @@ export function buildHero(race: RaceId): THREE.Group {
 
   const skull = part(
     "Head",
-    race === "golem" ? box(look.head.r * 1.7, look.head.r * 1.8, look.head.r * 1.6) : new THREE.SphereGeometry(look.head.r, 14, 12),
+    race === "golem" ? box(look.head.r * 1.7, look.head.r * 1.8, look.head.r * 1.6) : new THREE.SphereGeometry(look.head.r, 24, 18),
     skin,
   );
   head.add(skull);
@@ -324,11 +325,11 @@ function addLimb(
   group.position.set(x, isLeg ? 0 : 0.18 + yOffset, 0);
   parent.add(group);
 
-  const upper = part(name, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 4, 8), isLeg ? cloth : skin);
+  const upper = part(name, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 6, 12), isLeg ? cloth : skin);
   upper.position.y = isLeg ? -length * 0.35 : -length * 0.28;
   group.add(upper);
 
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.4), 4, 8), skin);
+  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.4), 6, 12), skin);
   lower.position.y = isLeg ? -length * 0.78 : -length * 0.72;
   group.add(lower);
 
@@ -339,7 +340,7 @@ function addLimb(
   } else {
     const left = name.startsWith("ArmLeft");
     const handName = left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`;
-    const hand = part(handName, new THREE.SphereGeometry(thick * 1.15, 8, 6), skin);
+    const hand = part(handName, new THREE.SphereGeometry(thick * 1.15, 12, 10), skin);
     hand.position.y = -length * 0.95;
     group.add(hand);
     const slot = new THREE.Group();
@@ -357,8 +358,11 @@ function part(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
   return mesh;
 }
 
-function box(w: number, h: number, d: number): THREE.BoxGeometry {
-  return new THREE.BoxGeometry(w, h, d);
+function box(w: number, h: number, d: number): THREE.BufferGeometry {
+  const radius = Math.min(w, h, d) * 0.22;
+  const safe = Math.min(radius, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
+  if (safe <= 0.001) return new THREE.BoxGeometry(w, h, d);
+  return new RoundedBoxGeometry(w, h, d, 3, safe);
 }
 
 function mat(color: number, metal: number, rough: number, emissive?: number, emit = 0): THREE.MeshStandardMaterial {
@@ -368,6 +372,7 @@ function mat(color: number, metal: number, rough: number, emissive?: number, emi
     roughness: rough,
     emissive: emissive ?? 0x000000,
     emissiveIntensity: emit,
+    envMapIntensity: 0.9,
   });
 }
 

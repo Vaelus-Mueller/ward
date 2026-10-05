@@ -16,12 +16,17 @@ export interface QualitySettings {
   antialias: boolean;
   /** Max simultaneous burst groups before culling oldest. */
   maxBursts: number;
+  /** Soft volumetric shafts + mist density scale (0 = off). */
+  atmosphere: number;
+  /** Weather particle budget multiplier. */
+  weather: number;
 }
 
 const PRESETS: Record<QualityLevel, Omit<QualitySettings, "level">> = {
-  high: { dpr: 1.85, shadows: true, shadowMap: 1024, fxScale: 1, antialias: true, maxBursts: 18 },
-  balanced: { dpr: 1.5, shadows: true, shadowMap: 768, fxScale: 0.7, antialias: true, maxBursts: 12 },
-  low: { dpr: 1.15, shadows: false, shadowMap: 512, fxScale: 0.4, antialias: false, maxBursts: 8 },
+  // High starts at 2048 soft shadows (PR #2 look), then AdaptiveQuality steps to 1024 / off.
+  high: { dpr: 1.85, shadows: true, shadowMap: 2048, fxScale: 1, antialias: true, maxBursts: 18, atmosphere: 1, weather: 1 },
+  balanced: { dpr: 1.5, shadows: true, shadowMap: 1024, fxScale: 0.7, antialias: true, maxBursts: 12, atmosphere: 0.55, weather: 0.55 },
+  low: { dpr: 1.15, shadows: false, shadowMap: 512, fxScale: 0.4, antialias: false, maxBursts: 8, atmosphere: 0, weather: 0 },
 };
 
 function isMobileShell(): boolean {
