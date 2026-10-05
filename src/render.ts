@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { classTitle } from "./game/character";
 import { ARENA, type Item } from "./game/types";
+import { ROAD_X, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
 
 const SCALE = 0.045;
@@ -305,7 +306,6 @@ export class Renderer {
     const maxX = (ARENA.width - ARENA.margin) * SCALE;
     const minZ = ARENA.margin * SCALE;
     const maxZ = (ARENA.height - ARENA.margin) * SCALE;
-    const span = 4;
     const place = (key: string, x: number, z: number, rot: number, width: number) => {
       const piece = this.templates.get(key);
       if (!piece) return;
@@ -325,19 +325,33 @@ export class Renderer {
       group.rotation.y = rot;
       this.scene.add(group);
     };
-    for (let x = minX; x <= maxX; x += span) {
-      const broken = Math.round(x) % 12 === 0;
-      place(broken ? "wall-broken" : "wall", x, minZ, 0, span);
-      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, span);
+    const step = 22;
+    for (let x = minX; x <= maxX; x += step) {
+      const broken = Math.round(x) % 44 === 0;
+      place(broken ? "wall-broken" : "wall", x, minZ, 0, step);
+      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, step);
     }
-    for (let z = minZ + span; z <= maxZ - span; z += span) {
-      place("wall", minX, z, Math.PI / 2, span);
-      place("wall", maxX, z, -Math.PI / 2, span);
+    for (let z = minZ + step; z <= maxZ - step; z += step) {
+      place("wall", minX, z, Math.PI / 2, step);
+      place("wall", maxX, z, -Math.PI / 2, step);
     }
-    for (let x = minX + 10; x < maxX; x += 16) {
-      for (let z = minZ + 10; z < maxZ; z += 16) {
-        place((x + z) % 32 === 0 ? "column" : "pillar", x, z, 0, 1.6);
-      }
+    const spine = roadSpine();
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE)),
+      new THREE.MeshStandardMaterial({ color: 0xb7a890, roughness: 0.96 }),
+    );
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
+    road.receiveShadow = true;
+    this.scene.add(road);
+    const seen = new Set<string>();
+    for (const pack of worldPacks()) {
+      const key = pack.branch ? pack.id : `${pack.level}`;
+      if (!pack.branch && pack.id !== `${pack.level}-0`) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const markX = (pack.branch ? pack.x : ROAD_X + 220) * SCALE;
+      place("column", markX, pack.y * SCALE, 0, 2.4);
     }
   }
 

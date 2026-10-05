@@ -13,6 +13,18 @@ import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
 import { passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import {
+  DESPAWN,
+  LEASH,
+  SIGHT,
+  SPAWN_IN,
+  levelToughness,
+  packKinds,
+  placeAt,
+  roadStart,
+  worldPacks,
+  type PackSpot,
+} from "./world";
 
 export interface Enemy {
   id: number;
@@ -37,6 +49,13 @@ export interface Enemy {
   gold: number;
   flash: number;
   level: number;
+  homeX: number;
+  homeY: number;
+  anchorX: number;
+  anchorY: number;
+  pack: string;
+  sight: number;
+  aggro: boolean;
 }
 
 export interface Shot {
@@ -148,6 +167,7 @@ export interface Snapshot {
   x: number;
   y: number;
   starterGiven: boolean;
+  cleared?: string[];
 }
 
 export function emptyIntent(): Intent {
@@ -160,18 +180,6 @@ export function emptyIntent(): Intent {
     skills: [false, false, false],
     lootId: null,
   };
-}
-
-export function wavePlan(wave: number): EnemyKind[] {
-  const count = Math.min(9, 3 + Math.floor(wave * 0.65));
-  const kinds: EnemyKind[] = [];
-  for (let i = 0; i < count; i++) {
-    if (wave >= 4 && i % 5 === 4) kinds.push("archer");
-    else if (wave >= 3 && i % 4 === 3) kinds.push("sentinel");
-    else kinds.push("hound");
-  }
-  if (wave % 5 === 0) kinds.push("brute");
-  return kinds;
 }
 
 export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, id: number): Enemy {
@@ -203,6 +211,13 @@ export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, i
     gold: arch.gold + Math.floor((wave - 1) / 2),
     flash: 0,
     level: wave,
+    homeX: x,
+    homeY: y,
+    anchorX: x,
+    anchorY: y,
+    pack: `solo-${id}`,
+    sight: SIGHT[kind],
+    aggro: false,
   };
 }
 
@@ -223,6 +238,10 @@ export class Sim {
   bannerT = 0;
   between = 0;
   killedTotal = 0;
+  placeLabel = "Level 1 · Threshold";
+  private cleared = new Set<string>();
+  private spawned = new Set<string>();
+  private roadNoted = false;
   private rng: () => number;
   private nextEnemy = 1;
   private nextDrop = 1;
@@ -235,8 +254,8 @@ export class Sim {
     this.rng = mulberry32(seed);
     this.derived = derive(character);
     this.player = {
-      x: ARENA.width / 2,
-      y: ARENA.height / 2,
+      x: roadStart().x,
+      y: roadStart().y,
       facing: -Math.PI / 2,
       hp: 1,
       mana: 1,
@@ -292,7 +311,8 @@ export class Sim {
     this.recompute();
     this.player.hp = this.derived.life;
     this.player.mana = this.derived.mana;
-    this.spawnWave();
+    this.trackPlace();
+    this.refreshPacks();
   }
 
   retry(): void {
@@ -308,7 +328,9 @@ export class Sim {
     this.player.hp = this.derived.life;
     this.player.mana = this.derived.mana;
     this.phase = "play";
-    this.spawnWave();
+    this.enemies = [];
+    this.spawned.clear();
+    this.refreshPacks();
     if (loss > 0) this.float(this.player.x, this.player.y - 30, `-${loss} gold`, "#e7c39a");
   }
 
@@ -321,6 +343,7 @@ export class Sim {
       x: this.player.x,
       y: this.player.y,
       starterGiven: this.starterGiven,
+      cleared: [...this.cleared],
     };
   }
 
@@ -336,6 +359,8 @@ export class Sim {
     this.phase = "title";
     this.enemies = [];
     this.shots = [];
+    this.cleared = new Set(Array.isArray(data.cleared) ? data.cleared : []);
+    this.spawned.clear();
   }
 
   rest(dt: number): void {
@@ -354,31 +379,7 @@ export class Sim {
       return burst.t > 0;
     });
 
-    if (this.phase === "between") {
-      this.tickTimers(dt);
-      this.applyIntent(intent, dt);
-      if (intent.lootId !== null) this.takeDrop(intent.lootId);
-      this.collectGold();
-      this.clampBodies();
-      this.between -= dt;
-      const nextWave = this.wave + 1;
-      if (nextWave % 10 === 0 && this.between > 0) {
-        const seconds = Math.max(1, Math.ceil(this.between));
-        this.banner = `Wave ${nextWave} in ${seconds}. The gate is open.`;
-        this.bannerT = this.between;
-      }
-      if (this.between <= 0) {
-        this.wave += 1;
-        this.phase = "play";
-        this.spawnWave();
-        if (this.wave % 10 === 0) {
-          this.banner = "";
-          this.bannerT = 0;
-        }
-        result.waveStarted = this.wave;
-      }
-      return result;
-    }
+    if (this.phase === "between") this.phase = "play";
 
     this.hurtThisTick = false;
     this.tickTimers(dt);
@@ -410,6 +411,8 @@ export class Sim {
       this.phase = "dead";
       result.died = true;
     }
+    this.refreshPacks();
+    this.trackPlace();
     return result;
   }
 
@@ -742,6 +745,7 @@ export class Sim {
   }
 
   private tickEnemies(dt: number, result: TickResult): void {
+    this.refreshAggro();
     for (const enemy of this.enemies) {
       enemy.cd = Math.max(0, enemy.cd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
@@ -752,6 +756,18 @@ export class Sim {
         if (enemy.dot.t <= 0) enemy.dot = null;
       }
       if (enemy.hp <= 0 || enemy.stun > 0) continue;
+      if (!enemy.aggro) {
+        enemy.telegraph = 0;
+        const hx = enemy.homeX - enemy.x;
+        const hy = enemy.homeY - enemy.y;
+        const home = Math.hypot(hx, hy);
+        if (home > 10) {
+          const step = Math.min(enemy.speed * (enemy.slow > 0 ? 0.55 : 1) * dt, home);
+          enemy.x += (hx / home) * step;
+          enemy.y += (hy / home) * step;
+        }
+        continue;
+      }
       const dx = this.player.x - enemy.x;
       const dy = this.player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
@@ -953,18 +969,13 @@ export class Sim {
         result.leveled += ranks;
       }
     }
+    const before = this.enemies;
     this.enemies = living;
-    if (this.enemies.length === 0 && this.phase === "play") {
-      this.phase = "between";
-      const nextWave = this.wave + 1;
-      const gate = nextWave % 10 === 0;
-      this.between = gate ? 10 : 2.2;
-      this.banner = gate
-        ? `Wave ${nextWave} in 10. The gate is open.`
-        : this.wave % 5 === 0
-          ? "The champion falls."
-          : "The ward is quiet… more are coming.";
-      this.bannerT = this.between;
+    this.markCleared(before, living);
+    if (!this.roadNoted && this.roadClear()) {
+      this.roadNoted = true;
+      this.banner = "The tenth ward falls quiet.";
+      this.bannerT = 4.5;
     }
   }
 
@@ -1001,18 +1012,79 @@ export class Sim {
     this.float(this.player.x, this.player.y - 26, item.name, item.uniqueId ? "#d4b15a" : rarityColor(item.rarity));
   }
 
-  private spawnWave(): void {
-    this.enemies = [];
-    this.shots = [];
-    const plan = wavePlan(this.wave);
-    plan.forEach((kind, index) => {
-      const angle = (index / plan.length) * Math.PI * 2 + this.rng() * 0.15;
-      const x = clamp(ARENA.width / 2 + Math.cos(angle) * ARENA.width * 0.36, ARENA.margin, ARENA.width - ARENA.margin);
-      const y = clamp(ARENA.height / 2 + Math.sin(angle) * ARENA.height * 0.34, ARENA.margin, ARENA.height - ARENA.margin);
-      this.enemies.push(makeEnemy(kind, this.wave, x, y, this.nextEnemy++));
+  private refreshAggro(): void {
+    const seen = new Set<string>();
+    for (const enemy of this.enemies) {
+      if (Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y) <= enemy.sight) seen.add(enemy.pack);
+    }
+    const leashed = new Set<string>();
+    for (const enemy of this.enemies) {
+      if (Math.hypot(this.player.x - enemy.anchorX, this.player.y - enemy.anchorY) > LEASH) leashed.add(enemy.pack);
+    }
+    for (const enemy of this.enemies) enemy.aggro = seen.has(enemy.pack) && !leashed.has(enemy.pack);
+  }
+
+  private markCleared(before: Enemy[], living: Enemy[]): void {
+    const alive = new Set(living.map((enemy) => enemy.pack));
+    for (const enemy of before) {
+      if (!alive.has(enemy.pack) && this.spawned.has(enemy.pack)) this.cleared.add(enemy.pack);
+    }
+  }
+
+  private roadClear(): boolean {
+    return worldPacks().filter((pack) => !pack.branch).every((pack) => this.cleared.has(pack.id));
+  }
+
+  private trackPlace(): void {
+    const place = placeAt(this.player.x, this.player.y);
+    this.wave = place.level;
+    const label = `Level ${place.level} · ${place.name}`;
+    if (label === this.placeLabel) return;
+    this.placeLabel = label;
+    if (this.bannerT <= 0) {
+      this.banner = place.name;
+      this.bannerT = 2.2;
+    }
+  }
+
+  private refreshPacks(): void {
+    const keep: Enemy[] = [];
+    for (const enemy of this.enemies) {
+      if (this.cleared.has(enemy.pack)) continue;
+      const dist = Math.hypot(enemy.anchorX - this.player.x, enemy.anchorY - this.player.y);
+      if (dist > DESPAWN) continue;
+      keep.push(enemy);
+    }
+    this.enemies = keep;
+    this.spawned = new Set(keep.map((enemy) => enemy.pack));
+    for (const pack of worldPacks()) {
+      if (this.cleared.has(pack.id) || this.spawned.has(pack.id)) continue;
+      if (Math.hypot(pack.x - this.player.x, pack.y - this.player.y) > SPAWN_IN) continue;
+      this.spawnPack(pack);
+      this.spawned.add(pack.id);
+    }
+  }
+
+  private spawnPack(pack: PackSpot): void {
+    const tough = levelToughness(pack);
+    const kinds = packKinds(pack);
+    kinds.forEach((kind, index) => {
+      const angle = (index / kinds.length) * Math.PI * 2;
+      const radius = 28 + kinds.length * 2.2;
+      const x = pack.x + Math.cos(angle) * radius;
+      const y = pack.y + Math.sin(angle) * radius;
+      const enemy = makeEnemy(kind, pack.level, x, y, this.nextEnemy++);
+      enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * tough));
+      enemy.hp = enemy.maxHp;
+      enemy.homeX = x;
+      enemy.homeY = y;
+      enemy.anchorX = pack.x;
+      enemy.anchorY = pack.y;
+      enemy.pack = pack.id;
+      enemy.sight = SIGHT[kind];
+      enemy.aggro = false;
+      this.enemies.push(enemy);
     });
-    this.banner = this.wave % 5 === 0 ? `Wave ${this.wave} — a champion enters` : `Wave ${this.wave}`;
-    this.bannerT = 2.4;
   }
 
   private nearestEnemy(range: number, preferFront: boolean): Enemy | null {

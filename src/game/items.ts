@@ -534,7 +534,7 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
       guard += 1;
     }
     used.add(choice.affix.key);
-    const value = roundStored(choice.affix.key, choice.affix.value * affixPower);
+    const value = rolledAffixAmount(choice.affix.key, choice.affix.value, affixPower);
     affixes.push({ key: choice.affix.key, value, label: storedLabel(choice.affix.key, value) });
     prefixes.push(choice.prefix);
   }
@@ -589,6 +589,13 @@ function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: num
     sockets: unique.sockets,
     gems: Array.from({ length: unique.sockets }, () => null),
   });
+}
+
+const ATTRIBUTE_KEYS = new Set(["strength", "agility", "endurance", "wisdom"]);
+
+export function rolledAffixAmount(key: string, base: number, power: number): number {
+  const scale = ATTRIBUTE_KEYS.has(key) ? 0.5 : 1;
+  return roundStored(key, base * power * scale);
 }
 
 function roundStored(key: string, value: number): number {

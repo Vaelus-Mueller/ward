@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
 import { derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
-import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
+import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, scaledActive, skillById, SKILLS } from "./skills";
-import { emptyIntent, makeEnemy, Sim, wavePlan } from "./sim";
+import { emptyIntent, makeEnemy, Sim } from "./sim";
+import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { STAT_POINTS_PER_LEVEL } from "./types";
 
 function memoryStorage(): Storage {
@@ -93,6 +94,7 @@ describe("levels and attributes", () => {
     brute.cd = 0;
     sim.enemies = [brute];
     sim.player.hp = sim.derived.life;
+    sim.derived.evasion = 0;
     sim.update(emptyIntent(), 0.05);
     expect(sim.player.channel).toBeNull();
     expect(Math.hypot(sim.player.x - brute.x, sim.player.y - brute.y)).toBeGreaterThan(40);
@@ -235,30 +237,51 @@ describe("gear and saving", () => {
 });
 
 describe("the ward", () => {
-  it("waits ten seconds before every tenth wave", () => {
+  it("lays a road of ten levels, each a few minutes on the main path", () => {
+    const packs = worldPacks();
+    const mains = packs.filter((pack) => !pack.branch);
+    expect(new Set(mains.map((pack) => pack.level)).size).toBe(10);
+    expect(packs.some((pack) => pack.branch)).toBe(true);
+    for (const pack of packs) {
+      expect(pack.size).toBeGreaterThanOrEqual(5);
+      expect(pack.size).toBeLessThanOrEqual(20);
+    }
+    for (let level = 1; level <= 10; level++) {
+      const spec = mains.filter((pack) => pack.level === level);
+      expect(spec.length).toBeGreaterThanOrEqual(6);
+      expect(mainPathMinutes(level)).toBeGreaterThanOrEqual(5);
+      expect(mainPathMinutes(level)).toBeLessThanOrEqual(10);
+      expect(walkSeconds(level)).toBeLessThan(90);
+      expect(toughnessFor(level, spec.length, spec[0]!.size)).toBeLessThan(4);
+    }
+    expect(mains.filter((pack) => pack.level === 5 && pack.boss)).toHaveLength(1);
+    expect(mains.filter((pack) => pack.level === 10 && pack.boss).length).toBeGreaterThan(0);
+    const order = [...new Set(mains.map((pack) => pack.y))];
+    const sorted = [...order].sort((a, b) => b - a);
+    expect(order).toEqual(sorted);
+  });
+
+  it("aggros a pack in sight and drops it when you leave", () => {
     const sim = new Sim(createCharacter(), 1);
     sim.begin();
-    sim.wave = 9;
-    sim.enemies = [];
-    sim.phase = "play";
-    sim.update(emptyIntent(), 0.05);
-    expect(sim.phase).toBe("between");
-    expect(sim.between).toBe(10);
-    expect(sim.banner).toContain("Wave 10 in 10");
-    sim.update(emptyIntent(), 9);
-    expect(sim.wave).toBe(9);
-    expect(sim.phase).toBe("between");
-    sim.update(emptyIntent(), 1.1);
-    expect(sim.wave).toBe(10);
-    expect(sim.phase).toBe("play");
-    expect(sim.enemies.length).toBeGreaterThan(0);
-    const quiet = new Sim(createCharacter(), 2);
-    quiet.begin();
-    quiet.wave = 3;
-    quiet.enemies = [];
-    quiet.phase = "play";
-    quiet.update(emptyIntent(), 0.05);
-    expect(quiet.between).toBe(2.2);
+    const enemy = sim.enemies[0]!;
+    expect(enemy.aggro).toBe(false);
+    const homeX = enemy.x;
+    const homeY = enemy.y;
+    sim.update(emptyIntent(), 1);
+    expect(enemy.aggro).toBe(false);
+    expect(Math.hypot(enemy.x - homeX, enemy.y - homeY)).toBeLessThan(40);
+    sim.player.x = enemy.x + enemy.sight - 20;
+    sim.player.y = enemy.y;
+    sim.update(emptyIntent(), 0.4);
+    expect(enemy.aggro).toBe(true);
+    const pulled = enemy.x;
+    sim.update(emptyIntent(), 0.8);
+    expect(Math.abs(enemy.x - pulled)).toBeGreaterThan(5);
+    sim.player.x = enemy.anchorX;
+    sim.player.y = enemy.anchorY + 900;
+    sim.update(emptyIntent(), 0.3);
+    expect(enemy.aggro).toBe(false);
   });
 
   it("regenerates in town without filling life", () => {
@@ -270,13 +293,17 @@ describe("the ward", () => {
     expect(sim.player.hp).toBeLessThan(sim.derived.life);
   });
 
-  it("sends a champion every fifth wave", () => {
-    expect(wavePlan(5)).toContain("brute");
-    expect(wavePlan(1)).not.toContain("brute");
+  it("scales hounds as the road goes on", () => {
     expect(makeEnemy("hound", 4, 0, 0, 1).maxHp).toBeGreaterThan(makeEnemy("hound", 1, 0, 0, 2).maxHp);
     expect(makeEnemy("hound", 1, 0, 0, 1).maxHp).toBeLessThan(28);
     expect(makeEnemy("hound", 1, 0, 0, 1).damage).toBeLessThan(7);
     expect(makeEnemy("hound", 6, 0, 0, 3).maxHp).toBe(Math.round(28 * (1 + 5 * 0.16)));
+  });
+
+  it("rolls attributes at half the previous value", () => {
+    expect(rolledAffixAmount("strength", 3, 2)).toBe(3);
+    expect(rolledAffixAmount("wisdom", 3, 1.5)).toBe(2);
+    expect(rolledAffixAmount("life", 14, 2)).toBe(28);
   });
 
   it("swings on its own when standing in weapon range", () => {

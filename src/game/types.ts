@@ -1,4 +1,4 @@
-export const ARENA = { width: 2400, height: 1600, margin: 78 };
+export const ARENA = { width: 3600, height: 60000, margin: 160 };
 export const BASE_ATTR = 10;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;

@@ -4,6 +4,7 @@ import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materi
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
 import { readSlots } from "./game/save";
+import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
 import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type SectorId, type SlotName } from "./game/types";
 
@@ -56,7 +57,7 @@ export class Ui {
       const input = must(`slot-name-${index}`) as HTMLInputElement;
       if (document.activeElement !== input) input.value = slot.name;
       const occupied = slot.save !== null;
-      text(`slot-meta-${index}`, occupied ? `Level ${slot.save?.character.level} · Wave ${slot.save?.wave}` : "Empty");
+      text(`slot-meta-${index}`, occupied ? `Level ${slot.save?.character.level} · ${levelName(slot.save?.wave ?? 1)}` : "Empty");
       text(`slot-play-${index}`, occupied ? "Continue" : "New");
     });
   }
@@ -78,8 +79,7 @@ export class Ui {
     const derived = sim.derived;
     const rank = c.paragon > 0 ? `L${c.level}  P${c.paragon}` : `L${c.level}`;
     text("identity", `${c.name}  ·  ${classTitle(c)}  ·  ${rank}`);
-    const gate = sim.phase === "between" && (sim.wave + 1) % 10 === 0;
-    text("wave-label", gate ? `Wave ${sim.wave + 1} in ${Math.max(1, Math.ceil(sim.between))}` : sim.phase === "between" ? "The ward stills" : `Wave ${sim.wave}`);
+    text("wave-label", sim.placeLabel);
     text("gold", `${c.gold}`);
     const bar = must("xp-fill");
     const goal = xpGoal(c);
