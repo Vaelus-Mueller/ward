@@ -15,22 +15,24 @@ export class RacePreview {
   private readonly onFrame = (time: number) => this.tick(time);
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.1, 40);
     this.camera.position.set(0, 1.15, 3.4);
     this.camera.lookAt(0, 0.95, 0);
-    this.scene.add(new THREE.AmbientLight(0xd8c8b0, 0.85));
-    const key = new THREE.DirectionalLight(0xfff0dc, 1.15);
+    this.scene.add(new THREE.HemisphereLight(0xfff4e6, 0x6e6254, 0.85));
+    const key = new THREE.DirectionalLight(0xfff0dc, 1.35);
     key.position.set(2.2, 4.2, 3.4);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0x9bb8d8, 0.45);
+    const rim = new THREE.DirectionalLight(0x9bb8d8, 0.55);
     rim.position.set(-2.4, 1.6, -2.2);
     this.scene.add(rim);
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(1.1, 32),
-      new THREE.MeshBasicMaterial({ color: 0x1a1511, transparent: true, opacity: 0.55 }),
+      new THREE.CircleGeometry(1.1, 48),
+      new THREE.MeshStandardMaterial({ color: 0x241c16, roughness: 0.82, metalness: 0.08 }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0.01;
@@ -84,7 +86,7 @@ export class RacePreview {
   private draw(): void {
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
     if (this.canvas.width !== Math.floor(width * dpr) || this.canvas.height !== Math.floor(height * dpr)) {
       this.renderer.setPixelRatio(dpr);
       this.renderer.setSize(width, height, false);

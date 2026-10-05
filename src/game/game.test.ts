@@ -5,10 +5,24 @@ import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, activeBaseDps, scaledActive, skillById, SKILLS } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, SYNERGY_PER_RANK, activeBaseDps, describeSkill, earlierSkills, passiveContribution, scaledActive, skillById, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
+
+function ancestorIds(id: string): Set<string> {
+  const found = new Set<string>();
+  const stack = [...(skillById(id)?.requires ?? []), ...(skillById(id)?.requiresAny ?? [])];
+  while (stack.length > 0) {
+    const next = stack.pop();
+    if (!next || found.has(next)) continue;
+    found.add(next);
+    const node = skillById(next);
+    if (!node) continue;
+    stack.push(...node.requires, ...node.requiresAny);
+  }
+  return found;
+}
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -528,6 +542,42 @@ describe("the ward", () => {
     };
     expect(derive(hero).thorns).toBe(5);
     expect(derive(hero).damageReduction).toBeCloseTo(0.06);
+  });
+
+  it("feeds each later skill from one to four earlier skills", () => {
+    for (const skill of SKILLS) {
+      const earlier = earlierSkills(skill.id);
+      if (skill.hub) {
+        expect(earlier, skill.id).toEqual([]);
+        continue;
+      }
+      expect(earlier.length, skill.id).toBeGreaterThanOrEqual(1);
+      expect(earlier.length, skill.id).toBeLessThanOrEqual(4);
+      for (const req of [...skill.requires, ...skill.requiresAny]) {
+        expect(earlier, skill.id).toContain(req);
+      }
+      const ancestors = ancestorIds(skill.id);
+      for (const id of earlier) expect(ancestors.has(id), `${skill.id} <- ${id}`).toBe(true);
+      expect(earlier.includes(skill.id), skill.id).toBe(false);
+    }
+
+    const plain = scaledActive("cleave", 5)!;
+    const fed = scaledActive("cleave", 5, { "heavy-blow": 10, "iron-oath": 10 })!;
+    const expected = 1 + 20 * SYNERGY_PER_RANK;
+    expect(fed.mult).toBeCloseTo(plain.mult * expected);
+    expect(fed.cooldown).toBeCloseTo(plain.cooldown);
+
+    const baseArmor = passiveContribution("braced-guard", 4).armor ?? 0;
+    const boosted = passiveContribution("braced-guard", 4, { "iron-oath": 8 }).armor ?? 0;
+    expect(boosted).toBeCloseTo(baseArmor * (1 + 8 * SYNERGY_PER_RANK));
+
+    const aura = scaledActive("bulwark-aura", 3, { "stone-skin": 4, "iron-oath": 6 })!;
+    const bareAura = scaledActive("bulwark-aura", 3)!;
+    expect(aura.aura.armor).toBeGreaterThan(bareAura.aura.armor ?? 0);
+    expect(aura.manaPerSec).toBe(bareAura.manaPerSec);
+    expect(describeSkill("cleave", 1, {})).toContain("Heavy Blow");
+    expect(describeSkill("cleave", 1, { "heavy-blow": 10, "iron-oath": 10 })).toContain("add 10%");
+    expect(describeSkill("iron-oath", 1, {})).not.toContain("Earlier skills");
   });
 
   it("caps ranked skills at 20 and keeps the per-rank scaling", () => {

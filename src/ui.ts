@@ -586,7 +586,7 @@ export class Ui {
     const gate = canSpendSkill(sim.character, skill.id);
     if (!gate.ok) this.confirmSpend = false;
     text("tree-name", `${skill.name}  ·  ${skill.kind}  ·  ${rank}/${skill.maxRank}`);
-    text("tree-blurb", describeSkill(skill.id, Math.max(1, rank)));
+    text("tree-blurb", describeSkill(skill.id, Math.max(1, rank), sim.character.skillRanks));
     text(
       "tree-next",
       rank > 0 && rank < skill.maxRank

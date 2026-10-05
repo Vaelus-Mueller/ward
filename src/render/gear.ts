@@ -489,7 +489,7 @@ function part(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
 }
 
 function mat(color: number, metalness: number, roughness: number): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, metalness, roughness });
+  return new THREE.MeshStandardMaterial({ color, metalness, roughness, envMapIntensity: 0.9 });
 }
 
 function disposeObject(root: THREE.Object3D): void {

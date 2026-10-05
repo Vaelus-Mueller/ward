@@ -292,7 +292,7 @@ export class Sim {
       if (!rank) continue;
       const skill = skillById(id);
       if (skill?.kind === "passive") {
-        const extra = passiveContribution(id, rank);
+        const extra = passiveContribution(id, rank, this.character.skillRanks);
         for (const key of Object.keys(extra) as (keyof Mods)[]) {
           const value = extra[key];
           if (typeof value === "number") mods[key] += value;
@@ -303,7 +303,7 @@ export class Sim {
       if (!this.player.auras[i]) continue;
       const id = this.character.slotted[i];
       if (!id) continue;
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (spec?.kind !== "aura") continue;
       for (const key of Object.keys(spec.aura) as (keyof Mods)[]) {
         const value = spec.aura[key];
@@ -602,7 +602,7 @@ export class Sim {
     const id = this.character.slotted[index];
     if (!id) return;
     const rank = this.character.skillRanks[id] ?? 0;
-    const spec = scaledActive(id, rank);
+    const spec = scaledActive(id, rank, this.character.skillRanks);
     if (!spec) return;
     if (spec.kind === "aura") {
       this.player.auras[index] = !this.player.auras[index];
@@ -825,7 +825,7 @@ export class Sim {
         this.player.auras[i] = false;
         continue;
       }
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0);
+      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
       if (!spec || spec.kind !== "aura") {
         this.player.auras[i] = false;
         continue;

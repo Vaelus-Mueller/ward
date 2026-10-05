@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { ARENA, type Item } from "./game/types";
@@ -99,16 +100,32 @@ export class Renderer {
   private lavaRough?: THREE.Texture;
   private readonly readyPromise: Promise<void>;
   private resolveReady!: () => void;
+  private readonly pixelCeiling: number;
+  private pixelRatio: number;
+  private frameBudget: number[] = [];
+  private frames = 0;
+  private shadowTier: 1024 | 2048 = 2048;
+  private rim!: THREE.DirectionalLight;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
-    this.webgl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    const native = window.devicePixelRatio || 1;
+    // Galaxy S24 is a 1080p phone at about 2.6–3x. Cap at 2x so the image stays
+    // sharp in landscape, and skip MSAA above 1.75x so fill rate stays free for shadows.
+    this.pixelCeiling = Math.min(2, Math.max(1, native));
+    this.pixelRatio = this.pixelCeiling;
+    this.webgl = new THREE.WebGLRenderer({
+      canvas,
+      antialias: this.pixelCeiling < 1.75,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
     this.webgl.setClearColor(0x3a342e);
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 1.28;
+    this.webgl.toneMappingExposure = 1.12;
     this.webgl.shadowMap.enabled = true;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.camera = new THREE.PerspectiveCamera(44, 1, 0.1, 200);
@@ -118,8 +135,9 @@ export class Renderer {
     this.moon = new THREE.DirectionalLight(0xfff8f0, 2.1);
     this.moon.position.set(-8, 20, 12);
     this.moon.castShadow = true;
-    this.moon.shadow.mapSize.set(1024, 1024);
-    this.moon.shadow.bias = -0.0006;
+    this.moon.shadow.mapSize.set(this.shadowTier, this.shadowTier);
+    this.moon.shadow.bias = -0.00035;
+    this.moon.shadow.normalBias = 0.028;
     this.moon.shadow.camera.near = 1;
     this.moon.shadow.camera.far = 36;
     const shadow = this.moon.shadow.camera;
@@ -132,10 +150,14 @@ export class Renderer {
     this.fill = new THREE.DirectionalLight(0xc9d4e4, 0.45);
     this.fill.position.set(12, 8, -8);
     this.scene.add(this.fill);
+    this.rim = new THREE.DirectionalLight(0x9bb4d4, 0.38);
+    this.rim.position.set(6, 5, -8);
+    this.scene.add(this.rim);
     this.ember = new THREE.PointLight(0xffb56a, 22, 40, 2);
     this.ember.position.set((ARENA.width * SCALE) / 2, 3.2, (ARENA.height * SCALE) / 2);
     this.scene.add(this.ember);
-    this.groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 });
+    this.groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.04, envMapIntensity: 0.4 });
+    this.installEnvironment();
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE), this.groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((ARENA.width * SCALE) / 2, -0.02, (ARENA.height * SCALE) / 2);
@@ -154,8 +176,7 @@ export class Renderer {
   resize(): void {
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-    this.webgl.setPixelRatio(dpr);
+    this.webgl.setPixelRatio(this.pixelRatio);
     this.webgl.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -167,6 +188,7 @@ export class Renderer {
     this.camera.position.set(x, 12.79, z + 11.88);
     this.camera.lookAt(x, 1.15, z);
     this.moon.position.set(x - 5, 14, z + 6);
+    this.rim.position.set(x + 7, 6, z - 5);
     this.moon.target.position.set(x, 0, z);
     this.moon.target.updateMatrixWorld();
   }
@@ -205,6 +227,48 @@ export class Renderer {
     this.syncDrops(sim);
     this.syncFloats(sim.floats);
     this.webgl.render(this.scene, this.camera);
+    this.noteFrame(dt);
+  }
+
+  private installEnvironment(): void {
+    const pmrem = new THREE.PMREMGenerator(this.webgl);
+    const room = new RoomEnvironment();
+    const target = pmrem.fromScene(room, 0.04);
+    this.scene.environment = target.texture;
+    this.scene.environmentIntensity = 0.45;
+    room.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) material.dispose();
+    });
+    pmrem.dispose();
+  }
+
+  private noteFrame(dt: number): void {
+    this.frames += 1;
+    if (this.frames < 90) return;
+    this.frameBudget.push(dt);
+    if (this.frameBudget.length < 24) return;
+    const avg = this.frameBudget.reduce((sum, sample) => sum + sample, 0) / this.frameBudget.length;
+    this.frameBudget.length = 0;
+    const slow = 1 / 55;
+    const fast = 1 / 72;
+    if (avg > slow) {
+      if (this.pixelRatio > 1.25) this.pixelRatio = Math.max(1.25, Math.round((this.pixelRatio - 0.25) * 4) / 4);
+      else this.setShadowTier(1024);
+    } else if (avg < fast && this.pixelRatio < this.pixelCeiling - 0.01) {
+      this.pixelRatio = Math.min(this.pixelCeiling, Math.round((this.pixelRatio + 0.25) * 4) / 4);
+    }
+  }
+
+  private setShadowTier(size: 1024 | 2048): void {
+    if (this.shadowTier === size) return;
+    this.shadowTier = size;
+    this.moon.shadow.mapSize.set(size, size);
+    this.moon.shadow.map?.dispose();
+    this.moon.shadow.map = null;
   }
 
   private async loadFloors(): Promise<void> {
@@ -217,10 +281,11 @@ export class Renderer {
         loader.loadAsync(url("hell_diff.jpg")),
         loader.loadAsync(url("hell_rough.jpg")),
       ]);
-      this.stone = prepFloor(stone, true);
-      this.stoneRough = prepFloor(stoneRough, false);
-      this.lava = prepFloor(lava, true);
-      this.lavaRough = prepFloor(lavaRough, false);
+      const anisotropy = Math.min(8, this.webgl.capabilities.getMaxAnisotropy());
+      this.stone = prepFloor(stone, true, anisotropy);
+      this.stoneRough = prepFloor(stoneRough, false, anisotropy);
+      this.lava = prepFloor(lava, true, anisotropy);
+      this.lavaRough = prepFloor(lavaRough, false, anisotropy);
       this.realm = "";
     } catch {
       // The colored floor remains if a texture is missing.
@@ -347,7 +412,7 @@ export class Renderer {
     const spine = roadSpine();
     const road = new THREE.Mesh(
       new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE)),
-      new THREE.MeshStandardMaterial({ color: 0xb7a890, roughness: 0.96 }),
+      new THREE.MeshStandardMaterial({ color: 0xb7a890, roughness: 0.94, metalness: 0.03, envMapIntensity: 0.3 }),
     );
     road.rotation.x = -Math.PI / 2;
     road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
@@ -715,12 +780,14 @@ function facingOf(enemy: Enemy, sim: Sim): number {
   return Math.atan2(sim.player.y - enemy.y, sim.player.x - enemy.x);
 }
 
-function prepFloor(texture: THREE.Texture, color: boolean): THREE.Texture {
+function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number): THREE.Texture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(16, 11);
   texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-  texture.anisotropy = 4;
+  texture.anisotropy = anisotropy;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   return texture;
 }
 

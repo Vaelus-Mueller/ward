@@ -181,6 +181,43 @@ export function skillById(id: string): SkillNode | undefined {
   return byId.get(id);
 }
 
+/**
+ * Each rank invested in an earlier skill adds this fraction to the later skill.
+ * Four earlier skills at rank 20 is +40%, enough to notice and not a second build.
+ */
+export const SYNERGY_PER_RANK = 0.005;
+
+/**
+ * One to four skills that sit strictly earlier on this node's path.
+ * Hubs open a spoke, so they have nothing earlier to draw from.
+ * Direct requirements come first; further ancestors fill the rest, nearest first.
+ */
+export function earlierSkills(id: string): string[] {
+  const skill = byId.get(id);
+  if (!skill || skill.hub) return [];
+  const ordered: string[] = [];
+  const seen = new Set<string>([id]);
+  const queue = [...skill.requires, ...skill.requiresAny];
+  while (queue.length > 0 && ordered.length < 4) {
+    const next = queue.shift();
+    if (!next || seen.has(next) || !byId.has(next)) continue;
+    seen.add(next);
+    ordered.push(next);
+    const node = byId.get(next);
+    if (!node) continue;
+    for (const req of [...node.requires, ...node.requiresAny]) {
+      if (!seen.has(req)) queue.push(req);
+    }
+  }
+  return ordered;
+}
+
+export function synergyFraction(id: string, ranks: Record<string, number>): number {
+  let total = 0;
+  for (const earlier of earlierSkills(id)) total += Math.max(0, ranks[earlier] ?? 0);
+  return total * SYNERGY_PER_RANK;
+}
+
 export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
   // Former 1-rank hubs/specs are diluted so rank 10 ≈ old power and rank 20 ≈ 2×.
   "iron-oath": { armor: 1.2, meleeMult: 0.005 },
@@ -357,13 +394,14 @@ export const ACTIVES: Record<string, ActiveSpec> = {
   inferno: act({ kind: "nova", color: "#ff5a1f", mana: 24, cooldown: 13, scaling: "spell", mult: dpsMult(13), range: 210, burn: 7 }),
 };
 
-export function passiveContribution(id: string, rank: number): Partial<Mods> {
+export function passiveContribution(id: string, rank: number, ranks: Record<string, number> = {}): Partial<Mods> {
   const per = PASSIVE_PER_RANK[id];
   if (!per || rank <= 0) return {};
+  const synergy = 1 + synergyFraction(id, ranks);
   const out: Partial<Mods> = {};
   for (const key of Object.keys(per) as (keyof Mods)[]) {
     const value = per[key];
-    if (typeof value === "number") out[key] = value * rank;
+    if (typeof value === "number") out[key] = value * rank * synergy;
   }
   return out;
 }
@@ -375,29 +413,31 @@ export function activeBaseDps(spec: ActiveSpec): number | null {
   return (spec.mult * Math.max(1, spec.shots)) / spec.cooldown;
 }
 
-export function scaledActive(id: string, rank: number): ActiveSpec | null {
+export function scaledActive(id: string, rank: number, ranks: Record<string, number> = {}): ActiveSpec | null {
   const spec = ACTIVES[id];
   if (!spec || rank <= 0) return null;
   const steps = rank - 1;
   // Damage climbs with ranks; cooldown trim stays mild so base DPS balance still holds.
   const cdScale = Math.max(0.7, 1 - 0.015 * steps);
+  const synergy = 1 + synergyFraction(id, ranks);
   return {
     ...spec,
-    mult: spec.mult * (1 + 0.12 * steps),
+    mult: spec.mult * (1 + 0.12 * steps) * synergy,
     cooldown: spec.cooldown * cdScale,
     mana: spec.kind === "aura" ? spec.mana : spec.mana,
-    healFrac: spec.healFrac * (1 + 0.1 * steps),
-    burn: spec.burn * (1 + 0.12 * steps),
-    shieldFrac: spec.shieldFrac * (1 + 0.08 * steps),
-    aura: scaleAura(spec.aura, rank),
+    healFrac: spec.healFrac * (1 + 0.1 * steps) * synergy,
+    burn: spec.burn * (1 + 0.12 * steps) * synergy,
+    shieldFrac: spec.shieldFrac * (1 + 0.08 * steps) * synergy,
+    aura: scaleAura(spec.aura, rank, synergy),
   };
 }
 
-function scaleAura(aura: Partial<Mods>, rank: number): Partial<Mods> {
+function scaleAura(aura: Partial<Mods>, rank: number, synergy = 1): Partial<Mods> {
   const out: Partial<Mods> = {};
+  const scale = (1 + 0.12 * (rank - 1)) * synergy;
   for (const key of Object.keys(aura) as (keyof Mods)[]) {
     const value = aura[key];
-    if (typeof value === "number") out[key] = value * (1 + 0.12 * (rank - 1));
+    if (typeof value === "number") out[key] = value * scale;
   }
   return out;
 }
@@ -443,16 +483,18 @@ export function formatMods(mods: Partial<Mods>): string {
   return parts.join(", ");
 }
 
-export function describeSkill(id: string, rank: number): string {
+export function describeSkill(id: string, rank: number, ranks?: Record<string, number>): string {
   const skill = skillById(id);
   if (!skill) return "";
   const shown = Math.max(1, rank);
+  const invested = ranks ?? {};
   if (skill.kind === "passive") {
-    const text = formatMods(passiveContribution(id, shown));
+    const text = formatMods(passiveContribution(id, shown, invested));
     const tail = rank > 0 ? text : `${text} at rank 1`;
-    return `${skill.blurb} ${tail}.`;
+    const synergy = ranks ? synergySentence(id, invested) : "";
+    return `${skill.blurb} ${tail}.${synergy ? ` ${synergy}` : ""}`;
   }
-  const spec = scaledActive(id, shown);
+  const spec = scaledActive(id, shown, invested);
   if (!spec) return skill.blurb;
   const bits = [skill.blurb];
   if (spec.kind === "aura") {
@@ -476,5 +518,26 @@ export function describeSkill(id: string, rank: number): string {
     if (spec.dash) bits.push("Dashes along your facing.");
   }
   if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise power; damage skills keep pace with their cooldown.");
+  if (ranks) {
+    const synergy = synergySentence(id, invested);
+    if (synergy) bits.push(synergy);
+  }
   return bits.join(" ");
+}
+
+function synergySentence(id: string, ranks: Record<string, number>): string {
+  const earlier = earlierSkills(id);
+  if (earlier.length === 0) return "";
+  const names = earlier.map((skillId) => skillById(skillId)?.name ?? skillId);
+  const pct = synergyFraction(id, ranks) * 100;
+  const each = SYNERGY_PER_RANK * 100;
+  if (pct <= 0) {
+    return `Earlier skills add ${trimPct(each)}% to this skill per rank: ${names.join(", ")}.`;
+  }
+  return `Earlier skills (${names.join(", ")}) add ${trimPct(pct)}% to this skill.`;
+}
+
+function trimPct(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
