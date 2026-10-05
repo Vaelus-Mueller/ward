@@ -1,0 +1,17 @@
+#!/bin/sh
+# After every commit on C:, push the branch to GitHub and the G: Drive copy.
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" = "HEAD" ]; then
+  echo "post-commit: detached HEAD — skipping remote sync"
+  exit 0
+fi
+
+echo "post-commit: syncing $branch → GitHub (origin) and G: Drive (gdrive)..."
+
+if ! git push -u origin "$branch"; then
+  echo "post-commit: WARNING — GitHub push failed (commit is still local on C:)"
+fi
+
+if ! git push gdrive "$branch"; then
+  echo "post-commit: WARNING — G: Drive push failed (commit is still local on C:)"
+fi
