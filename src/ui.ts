@@ -1,10 +1,11 @@
 import { classTitle, refundStat, retrain, retrainCost, slotSkill, spendSkill, spendStat, canSpendSkill } from "./game/character";
 import { derive, requirementText, xpGoal } from "./game/formulas";
-import { canUpgrade, equipItem, gemKind, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
+import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { readSlots } from "./game/save";
 import type { Sim } from "./game/sim";
-import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type SectorId, type SlotName } from "./game/types";
+import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type SectorId, type SlotName } from "./game/types";
 
 export class Ui {
   treeFilter: SectorId | "all" = "all";
@@ -12,6 +13,8 @@ export class Ui {
   private session: Record<Attr, number> = { strength: 0, agility: 0, endurance: 0, wisdom: 0 };
   private treeKey = "";
   private packKey = "";
+  private packTab: "gear" | "gems" = "gear";
+  private tip: { slot: SlotName } | { uid: string } | { gem: GemKind; quality: number } | null = null;
   private townKey = "";
   private treeCenter = true;
   private fitOnPaint = true;
@@ -46,10 +49,16 @@ export class Ui {
     return false;
   }
 
-  showTitle(hasSave: boolean): void {
+  showTitle(): void {
     this.show("title");
-    const cont = must("continue");
-    cont.toggleAttribute("hidden", !hasSave);
+    const slots = readSlots(localStorage);
+    slots.forEach((slot, index) => {
+      const input = must(`slot-name-${index}`) as HTMLInputElement;
+      if (document.activeElement !== input) input.value = slot.name;
+      const occupied = slot.save !== null;
+      text(`slot-meta-${index}`, occupied ? `Level ${slot.save?.character.level} · Wave ${slot.save?.wave}` : "Empty");
+      text(`slot-play-${index}`, occupied ? "Continue" : "New");
+    });
   }
 
   hideTitle(): void {
@@ -68,7 +77,7 @@ export class Ui {
     const c = sim.character;
     const derived = sim.derived;
     const rank = c.paragon > 0 ? `L${c.level}  P${c.paragon}` : `L${c.level}`;
-    text("identity", `${classTitle(c)}  ·  ${rank}`);
+    text("identity", `${c.name}  ·  ${classTitle(c)}  ·  ${rank}`);
     const gate = sim.phase === "between" && (sim.wave + 1) % 10 === 0;
     text("wave-label", gate ? `Wave ${sim.wave + 1} in ${Math.max(1, Math.ceil(sim.between))}` : sim.phase === "between" ? "The ward stills" : `Wave ${sim.wave}`);
     text("gold", `${c.gold}`);
@@ -133,7 +142,10 @@ export class Ui {
   private bindStatic(): void {
     must("close-sheet").addEventListener("click", () => this.hide("sheet"));
     must("close-tree").addEventListener("click", () => this.hide("tree"));
-    must("close-pack").addEventListener("click", () => this.hide("pack"));
+    must("close-pack").addEventListener("click", () => {
+      this.tip = null;
+      this.hide("pack");
+    });
     must("close-privacy").addEventListener("click", () => this.hide("privacy"));
     must("btn-character").addEventListener("click", () => this.openSheet());
     must("btn-tree").addEventListener("click", () => this.openTree());
@@ -142,6 +154,29 @@ export class Ui {
     });
     must("btn-town").addEventListener("click", () => this.openTown());
     must("close-town").addEventListener("click", () => this.hide("town"));
+    must("pack-tab-gear").addEventListener("click", () => {
+      this.packTab = "gear";
+      this.packKey = "";
+    });
+    must("pack-tab-gems").addEventListener("click", () => {
+      this.packTab = "gems";
+      this.packKey = "";
+    });
+    for (const slot of GEAR_SLOTS) {
+      must(`eq-${slot}`).addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.tip = this.tip && "slot" in this.tip && this.tip.slot === slot ? null : { slot };
+        this.packKey = "";
+      });
+    }
+    must("pack").addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.closest(".gear-tip, .gear-slot, .item-name")) return;
+      if (!this.tip) return;
+      this.tip = null;
+      this.packKey = "";
+    });
+    must("pack-list").addEventListener("scroll", () => this.placeTip(), { passive: true });
     must("open-privacy").addEventListener("click", () => this.show("privacy"));
     for (const id of Object.keys(SECTORS) as SectorId[]) {
       document.querySelector(`[data-filter="${id}"]`)?.addEventListener("click", () => {
@@ -261,7 +296,7 @@ export class Ui {
   private paintSheet(sim: Sim): void {
     const c = sim.character;
     const d = derive(c, sim.mods);
-    text("sheet-title", "Ward");
+    text("sheet-title", c.name);
     text("sheet-level", c.paragon > 0 ? `${classTitle(c)}  ·  Level ${c.level}  ·  Paragon ${c.paragon}` : `${classTitle(c)}  ·  Level ${c.level}`);
     text("unspent-stats", `${c.unspentStats}`);
     text("unspent-skills", `${c.unspentSkills}`);
@@ -653,101 +688,242 @@ export class Ui {
       belt: "Belt",
       boots: "Boots",
       gloves: "Gloves",
-      ring1: "Ring",
-      ring2: "Ring",
+      ring1: "Left ring",
+      ring2: "Right ring",
       neck: "Necklace",
-      ear1: "Earring",
-      ear2: "Earring",
+      ear1: "Left earring",
+      ear2: "Right earring",
     };
     for (const slot of GEAR_SLOTS) {
       const item = c.equipment[slot];
-      const el = must(`eq-${slot}`);
-      el.innerHTML = "";
-      const title = document.createElement("div");
-      title.className = "slot-label";
-      title.textContent = labels[slot];
-      el.append(title);
-      const name = document.createElement("div");
-      name.textContent = item ? item.name : "Empty";
-      name.className = item ? rarityClass(item) : "";
-      el.append(name);
-      if (item) {
-        const meta = document.createElement("div");
-        meta.className = "muted";
-        meta.textContent = `${itemSummary(item, c.level)}. ${item.affixes.map((affix) => affix.label).join(", ")}`;
-        el.append(meta);
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = "Remove";
-        button.addEventListener("click", () => {
-          const error = unequipItem(c, slot);
-          text("pack-note", error ?? `Removed ${item.name}.`);
-          if (!error) {
-            sim.recompute();
-            this.packKey = "";
-            this.actions.changed();
-          }
-        });
-        el.append(button);
-        this.socketButtons(sim, item.uid, el);
-      }
+      const el = must(`eq-${slot}`) as HTMLButtonElement;
+      el.className = `gear-slot${item ? ` ${rarityClass(item)}` : " empty"}${this.tip && "slot" in this.tip && this.tip.slot === slot ? " on" : ""}`;
+      el.innerHTML = gearIcon(slot, item?.style ?? "melee");
+      el.setAttribute("aria-label", item ? `${labels[slot]}, ${item.name}` : `${labels[slot]}, empty`);
     }
+    must("pack-tab-gear").classList.toggle("on", this.packTab === "gear");
+    must("pack-tab-gems").classList.toggle("on", this.packTab === "gems");
     const list = must("pack-list");
     list.innerHTML = "";
-    this.paintSalvageBar(sim);
-    if (c.inventory.length === 0) {
+    must("salvage-bar").toggleAttribute("hidden", this.packTab !== "gear");
+    if (this.packTab === "gear") this.paintSalvageBar(sim);
+    if (this.packTab === "gems") {
+      this.paintGemList(sim, list);
+      this.paintTip(sim, labels);
+      return;
+    }
+    const gear = c.inventory.filter((item) => item.slot !== "gem");
+    if (gear.length === 0) {
       const empty = document.createElement("p");
       empty.className = "muted";
-      empty.textContent = "The pack is empty. Gear and gems fall in the ward.";
+      empty.textContent = "The pack is empty. Spare gear falls in the ward.";
+      list.append(empty);
+      this.paintTip(sim, labels);
+      return;
+    }
+    for (const item of gear) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const selected = this.tip && "uid" in this.tip && this.tip.uid === item.uid;
+      button.className = `gear-slot loot-slot ${rarityClass(item)}${selected ? " on" : ""}`;
+      button.dataset.tip = item.uid;
+      button.innerHTML = gearIcon(item.slot, item.style);
+      button.setAttribute("aria-label", item.name);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.tip = this.tip && "uid" in this.tip && this.tip.uid === item.uid ? null : { uid: item.uid };
+        this.packKey = "";
+      });
+      list.append(button);
+    }
+    this.paintTip(sim, labels);
+  }
+
+  private paintTip(sim: Sim, labels: Record<SlotName, string>): void {
+    const tip = must("gear-tip");
+    tip.innerHTML = "";
+    if (!this.tip) {
+      tip.classList.add("hidden");
+      return;
+    }
+    if ("gem" in this.tip) {
+      this.paintGemTip(sim);
+      return;
+    }
+    const c = sim.character;
+    const wornSlot = "slot" in this.tip ? this.tip.slot : null;
+    const item = wornSlot ? c.equipment[wornSlot] : c.inventory.find((entry) => "uid" in this.tip! && entry.uid === this.tip.uid);
+    if (!wornSlot && !item) {
+      this.tip = null;
+      tip.classList.add("hidden");
+      return;
+    }
+    const title = document.createElement("div");
+    title.textContent = item ? item.name : labels[wornSlot!];
+    if (item) title.className = rarityClass(item);
+    const body = document.createElement("p");
+    body.className = "muted";
+    if (!item) {
+      body.textContent = "Empty.";
+    } else {
+      const affix = liveItem(item, c.level).affixes.map((entry) => entry.label).join(", ");
+      const req = requirementText(item);
+      body.textContent = [wornSlot ? labels[wornSlot] : null, itemSummary(item, c.level), affix, req].filter(Boolean).join(". ");
+    }
+    tip.append(title, body);
+    if (item && wornSlot) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Remove";
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const error = unequipItem(c, wornSlot);
+        text("pack-note", error ?? `Removed ${item.name}.`);
+        if (!error) {
+          this.tip = null;
+          sim.recompute();
+          this.packKey = "";
+          this.actions.changed();
+        }
+      });
+      tip.append(button);
+      this.socketButtons(sim, item.uid, tip);
+    } else if (item) {
+      const equip = document.createElement("button");
+      equip.type = "button";
+      equip.textContent = "Equip";
+      equip.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const error = equipItem(c, item.uid);
+        text("pack-note", error ?? `Equipped ${item.name}.`);
+        if (!error) {
+          this.tip = null;
+          sim.recompute();
+          this.packKey = "";
+          this.actions.changed();
+        }
+      });
+      const salvage = document.createElement("button");
+      salvage.type = "button";
+      const gained = salvageCount(item);
+      salvage.textContent = `Salvage ${gained}`;
+      salvage.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const error = salvageItem(c, item.uid);
+        text("pack-note", error ?? `Broke down ${item.name} into ${gained} ${MATERIAL_LABEL[materialFor(item)]}.`);
+        if (!error) {
+          this.tip = null;
+          this.packKey = "";
+          this.townKey = "";
+          this.actions.changed();
+        }
+      });
+      tip.append(equip, salvage);
+      this.socketButtons(sim, item.uid, tip);
+    }
+    tip.classList.remove("hidden");
+    this.placeTip();
+  }
+
+  private placeTip(): void {
+    const tip = document.getElementById("gear-tip");
+    if (!tip || tip.classList.contains("hidden") || !this.tip) return;
+    const anchor = "slot" in this.tip
+      ? document.getElementById(`eq-${this.tip.slot}`)
+      : document.querySelector(`[data-tip="${CSS.escape("uid" in this.tip ? this.tip.uid : `gem:${this.tip.gem}:${this.tip.quality}`)}"]`);
+    if (!anchor) return;
+    const margin = 8;
+    const rect = anchor.getBoundingClientRect();
+    const inLoot = anchor.classList.contains("loot-slot");
+    const side = document.querySelector(".pack-side")?.getBoundingClientRect();
+    const width = tip.offsetWidth;
+    const height = tip.offsetHeight;
+    let left = inLoot ? rect.left : (side?.left ?? rect.right) + margin;
+    let top = inLoot ? rect.bottom + margin : rect.top;
+    if (!inLoot && left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width);
+      top = rect.bottom + margin;
+    }
+    if (inLoot && left + width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - margin - width);
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - margin);
+    if (top < margin) top = margin;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+
+  private paintGemList(sim: Sim, list: HTMLElement): void {
+    const c = sim.character;
+    if (!Array.isArray(c.gems)) c.gems = [];
+    const stacks = [...c.gems].filter((stack) => stack.count > 0).sort((a, b) => a.kind.localeCompare(b.kind) || a.quality - b.quality);
+    if (stacks.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "No gems yet. They fall in the ward and stack here.";
       list.append(empty);
       return;
     }
-    for (const item of c.inventory) {
-      const row = document.createElement("div");
-      row.className = "pack-row";
-      const copy = document.createElement("div");
-      const name = document.createElement("div");
-      name.className = rarityClass(item);
-      name.textContent = item.name;
-      const meta = document.createElement("div");
-      meta.className = "muted";
-      const req = requirementText(item);
-      const affix = item.slot === "gem" ? "" : liveItem(item, c.level).affixes.map((entry) => entry.label).join(", ");
-      meta.textContent = `${itemSummary(item, c.level)}${affix ? `. ${affix}` : ""}${req ? `. ${req}` : ""}`;
-      copy.append(name, meta);
-      row.append(copy);
-      if (item.slot !== "gem") {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = "Equip";
-        button.addEventListener("click", () => {
-          const error = equipItem(c, item.uid);
-          text("pack-note", error ?? `Equipped ${item.name}.`);
-          if (!error) {
-            sim.recompute();
-            this.packKey = "";
-            this.actions.changed();
-          }
-        });
-        row.append(button);
-        const salvage = document.createElement("button");
-        salvage.type = "button";
-        const gained = salvageCount(item);
-        salvage.textContent = `Salvage ${gained}`;
-        salvage.addEventListener("click", () => {
-          const error = salvageItem(c, item.uid);
-          text("pack-note", error ?? `Broke down ${item.name} into ${gained} ${MATERIAL_LABEL[materialFor(item)]}.`);
-          if (!error) {
-            this.packKey = "";
-            this.townKey = "";
-            this.actions.changed();
-          }
-        });
-        row.append(salvage);
-        this.socketButtons(sim, item.uid, row);
-      }
-      list.append(row);
+    for (const stack of stacks) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const selected = this.tip && "gem" in this.tip && this.tip.gem === stack.kind && this.tip.quality === stack.quality;
+      button.className = `gear-slot loot-slot gem-${stack.kind}${selected ? " on" : ""}`;
+      button.dataset.tip = `gem:${stack.kind}:${stack.quality}`;
+      button.innerHTML = `${gemIcon()}<span class="loot-count">${stack.count}</span>`;
+      button.setAttribute("aria-label", `${gemStackName(stack.kind, stack.quality)}, ${stack.count}`);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.tip = selected ? null : { gem: stack.kind, quality: stack.quality };
+        this.packKey = "";
+      });
+      list.append(button);
     }
+  }
+
+  private paintGemTip(sim: Sim): void {
+    if (!this.tip || !("gem" in this.tip)) return;
+    const tip = must("gear-tip");
+    const c = sim.character;
+    const stack = (c.gems ?? []).find((entry) => this.tip && "gem" in this.tip && entry.kind === this.tip.gem && entry.quality === this.tip.quality && entry.count > 0);
+    if (!stack || !this.tip || !("gem" in this.tip)) {
+      this.tip = null;
+      tip.classList.add("hidden");
+      return;
+    }
+    const name = gemStackName(stack.kind, stack.quality);
+    const title = document.createElement("div");
+    title.className = `gem-${stack.kind}`;
+    title.textContent = `${name}  × ${stack.count}`;
+    const body = document.createElement("p");
+    body.className = "muted";
+    body.textContent = "Socket into a weapon, helm, or chest.";
+    tip.append(title, body);
+    const host = this.firstSocketHost(c);
+    if (host) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `Socket into ${host.name}`;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const error = socketGem(c, host.uid, stack.kind, stack.quality);
+        text("pack-note", error ?? `Set ${name} into ${host.name}.`);
+        if (!error) {
+          if (stack.count <= 0) this.tip = null;
+          sim.recompute();
+          this.packKey = "";
+          this.actions.changed();
+        }
+      });
+      tip.append(button);
+    }
+    tip.classList.remove("hidden");
+    this.placeTip();
+  }
+
+  private firstSocketHost(c: Sim["character"]): { uid: string; name: string } | null {
+    const worn = GEAR_SLOTS.map((slot) => c.equipment[slot]).find((item) => item && item.gems.includes(null));
+    const bag = c.inventory.find((item) => item.gems.includes(null));
+    const host = worn ?? bag;
+    return host ? { uid: host.uid, name: host.name } : null;
   }
 
   private paintSalvageBar(sim: Sim): void {
@@ -854,7 +1030,8 @@ export class Ui {
     const c = sim.character;
     const worn = GEAR_SLOTS.map((slot) => c.equipment[slot]?.uid ?? "").join(",");
     const bag = c.inventory.map((item) => `${item.uid}:${item.ilvl}:${item.gems.length}`).join(",");
-    return `${worn}|${bag}|${(c.salvageMarks ?? []).join(",")}`;
+    const gems = (c.gems ?? []).map((stack) => `${stack.kind}:${stack.quality}:${stack.count}`).join(",");
+    return `${this.packTab}|${worn}|${bag}|${gems}|${(c.salvageMarks ?? []).join(",")}`;
   }
 
   private townSignature(sim: Sim): string {
@@ -871,15 +1048,15 @@ export class Ui {
     const c = sim.character;
     const item = GEAR_SLOTS.map((slot) => c.equipment[slot]).find((entry) => entry?.uid === itemUid) ?? c.inventory.find((entry) => entry.uid === itemUid);
     if (!item || !item.gems.includes(null)) return;
-    for (const gem of c.inventory) {
-      const kind = gemKind(gem);
-      if (!kind) continue;
+    for (const stack of c.gems ?? []) {
+      if (stack.count <= 0) continue;
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = `Socket ${gem.name}`;
+      const label = gemStackName(stack.kind, stack.quality);
+      button.textContent = `Socket ${label}`;
       button.addEventListener("click", () => {
-        const error = socketGem(c, itemUid, gem.uid);
-        text("pack-note", error ?? `Set ${gem.name} into ${item.name}.`);
+        const error = socketGem(c, itemUid, stack.kind, stack.quality);
+        text("pack-note", error ?? `Set ${label} into ${item.name}.`);
         if (!error) {
           sim.recompute();
           this.packKey = "";
@@ -939,6 +1116,29 @@ function clamp(value: number, min: number, max: number): number {
 function text(id: string, value: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
+}
+
+function gemIcon(): string {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M12 3 19 9 12 21 5 9z" fill="currentColor" fill-opacity="0.85"/><path d="M5 9h14M8.2 9 12 3.6 15.8 9" fill="none"/></svg>`;
+}
+
+function gearIcon(slot: string, style: string): string {
+  const kind = slot === "weapon" ? style : slot.startsWith("ring") ? "ring" : slot.startsWith("ear") ? "ear" : slot;
+  const shapes: Record<string, string> = {
+    head: `<path d="M5 14c0-5 3.2-9 7-9s7 4 7 9v3H5z"/><path d="M8 17c1.2 2 6.8 2 8 0"/>`,
+    ear: `<circle cx="12" cy="8" r="2.4"/><path d="M12 10.5v6"/><circle cx="12" cy="18.2" r="1.4" fill="currentColor" stroke="none"/>`,
+    neck: `<path d="M4 8c2.6 3.2 13.4 3.2 16 0"/><circle cx="12" cy="16" r="3"/>`,
+    melee: `<path d="M12 2.5v11"/><path d="M8 7.5h8"/><path d="M10 14.5 12 21l2-6.5"/>`,
+    bow: `<path d="M8 3.5c7 4 7 13 0 17"/><path d="M8 3.5v17"/><path d="M8 12h7"/>`,
+    focus: `<path d="M12 3.5 18.5 12 12 20.5 5.5 12z"/>`,
+    chest: `<path d="M6 5h12l2 14H4z"/><path d="M12 5v14"/>`,
+    gloves: `<path d="M8 11V6.5M11 11V5.5M14 11V7"/><path d="M6 11h12v3c0 4-2.2 7-6 7s-6-3-6-7z"/>`,
+    belt: `<path d="M3 10h18v4H3z"/><path d="M9 9h6v6H9z"/>`,
+    boots: `<path d="M8 3.5h5v10l5 2v4H6v-5l2-2z"/>`,
+    ring: `<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>`,
+  };
+  const shape = shapes[kind] ?? shapes.chest;
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${shape}</svg>`;
 }
 
 function rarityClass(item: { rarity: string; ethereal: boolean; uniqueId: string | null }): string {

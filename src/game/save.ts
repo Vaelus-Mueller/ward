@@ -1,7 +1,15 @@
+import { addGem } from "./items";
 import { emptyEquipment, GEAR_SLOTS, type ArmorType, type Character, type GemKind, type Item, type Rarity, type SocketGem } from "./types";
 import type { Snapshot } from "./sim";
 
 export const SAVE_KEY = "vaelus-save-v1";
+export const SLOTS_KEY = "vaelus-slots-v1";
+export const SLOT_COUNT = 3;
+
+export interface SaveSlot {
+  name: string;
+  save: SaveFile | null;
+}
 
 export interface SaveFile extends Snapshot {
   version: 1;
@@ -19,6 +27,7 @@ export function deserialize(raw: string): SaveFile | null {
     if (!validCharacter(data.character)) return null;
     migrateGear(data.character);
     migrateAttributes(data.character);
+    data.character.name = cleanName(data.character.name);
     if (!Number.isFinite(data.character.paragon)) data.character.paragon = 0;
     if (!Number.isFinite(data.wave) || !Number.isFinite(data.hp)) return null;
     return data;
@@ -41,6 +50,13 @@ function migrateGear(character: Character): void {
     if (item) migrateItem(item);
   }
   if (!Array.isArray(character.gems)) character.gems = [];
+  const kept = [];
+  for (const item of character.inventory) {
+    const kind = item.slot === "gem" ? item.gems[0]?.kind : null;
+    if (kind) addGem(character, kind, item.quality || item.gems[0]?.quality || 1, 1);
+    else kept.push(item);
+  }
+  character.inventory = kept;
   if (!Array.isArray(character.materials)) character.materials = [];
   if (!Array.isArray(character.salvageMarks)) character.salvageMarks = ["grey", "white"];
 }
@@ -146,4 +162,66 @@ export function readSave(storage: Storage): SaveFile | null {
 
 export function writeSave(storage: Storage, snapshot: Snapshot): void {
   storage.setItem(SAVE_KEY, serialize(snapshot));
+}
+
+export function cleanName(raw: unknown): string {
+  const text = typeof raw === "string" ? raw.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 24) : "";
+  return text || "Exile";
+}
+
+export function readSlots(storage: Storage): SaveSlot[] {
+  return loadBank(storage).slots;
+}
+
+export function writeSlot(storage: Storage, index: number, snapshot: Snapshot): void {
+  const bank = loadBank(storage);
+  const name = cleanName(snapshot.character.name);
+  snapshot.character.name = name;
+  const file: SaveFile = { version: 1, ...snapshot, character: snapshot.character };
+  bank.slots[index] = { name, save: file };
+  storage.setItem(SLOTS_KEY, JSON.stringify({ version: 1, slots: bank.slots }));
+}
+
+export function nameSlot(storage: Storage, index: number, raw: string): void {
+  const bank = loadBank(storage);
+  const draft = raw.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 24);
+  const slot = bank.slots[index];
+  slot.name = draft;
+  if (slot.save && draft) slot.save.character.name = draft;
+  storage.setItem(SLOTS_KEY, JSON.stringify({ version: 1, slots: bank.slots }));
+}
+
+function emptySlots(): SaveSlot[] {
+  return Array.from({ length: SLOT_COUNT }, () => ({ name: "", save: null }));
+}
+
+function loadBank(storage: Storage): { slots: SaveSlot[] } {
+  const raw = storage.getItem(SLOTS_KEY);
+  if (raw) {
+    const parsed = parseBank(raw);
+    if (parsed) return parsed;
+  }
+  const slots = emptySlots();
+  const legacy = readSave(storage);
+  if (legacy) slots[0] = { name: legacy.character.name, save: legacy };
+  storage.setItem(SLOTS_KEY, JSON.stringify({ version: 1, slots }));
+  return { slots };
+}
+
+function parseBank(raw: string): { slots: SaveSlot[] } | null {
+  try {
+    const data = JSON.parse(raw) as { version?: number; slots?: { name?: string; save?: SaveFile | null }[] };
+    if (!data || data.version !== 1 || !Array.isArray(data.slots)) return null;
+    const slots = emptySlots();
+    for (let i = 0; i < SLOT_COUNT; i++) {
+      const entry = data.slots[i];
+      if (!entry) continue;
+      const draft = typeof entry.name === "string" ? entry.name.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 24) : "";
+      const save = entry.save ? deserialize(JSON.stringify(entry.save)) : null;
+      slots[i] = { name: save?.character.name || draft, save };
+    }
+    return { slots };
+  } catch {
+    return null;
+  }
 }

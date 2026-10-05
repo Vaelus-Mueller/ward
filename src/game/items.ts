@@ -618,8 +618,37 @@ export function canCarry(c: Character): boolean {
 }
 
 export function tryAddItem(c: Character, item: Item): boolean {
+  if (item.slot === "gem") {
+    const kind = gemKind(item);
+    if (!kind) return false;
+    addGem(c, kind, item.quality || item.gems[0]?.quality || 1, 1);
+    return true;
+  }
   if (!canCarry(c)) return false;
   c.inventory.push(item);
+  return true;
+}
+
+export function gemStackName(kind: GemKind, quality: number): string {
+  const rank = Math.max(1, Math.round(quality) || 1);
+  return rank === 1 ? GEM_NAMES[kind] : `${GEM_NAMES[kind]} ${rank}`;
+}
+
+export function addGem(c: Character, kind: GemKind, quality: number, count = 1): void {
+  if (!Array.isArray(c.gems)) c.gems = [];
+  const rank = Math.max(1, Math.round(quality) || 1);
+  const stack = c.gems.find((entry) => entry.kind === kind && entry.quality === rank);
+  if (stack) stack.count += count;
+  else c.gems.push({ kind, quality: rank, count });
+}
+
+function takeGem(c: Character, kind: GemKind, quality: number): boolean {
+  if (!Array.isArray(c.gems)) return false;
+  const rank = Math.max(1, Math.round(quality) || 1);
+  const stack = c.gems.find((entry) => entry.kind === kind && entry.quality === rank && entry.count > 0);
+  if (!stack) return false;
+  stack.count -= 1;
+  if (stack.count <= 0) c.gems = c.gems.filter((entry) => entry.count > 0);
   return true;
 }
 
@@ -661,17 +690,13 @@ export function unequipItem(c: Character, slot: SlotName): string | null {
   return null;
 }
 
-export function socketGem(c: Character, itemUid: string, gemUid: string): string | null {
-  const gemIndex = c.inventory.findIndex((entry) => entry.uid === gemUid);
-  const gem = gemIndex >= 0 ? c.inventory[gemIndex] : undefined;
-  const kind = gem ? gemKind(gem) : null;
-  if (!gem || !kind) return "That is not a gem.";
+export function socketGem(c: Character, itemUid: string, kind: GemKind, quality: number): string | null {
   const host = findHost(c, itemUid);
   if (!host) return "That item is not here.";
   const hole = host.gems.findIndex((entry) => entry === null);
   if (hole < 0) return "That item has no empty socket.";
-  host.gems[hole] = { kind, quality: gem.quality > 0 ? gem.quality : 1 };
-  c.inventory.splice(gemIndex, 1);
+  if (!takeGem(c, kind, quality)) return "That gem is not in the pouch.";
+  host.gems[hole] = { kind, quality: Math.max(1, Math.round(quality) || 1) };
   return null;
 }
 
@@ -786,12 +811,10 @@ export function salvageItem(c: Character, uid: string): string | null {
   const item = c.inventory[index]!;
   if (item.slot === "gem") return "Gems are not broken down.";
   const sockets = item.gems.filter((gem) => gem);
-  const room = INVENTORY_CAP - (c.inventory.length - 1);
-  if (sockets.length > room) return "Make room for the gems socketed in that item.";
   c.inventory.splice(index, 1);
   for (const gem of sockets) {
     if (!gem) continue;
-    c.inventory.push(looseGem(gem.kind, gem.quality, `gem-back-${item.uid}-${gem.kind}-${c.inventory.length}`));
+    addGem(c, gem.kind, gem.quality, 1);
   }
   const count = salvageCount(item);
   addMaterial(c, materialFor(item), count);
@@ -829,30 +852,6 @@ export function upgradeItem(c: Character, uid: string): string | null {
   }
   item.ilvl = from + 1;
   return null;
-}
-
-function looseGem(kind: GemKind, quality: number, uid: string): Item {
-  const rank = Math.max(1, quality || 1);
-  return blankItem({
-    uid,
-    name: GEM_NAMES[kind],
-    slot: "gem",
-    rarity: "white",
-    armorType: null,
-    style: "melee",
-    damageMin: 0,
-    damageMax: 0,
-    armor: 0,
-    speed: 1,
-    rangeBonus: 0,
-    reqStr: 0,
-    reqDex: 0,
-    reqEne: 0,
-    affixes: [],
-    quality: rank,
-    gems: [{ kind, quality: rank }],
-    dye: gemDye(kind),
-  });
 }
 
 function gemDye(kind: GemKind): number {

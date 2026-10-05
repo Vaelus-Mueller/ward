@@ -14,8 +14,9 @@ import {
   type SectorId,
 } from "./types";
 
-export function createCharacter(): Character {
+export function createCharacter(name = "Exile"): Character {
   return {
+    name,
     level: 1,
     xp: 0,
     gold: 0,

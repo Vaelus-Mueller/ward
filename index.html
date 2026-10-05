@@ -53,9 +53,22 @@
           <p class="eyebrow">Gate Ward</p>
           <h1>Ward</h1>
           <p class="lede">An exile holds a ruined ward. Paths open on a wheel. Attributes are spent by hand.</p>
-          <div class="row-buttons">
-            <button id="new-game" type="button" class="primary">Enter the gate</button>
-            <button id="continue" type="button" hidden>Continue</button>
+          <div id="save-slots" class="save-slots">
+            <article class="save-slot">
+              <label class="slot-name">Slot 1<input id="slot-name-0" data-slot="0" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <p id="slot-meta-0" class="muted">Empty</p>
+              <button id="slot-play-0" data-play="0" type="button" class="primary">New</button>
+            </article>
+            <article class="save-slot">
+              <label class="slot-name">Slot 2<input id="slot-name-1" data-slot="1" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <p id="slot-meta-1" class="muted">Empty</p>
+              <button id="slot-play-1" data-play="1" type="button" class="primary">New</button>
+            </article>
+            <article class="save-slot">
+              <label class="slot-name">Slot 3<input id="slot-name-2" data-slot="2" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <p id="slot-meta-2" class="muted">Empty</p>
+              <button id="slot-play-2" data-play="2" type="button" class="primary">New</button>
+            </article>
           </div>
           <ul class="help">
             <li>Hold the phone sideways. Left thumb moves. Right thumb attacks.</li>
@@ -254,22 +267,42 @@
             <h2>Pack</h2>
             <button id="close-pack" type="button">Close</button>
           </header>
-          <div class="equip">
-            <div id="eq-head"></div>
-            <div id="eq-ear1"></div>
-            <div id="eq-ear2"></div>
-            <div id="eq-neck"></div>
-            <div id="eq-weapon"></div>
-            <div id="eq-chest"></div>
-            <div id="eq-gloves"></div>
-            <div id="eq-belt"></div>
-            <div id="eq-boots"></div>
-            <div id="eq-ring1"></div>
-            <div id="eq-ring2"></div>
+          <div class="pack-body">
+            <div class="doll" id="doll">
+              <svg class="silhouette" viewBox="0 0 100 220" aria-hidden="true">
+                <g fill="#2c261f" stroke="#8c7355" stroke-width="2" stroke-linejoin="round">
+                  <ellipse cx="50" cy="28" rx="16" ry="18"></ellipse>
+                  <path d="M42 44h16l-2 14H44z"></path>
+                  <path d="M30 62c-8 18-8 46 2 66h36c10-20 10-48 2-66-8-4-14-6-20-6s-12 2-20 6z"></path>
+                  <path d="M30 70 12 118l8 4 16-40z"></path>
+                  <path d="M70 70 88 118l-8 4-16-40z"></path>
+                  <path d="M38 128 32 202h12l6-62z"></path>
+                  <path d="M62 128 68 202H56l-6-62z"></path>
+                </g>
+              </svg>
+              <button id="eq-ear1" class="gear-slot" type="button"></button>
+              <button id="eq-head" class="gear-slot" type="button"></button>
+              <button id="eq-ear2" class="gear-slot" type="button"></button>
+              <button id="eq-neck" class="gear-slot" type="button"></button>
+              <button id="eq-weapon" class="gear-slot" type="button"></button>
+              <button id="eq-chest" class="gear-slot" type="button"></button>
+              <button id="eq-gloves" class="gear-slot" type="button"></button>
+              <button id="eq-belt" class="gear-slot" type="button"></button>
+              <button id="eq-ring1" class="gear-slot" type="button"></button>
+              <button id="eq-ring2" class="gear-slot" type="button"></button>
+              <button id="eq-boots" class="gear-slot" type="button"></button>
+            </div>
+            <div class="pack-side">
+              <div class="pack-tabs">
+                <button id="pack-tab-gear" type="button">Gear</button>
+                <button id="pack-tab-gems" type="button">Gems</button>
+              </div>
+              <div id="salvage-bar" class="salvage-bar"></div>
+              <div id="pack-list" class="loot-grid"></div>
+              <p id="pack-note" class="muted"></p>
+            </div>
           </div>
-          <div id="salvage-bar" class="salvage-bar"></div>
-          <div id="pack-list"></div>
-          <p id="pack-note" class="muted"></p>
+          <div id="gear-tip" class="gear-tip hidden" role="dialog" aria-label="Item"></div>
         </div>
       </section>
 

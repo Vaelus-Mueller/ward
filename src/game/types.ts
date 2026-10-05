@@ -137,6 +137,7 @@ export interface Item {
 }
 
 export interface Character {
+  name: string;
   level: number;
   xp: number;
   gold: number;

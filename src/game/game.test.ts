@@ -2,11 +2,25 @@ import { describe, expect, it } from "vitest";
 import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
 import { derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
-import { addMaterial, equipItem, isSignatureAffix, materialCount, salvageCount, salvageItem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
-import { deserialize, serialize } from "./save";
+import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
+import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, scaledActive, skillById, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim, wavePlan } from "./sim";
 import { STAT_POINTS_PER_LEVEL } from "./types";
+
+function memoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear: () => data.clear(),
+    getItem: (key) => data.get(key) ?? null,
+    key: (index) => [...data.keys()][index] ?? null,
+    removeItem: (key) => data.delete(key),
+    setItem: (key, value) => data.set(key, value),
+  };
+}
 
 describe("levels and attributes", () => {
   it("grants five attribute points and one skill point per level", () => {
@@ -190,6 +204,33 @@ describe("gear and saving", () => {
     expect(restored).not.toBeNull();
     expect(restored?.character.level).toBe(hero.level);
     expect(restored?.wave).toBe(4);
+    expect(restored?.character.name).toBe("Exile");
+  });
+
+  it("keeps three named slots and folds the old save into the first", () => {
+    const storage = memoryStorage();
+    const hero = createCharacter();
+    hero.level = 6;
+    const sim = new Sim(hero, 1);
+    sim.wave = 8;
+    writeSave(storage, sim.toSnapshot());
+    const migrated = readSlots(storage);
+    expect(migrated).toHaveLength(3);
+    expect(migrated[0]?.save?.character.level).toBe(6);
+    expect(migrated[0]?.save?.wave).toBe(8);
+    expect(migrated[1]?.save).toBeNull();
+    expect(migrated[2]?.save).toBeNull();
+    nameSlot(storage, 1, "  Ash  ");
+    const named = createCharacter("Mara");
+    const next = new Sim(named, 2);
+    next.wave = 3;
+    writeSlot(storage, 2, next.toSnapshot());
+    const slots = readSlots(storage);
+    expect(slots[1]?.name).toBe("Ash");
+    expect(slots[1]?.save).toBeNull();
+    expect(slots[2]?.name).toBe("Mara");
+    expect(slots[2]?.save?.wave).toBe(3);
+    expect(slots[0]?.save?.character.level).toBe(6);
   });
 });
 
@@ -411,6 +452,21 @@ describe("the ward", () => {
     const short = upgradeItem(hero, stud.uid) ?? "";
     expect(short).toContain("2 Cloth Weave");
     expect(short).toContain("2 Jewel Dust");
+  });
+
+  it("stacks gems in their own pouch", () => {
+    const hero = createCharacter();
+    expect(tryAddItem(hero, rollGem(() => 0, "a"))).toBe(true);
+    expect(tryAddItem(hero, rollGem(() => 0, "b"))).toBe(true);
+    expect(hero.inventory).toHaveLength(0);
+    expect(hero.gems).toEqual([{ kind: "ruby", quality: 1, count: 2 }]);
+    const blade = starterBlade("socket");
+    blade.sockets = 1;
+    blade.gems = [null];
+    hero.equipment.weapon = blade;
+    expect(socketGem(hero, blade.uid, "ruby", 1)).toBeNull();
+    expect(hero.gems[0]?.count).toBe(1);
+    expect(blade.gems[0]).toEqual({ kind: "ruby", quality: 1 });
   });
 
   it("breaks an item into materials from its level and rarity", () => {

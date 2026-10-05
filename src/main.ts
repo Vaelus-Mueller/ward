@@ -4,7 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { AudioBus } from "./audio";
 import { createCharacter } from "./game/character";
-import { readSave, writeSave } from "./game/save";
+import { cleanName, nameSlot, readSlots, writeSlot } from "./game/save";
 import { Sim } from "./game/sim";
 import { Input } from "./input";
 import { Renderer } from "./render";
@@ -25,20 +25,22 @@ const ui = new Ui({
 const renderer = new Renderer(canvas);
 const input = new Input(canvas, must("joy"), (x, y) => renderer.pick(x, y));
 
-must("new-game").addEventListener("click", () => {
+let activeSlot = 0;
+
+must("save-slots").addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-play]");
+  if (!button) return;
+  const index = Number(button.dataset.play);
+  if (index < 0 || index > 2) return;
   audio.hit();
-  box.sim = new Sim(createCharacter(), Date.now() >>> 0 || 1);
-  box.sim.begin();
-  startRun();
+  playSlot(index);
 });
 
-must("continue").addEventListener("click", () => {
-  const save = readSave(localStorage);
-  if (!save) return;
-  box.sim = new Sim(save.character, 1);
-  box.sim.applySnapshot(save);
-  box.sim.begin();
-  startRun();
+must("save-slots").addEventListener("change", (event) => {
+  const input = event.target as HTMLInputElement;
+  if (!input.dataset.slot) return;
+  nameSlot(localStorage, Number(input.dataset.slot), input.value);
+  ui.showTitle();
 });
 
 must("retry").addEventListener("click", () => {
@@ -104,7 +106,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) persist();
 });
 
-ui.showTitle(readSave(localStorage) !== null);
+ui.showTitle();
 paintMute();
 void nativeChrome();
 
@@ -145,9 +147,24 @@ function startRun(): void {
   persist();
 }
 
+function playSlot(index: number): void {
+  activeSlot = index;
+  const name = cleanName((must(`slot-name-${index}`) as HTMLInputElement).value);
+  const existing = readSlots(localStorage)[index]?.save;
+  if (existing) {
+    existing.character.name = name;
+    box.sim = new Sim(existing.character, 1);
+    box.sim.applySnapshot(existing);
+  } else {
+    box.sim = new Sim(createCharacter(name), Date.now() >>> 0 || 1);
+  }
+  box.sim.begin();
+  startRun();
+}
+
 function persist(): void {
   if (!box.started) return;
-  writeSave(localStorage, box.sim.toSnapshot());
+  writeSlot(localStorage, activeSlot, box.sim.toSnapshot());
 }
 
 function paintMute(): void {

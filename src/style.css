@@ -206,7 +206,28 @@ p { line-height: 1.45; }
   border: 1px solid var(--line);
   padding: 18px 18px 22px;
 }
-.title-panel { text-align: center; width: min(560px, 100%); }
+.title-panel { text-align: center; width: min(920px, 100%); }
+.save-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; text-align: left; }
+.save-slot { display: grid; grid-template-columns: 1fr; gap: 4px; border: 1px solid var(--line); padding: 8px; }
+.slot-name { display: grid; gap: 4px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.save-slot input {
+  min-height: 40px;
+  width: 100%;
+  padding: 0 8px;
+  color: var(--ink);
+  background: #221c17;
+  border: 1px solid var(--line);
+  font: inherit;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+.save-slot .muted { margin: 0; }
+@media (max-width: 720px) and (orientation: portrait) {
+  .save-slots { grid-template-columns: 1fr; }
+}
 .eyebrow { letter-spacing: 0.28em; text-transform: uppercase; color: var(--gold); font-size: 12px; }
 .lede { color: var(--muted); }
 .help { text-align: left; color: var(--muted); padding-left: 18px; }
@@ -233,7 +254,7 @@ p { line-height: 1.45; }
   .ledger-body { grid-template-columns: 1fr; max-height: none; }
   .ledger-cols { grid-template-columns: 1fr 1fr; }
 }
-.stat-row, .derived div, .pack-row, .equip > div {
+.stat-row, .derived div, .pack-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
   gap: 8px;
@@ -292,15 +313,132 @@ p { line-height: 1.45; }
     padding: 0 0 0 12px;
   }
 }
-.equip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.equip > div { display: block; min-height: 72px; }
+#pack { font-size: 14px; }
+#pack .muted { font-size: 11px; }
+.pack-body { display: grid; grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.25fr); gap: 12px; min-height: 0; }
+.pack-side { display: flex; flex-direction: column; min-height: 0; }
+.pack-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.pack-tabs button.on { border-color: var(--gold); color: var(--gold); }
+#pack-list { overflow: auto; flex: 1; }
+.doll {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(10px, 1fr) 46px minmax(10px, 1fr) 46px;
+  grid-template-rows: repeat(6, 46px);
+  gap: 8px 6px;
+  align-items: center;
+  justify-items: center;
+  width: min(100%, 280px);
+  margin: 0 auto;
+}
+.silhouette { position: absolute; top: 0; bottom: 0; left: 22%; right: 22%; width: auto; height: 100%; margin: 0 auto; z-index: 0; pointer-events: none; }
+#eq-ear1 { grid-area: 1 / 1; }
+#eq-head { grid-area: 1 / 3; }
+#eq-ear2 { grid-area: 1 / 5; }
+#eq-neck { grid-area: 2 / 3; }
+#eq-weapon { grid-area: 3 / 1; }
+#eq-chest { grid-area: 3 / 3; }
+#eq-gloves { grid-area: 3 / 5; }
+#eq-belt { grid-area: 4 / 3; }
+#eq-ring1 { grid-area: 5 / 1; }
+#eq-ring2 { grid-area: 5 / 5; }
+#eq-boots { grid-area: 6 / 3; }
+.gear-slot {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  background: rgba(18, 15, 12, 0.92);
+  box-shadow: none;
+}
+.gear-slot svg { width: 26px; height: 26px; display: block; }
+.gear-slot.empty { color: #8a7b68; border-style: dashed; opacity: 0.8; }
+.gear-slot.on { outline: 1px solid var(--gold); outline-offset: 2px; }
+.gear-slot.rarity-grey,
+.gear-slot.rarity-white,
+.gear-slot.rarity-green,
+.gear-slot.rarity-blue,
+.gear-slot.rarity-purple,
+.gear-slot.rarity-orange,
+.gear-slot.rarity-yellow,
+.gear-slot.rarity-gold,
+.gear-slot.unique,
+.gear-slot.rarity-red { border-color: currentColor; }
+.gear-slot.rarity-rainbow {
+  color: #f4efe6;
+  -webkit-text-fill-color: #f4efe6;
+  background-clip: border-box;
+  border-color: #e6c15a;
+}
+.gear-slot.rarity-rainbow::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  height: 3px;
+  background: linear-gradient(90deg, #e85d5d, #e6c15a, #7dce7a, #6aa7ff, #c58bff);
+}
+.gear-slot { position: relative; }
+.gear-slot.ethereal { box-shadow: 0 0 8px rgba(180, 214, 236, 0.55); }
+.gear-tip {
+  position: fixed;
+  z-index: 8;
+  width: min(260px, 72vw);
+  padding: 10px;
+  background: #1c1814;
+  border: 1px solid var(--gold);
+  font-size: 14px;
+  pointer-events: auto;
+}
+.gear-tip p { margin: 6px 0; }
+.gear-tip .row-buttons { justify-content: flex-start; }
+.item-name {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  letter-spacing: 0;
+}
 .pack-row { grid-template-columns: 1fr auto auto; }
+.loot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 44px);
+  gap: 6px;
+  align-content: start;
+}
+.loot-grid > p { grid-column: 1 / -1; margin: 4px 0; }
+.loot-count {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 9px;
+  line-height: 1;
+  color: #f4efe6;
+  text-shadow: 0 1px 1px #000;
+  pointer-events: none;
+}
 .salvage-bar, .material-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
-.salvage-bar button { min-height: 32px; padding: 0 8px; font-size: 12px; }
+.salvage-bar { margin: 2px 0 4px; }
+.salvage-bar button { min-height: 24px; padding: 0 6px; font-size: 7px; }
 .salvage-bar button.on { border-color: var(--gold); color: var(--gold); }
 .town-panel { width: min(920px, 100%); }
 .town-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid rgba(140, 115, 85, 0.35); }
 .slot-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
+.gem-ruby { color: #e15b4c; border-color: currentColor; }
+.gem-sapphire { color: #7eb6ff; border-color: currentColor; }
+.gem-topaz { color: #f0a04a; border-color: currentColor; }
+.gem-emerald { color: #7dce7a; border-color: currentColor; }
+.gem-diamond { color: #f4efe6; border-color: currentColor; }
+.gem-amethyst { color: #c58bff; border-color: currentColor; }
+.gem-skull { color: #d4c4a8; border-color: currentColor; }
 .rarity-grey { color: #8a8680; }
 .rarity-white, .rarity-common { color: #f4efe6; }
 .rarity-green { color: #7dce7a; }
@@ -319,13 +457,27 @@ p { line-height: 1.45; }
 }
 .unique { color: #d4b15a; }
 .ethereal { font-style: italic; text-shadow: 0 0 8px rgba(180, 214, 236, 0.45); }
-.equip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
 @media (max-width: 720px), (orientation: landscape) and (max-height: 500px) {
   .derived { grid-template-columns: repeat(2, 1fr); }
 }
+@media (orientation: landscape) and (max-height: 520px) {
+  #pack .panel { padding: 8px 10px 10px; }
+  #pack .panel-head { margin-bottom: 4px; }
+  .doll {
+    grid-template-rows: repeat(6, 38px);
+    gap: 4px 6px;
+    width: min(100%, 230px);
+  }
+  .gear-slot {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+  .gear-slot svg { width: 22px; height: 22px; }
+  .loot-grid { grid-template-columns: repeat(auto-fill, 36px); gap: 4px; }
+}
 @media (max-width: 720px) and (orientation: portrait) {
-  .equip { grid-template-columns: 1fr 1fr; }
+  .pack-body { grid-template-columns: 1fr; }
   h1 { letter-spacing: 0.08em; text-indent: 0; font-size: 42px; }
   .title-panel { padding: 12px; }
   .help { margin: 8px 0; }
