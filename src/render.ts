@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { classTitle } from "./game/character";
 import { ARENA, type Item } from "./game/types";
 import { ROAD_X, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
+import { buildHero, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { syncHeroGear } from "./render/gear";
 
 const SCALE = 0.045;
 const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
@@ -96,8 +97,13 @@ export class Renderer {
   private stoneRough?: THREE.Texture;
   private lava?: THREE.Texture;
   private lavaRough?: THREE.Texture;
+  private readonly readyPromise: Promise<void>;
+  private resolveReady!: () => void;
 
   constructor(private canvas: HTMLCanvasElement) {
+    this.readyPromise = new Promise((resolve) => {
+      this.resolveReady = resolve;
+    });
     this.webgl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.webgl.setClearColor(0x3a342e);
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
@@ -138,8 +144,11 @@ export class Renderer {
     this.floatLayer = document.createElement("div");
     this.floatLayer.id = "float-layer";
     canvas.parentElement?.appendChild(this.floatLayer);
-    void this.loadModels();
-    void this.loadFloors();
+    void Promise.all([this.loadModels(), this.loadFloors()]).finally(() => this.resolveReady());
+  }
+
+  whenReady(): Promise<void> {
+    return this.readyPromise;
   }
 
   resize(): void {
@@ -356,11 +365,11 @@ export class Renderer {
   }
 
   private syncPlayer(sim: Sim, dt: number): void {
-    const kind = heroKind(sim);
-    const ready = this.templates.has(kind);
-    if (!this.player || this.playerKind !== kind || (this.player.placeholder && ready)) {
+    const kind = sim.character.race || "human";
+    const height = HERO_HEIGHT[kind] ?? 1.78;
+    if (!this.player || this.playerKind !== kind) {
       if (this.player) this.scene.remove(this.player.root);
-      this.player = this.makeActor(kind, HEIGHT[kind] ?? 1.7, false);
+      this.player = this.makeActor(kind, height, false);
       this.playerKind = kind;
       if (this.player) this.scene.add(this.player.root);
     }
@@ -376,7 +385,7 @@ export class Renderer {
         new THREE.MeshBasicMaterial({ color: 0xe7c39a, transparent: true, opacity: 0.18 }),
       );
       shell.name = "ward-shell";
-      shell.position.y = 0.9;
+      shell.position.y = height * 0.55;
       this.player.root.add(shell);
     } else if (ward && sim.player.shield <= 0) {
       this.player.root.remove(ward);
@@ -426,17 +435,20 @@ export class Renderer {
   }
 
   private makeActor(kind: string, height: number, enemy: boolean): Actor {
-    const loaded = this.templates.get(kind);
-    const template = loaded ?? fallbackFigure(kind, height);
-    const model = cloneSkinned(template.scene);
+    const hero = isHeroRace(kind);
+    const loaded = hero ? null : this.templates.get(kind);
+    const template = hero
+      ? { scene: buildHero(kind), clips: [] as THREE.AnimationClip[] }
+      : loaded ?? fallbackFigure(kind, height);
+    const model = hero ? template.scene : cloneSkinned(template.scene);
     if (loaded) this.dress(model, kind);
     cloneMaterials(model);
-    fitFeet(model, height);
+    if (!hero) fitFeet(model, height);
     const root = new THREE.Group();
     root.add(model);
-    const marker = markerFor(kind);
+    const marker = markerFor(hero ? "knight" : kind);
     const ring = new THREE.Mesh(
-      new THREE.CircleGeometry(kind === "brute" ? 0.62 : kind === "hound" ? 0.36 : 0.46, 24),
+      new THREE.CircleGeometry(kind === "brute" ? 0.62 : kind === "hound" ? 0.36 : hero ? 0.4 : 0.46, 24),
       new THREE.MeshBasicMaterial({ color: marker.ring, transparent: true, opacity: 0.4, depthWrite: false }),
     );
     ring.rotation.x = -Math.PI / 2;
@@ -471,14 +483,14 @@ export class Renderer {
       attack: exactAction(mixer, template.clips, pose.attack, true),
       hit: exactAction(mixer, template.clips, "Hit_A", true),
       mode: "",
-      placeholder: !loaded,
+      placeholder: !hero && !loaded,
       kind,
       attackLeft: 0,
       attackDur: 0.5,
       held: false,
       hitLeft: 0,
       hurt: false,
-      armed: !GEAR[kind],
+      armed: hero || !GEAR[kind],
       slash,
       blade,
       bar,
@@ -522,17 +534,12 @@ export class Renderer {
     rememberMaterials(model);
     restoreMaterials(model);
     const eq = sim.character.equipment;
+    // Soft body dye under the handcrafted armor shells.
     tintHead(model, eq.head);
     tintNamed(model, ["Body"], eq.chest);
     tintNamed(model, ["ArmLeft", "ArmRight"], eq.gloves);
     tintNamed(model, ["LegLeft", "LegRight"], eq.boots);
-    showAddon(model, "hips", "gear-belt", "belt", eq.belt);
-    showAddon(model, "hand.r", "gear-ring-r", "ring", eq.ring1);
-    showAddon(model, "hand.l", "gear-ring-l", "ring", eq.ring2);
-    showAddon(model, "head", "gear-ear-l", "earring", eq.ear1);
-    showAddon(model, "head", "gear-ear-r", "earring", eq.ear2);
-    if (!showAddon(model, "chest", "gear-neck", "neck", eq.neck)) showAddon(model, "spine", "gear-neck", "neck", eq.neck);
-    if (eq.weapon?.ethereal) ghostWeapon(model);
+    syncHeroGear(model, eq, performance.now());
   }
 
   private placeActor(
@@ -702,13 +709,6 @@ export class Renderer {
       node.style.top = `${(-point.y * 0.5 + 0.5) * height}px`;
     });
   }
-}
-
-function heroKind(sim: Sim): string {
-  const title = classTitle(sim.character);
-  if (title === "Shade" || title === "Cutpurse" || title === "Marksman") return "rogue";
-  if (title === "Rite" || title === "Pyre" || title === "Cantor") return "mage";
-  return "knight";
 }
 
 function facingOf(enemy: Enemy, sim: Sim): number {
@@ -972,22 +972,11 @@ function tintNamed(root: THREE.Object3D, parts: string[], item: Item | null): vo
   const finish = ARMOR_FINISH[item.armorType] ?? ARMOR_FINISH.cloth!;
   root.traverse((node) => {
     if (!parts.some((part) => node.name.includes(part))) return;
+    if (node.name.startsWith("gear-")) return;
     const material = standardMaterial(node as THREE.Mesh);
     if (!material) return;
     applyFinish(material, item.dye, finish.metalness, finish.roughness, item.ethereal, true);
   });
-}
-
-function ghostWeapon(root: THREE.Object3D): void {
-  for (const name of ["1H_Sword", "Knife", "Knife_Offhand", "1H_Wand"]) {
-    const node = root.getObjectByName(name);
-    if (!node?.visible) continue;
-    node.traverse((child) => {
-      const material = standardMaterial(child as THREE.Mesh);
-      if (!material) return;
-      applyFinish(material, 0xd5e6f5, 0.45, 0.22, true, false);
-    });
-  }
 }
 
 function applyFinish(
@@ -1002,44 +991,12 @@ function applyFinish(
   material.color.setHex(dye);
   material.metalness = metalness;
   material.roughness = roughness;
-  material.transparent = false;
-  material.opacity = 1;
+  material.transparent = ethereal;
+  material.opacity = ethereal ? 0.55 : 1;
+  material.depthWrite = !ethereal;
   material.emissive.setHex(ethereal ? 0xb7d4ea : 0x000000);
-  material.emissiveIntensity = ethereal ? 0.55 : 0;
+  material.emissiveIntensity = ethereal ? 0.4 : 0;
   if (ethereal) material.color.lerp(new THREE.Color(0xd7e8f6), 0.45);
-}
-
-function showAddon(root: THREE.Object3D, boneName: string, addonName: string, shape: "belt" | "ring" | "neck" | "earring", item: Item | null): boolean {
-  const bone = root.getObjectByName(boneName);
-  if (!bone) return false;
-  let mesh = bone.getObjectByName(addonName) as THREE.Mesh | undefined;
-  if (!mesh) {
-    const geometry =
-      shape === "belt"
-        ? new THREE.TorusGeometry(0.22, 0.045, 8, 18)
-        : shape === "ring"
-          ? new THREE.TorusGeometry(0.045, 0.012, 6, 12)
-          : shape === "earring"
-            ? new THREE.SphereGeometry(0.035, 8, 8)
-            : new THREE.OctahedronGeometry(0.07, 0);
-    mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: 0.4, metalness: 0.6 }));
-    mesh.name = addonName;
-    if (shape === "belt") {
-      mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = 0.05;
-    }
-    if (shape === "neck") mesh.position.set(0, 0.12, 0.08);
-    if (shape === "ring") mesh.rotation.z = Math.PI / 2;
-    if (shape === "earring") mesh.position.set(addonName.endsWith("-r") ? 0.12 : -0.12, 0.02, 0.06);
-    bone.add(mesh);
-  }
-  mesh.visible = !!item;
-  if (!item) return true;
-  const material = mesh.material as THREE.MeshStandardMaterial;
-  const metal = item.armorType ? (ARMOR_FINISH[item.armorType]?.metalness ?? 0.7) : 0.82;
-  const rough = item.armorType ? (ARMOR_FINISH[item.armorType]?.roughness ?? 0.35) : 0.28;
-  applyFinish(material, item.dye || 0xe4c37a, metal, rough, item.ethereal, true);
-  return true;
 }
 
 function standardMaterial(node: THREE.Mesh): THREE.MeshStandardMaterial | null {

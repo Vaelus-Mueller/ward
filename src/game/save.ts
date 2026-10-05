@@ -1,5 +1,17 @@
-import { addGem } from "./items";
-import { emptyEquipment, GEAR_SLOTS, type ArmorType, type Character, type GemKind, type Item, type Rarity, type SocketGem } from "./types";
+import { addGem, defaultHands } from "./items";
+import { isRaceId } from "./races";
+import {
+  emptyEquipment,
+  GEAR_SLOTS,
+  type ArmorType,
+  type Character,
+  type GemKind,
+  type Item,
+  type ItemSlot,
+  type Rarity,
+  type SocketGem,
+  type WeaponStyle,
+} from "./types";
 import type { Snapshot } from "./sim";
 
 export const SAVE_KEY = "vaelus-save-v1";
@@ -28,6 +40,7 @@ export function deserialize(raw: string): SaveFile | null {
     migrateGear(data.character);
     migrateAttributes(data.character);
     data.character.name = cleanName(data.character.name);
+    data.character.race = isRaceId(data.character.race) ? data.character.race : "human";
     if (!Number.isFinite(data.character.paragon)) data.character.paragon = 0;
     if (!Number.isFinite(data.wave) || !Number.isFinite(data.hp)) return null;
     return data;
@@ -82,6 +95,9 @@ function migrateItem(item: Item): void {
   if (!Number.isFinite(item.dye)) item.dye = 0xcfc6b8;
   if (typeof item.ethereal !== "boolean") item.ethereal = false;
   if (typeof item.uniqueId !== "string") item.uniqueId = null;
+  if (item.hands !== 1 && item.hands !== 2) {
+    item.hands = defaultHands(item.slot as ItemSlot, item.style as WeaponStyle, item.name);
+  }
   if (!Number.isFinite(item.quality)) item.quality = item.slot === "gem" ? 1 : 0;
   if (!Number.isFinite(item.sockets)) item.sockets = 0;
   const raw = (Array.isArray(item.gems) ? item.gems : []) as unknown[];

@@ -10,8 +10,31 @@ export const INVENTORY_CAP = 16;
 export const GEM_QUALITIES = 20;
 
 export type Attr = "strength" | "agility" | "endurance" | "wisdom";
-export type SlotName = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring1" | "ring2" | "neck" | "ear1" | "ear2";
-export type ItemSlot = "weapon" | "head" | "chest" | "belt" | "boots" | "gloves" | "ring" | "neck" | "earring" | "gem";
+export type SlotName =
+  | "weapon"
+  | "offhand"
+  | "head"
+  | "chest"
+  | "belt"
+  | "boots"
+  | "gloves"
+  | "ring1"
+  | "ring2"
+  | "neck"
+  | "ear1"
+  | "ear2";
+export type ItemSlot =
+  | "weapon"
+  | "shield"
+  | "head"
+  | "chest"
+  | "belt"
+  | "boots"
+  | "gloves"
+  | "ring"
+  | "neck"
+  | "earring"
+  | "gem";
 export type ArmorType = "cloth" | "leather" | "mail" | "plate";
 export type Rarity = "grey" | "white" | "green" | "blue" | "purple" | "orange" | "yellow" | "gold" | "red" | "rainbow";
 export type GemKind = "ruby" | "sapphire" | "topaz" | "emerald" | "diamond" | "amethyst" | "skull";
@@ -45,7 +68,8 @@ export interface MaterialStack {
   id: MaterialId;
   count: number;
 }
-export type WeaponStyle = "melee" | "bow" | "focus";
+export type WeaponStyle = "melee" | "bow" | "focus" | "thrown" | "handbow";
+export type WeaponHands = 1 | 2;
 export type SectorId = "bulwark" | "shade" | "rite";
 export type SkillKind = "passive" | "active" | "aura" | "channel";
 export type EnemyKind = "hound" | "sentinel" | "archer" | "brute";
@@ -72,7 +96,20 @@ export interface Affix {
   label: string;
 }
 
-export const GEAR_SLOTS: SlotName[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring1", "ring2", "neck", "ear1", "ear2"];
+export const GEAR_SLOTS: SlotName[] = [
+  "weapon",
+  "offhand",
+  "head",
+  "chest",
+  "belt",
+  "boots",
+  "gloves",
+  "ring1",
+  "ring2",
+  "neck",
+  "ear1",
+  "ear2",
+];
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   grey: "Grey",
@@ -97,6 +134,7 @@ export const ARMOR_LABEL: Record<ArmorType, string> = {
 export function emptyEquipment(): Record<SlotName, Item | null> {
   return {
     weapon: null,
+    offhand: null,
     head: null,
     chest: null,
     belt: null,
@@ -119,6 +157,7 @@ export interface Item {
   ethereal: boolean;
   uniqueId: string | null;
   style: WeaponStyle;
+  hands: WeaponHands;
   damageMin: number;
   damageMax: number;
   armor: number;
@@ -136,8 +175,11 @@ export interface Item {
   gems: (SocketGem | null)[];
 }
 
+export type RaceId = "human" | "elf" | "dwarf" | "gnome" | "hobbit" | "insectoid" | "minotaur" | "golem";
+
 export interface Character {
   name: string;
+  race: RaceId;
   level: number;
   xp: number;
   gold: number;

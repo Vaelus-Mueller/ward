@@ -1,4 +1,5 @@
 import { liveItem } from "./itemstats";
+import { raceAttrs } from "./races";
 import {
   ATTRS,
   GEAR_SLOTS,
@@ -27,11 +28,12 @@ export function xpGoal(c: Character): number {
 }
 
 export function attributes(c: Character): Record<Attr, number> {
+  const racial = raceAttrs(c.race);
   const totals: Record<Attr, number> = {
-    strength: BASE_ATTR + c.spent.strength,
-    agility: BASE_ATTR + c.spent.agility,
-    endurance: BASE_ATTR + c.spent.endurance,
-    wisdom: BASE_ATTR + c.spent.wisdom,
+    strength: BASE_ATTR + c.spent.strength + racial.strength,
+    agility: BASE_ATTR + c.spent.agility + racial.agility,
+    endurance: BASE_ATTR + c.spent.endurance + racial.endurance,
+    wisdom: BASE_ATTR + c.spent.wisdom + racial.wisdom,
   };
   for (const item of lived(c)) {
     for (const affix of item.affixes) {
@@ -72,6 +74,7 @@ export function addMods(into: Mods, extra: Partial<Mods>): void {
 export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const attr = attributes(c);
   const weapon = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
+  const offhand = c.equipment.offhand ? liveItem(c.equipment.offhand, c.level) : null;
   const style: WeaponStyle = weapon?.style ?? "melee";
   const life = Math.round(c.level * 5 + attr.endurance + mods.life + gearNumber(c, "life"));
   const mana = Math.round(16 + c.level + attr.wisdom * 0.5 + mods.mana + gearNumber(c, "mana"));
@@ -84,15 +87,24 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const evasion = clamp(attr.agility * 0.0035 + mods.evasion + gearNumber(c, "evasion"), 0, 0.4);
   const crit = clamp(attr.agility * 0.002 + mods.crit + gearNumber(c, "crit"), 0, 0.55);
   const scaler =
-    style === "bow" ? attr.agility : style === "focus" ? attr.wisdom : attr.strength;
+    style === "bow" || style === "thrown" || style === "handbow"
+      ? attr.agility
+      : style === "focus"
+        ? attr.wisdom
+        : attr.strength;
   const statMul = 1 + scaler * 0.015;
   const meleeMul = mods.meleeMult + gearNumber(c, "meleeMult");
   const spellMulGear = mods.spellMult + gearNumber(c, "spellMult");
   const skillMul = style === "focus" ? 1 + spellMulGear : 1 + meleeMul;
-  const bowMul = style === "bow" ? 1 + mods.projectileMult * 0.5 : 1;
+  const ranged = style === "bow" || style === "thrown" || style === "handbow";
+  const bowMul = ranged ? 1 + mods.projectileMult * 0.5 : 1;
+  // Flat damage affixes (gems, etc.) from all gear including offhand apply in full.
+  // Off-hand weapon dice contribute half their rolled base damage; shields add none.
   const flat = gearNumber(c, "damage");
-  let meleeMin = ((weapon?.damageMin ?? 3) + flat) * statMul * skillMul * bowMul;
-  let meleeMax = ((weapon?.damageMax ?? 6) + flat) * statMul * skillMul * bowMul;
+  const offMin = offhand && offhand.damageMax > 0 ? offhand.damageMin * 0.5 : 0;
+  const offMax = offhand && offhand.damageMax > 0 ? offhand.damageMax * 0.5 : 0;
+  let meleeMin = ((weapon?.damageMin ?? 3) + offMin + flat) * statMul * skillMul * bowMul;
+  let meleeMax = ((weapon?.damageMax ?? 6) + offMax + flat) * statMul * skillMul * bowMul;
   if (meleeMax < meleeMin) meleeMax = meleeMin;
   const focusBonus = style === "focus" ? 1.15 : 1;
   const spellMul = (1 + spellMulGear) * focusBonus;
@@ -103,7 +115,15 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     0.58 / speed / (1 + mods.attackSpeed + gearNumber(c, "attackSpeed") + attr.agility * 0.002);
   const moveSpeed = 172 * (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025);
   const weaponRange =
-    (style === "bow" ? 300 : style === "focus" ? 230 : 70) + (weapon?.rangeBonus ?? 0);
+    (style === "bow"
+      ? 300
+      : style === "handbow"
+        ? 240
+        : style === "thrown"
+          ? 180
+          : style === "focus"
+            ? 230
+            : 70) + (weapon?.rangeBonus ?? 0);
 
   return {
     strength: attr.strength,

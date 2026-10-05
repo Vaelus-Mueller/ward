@@ -3,14 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#0e0d0b" />
+    <meta name="theme-color" content="#07060a" />
     <meta name="color-scheme" content="dark" />
     <title>Ward</title>
     <link rel="icon" href="./favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="app">
       <canvas id="view"></canvas>
+
+      <section id="splash" class="splash" aria-label="Loading Ward" aria-busy="true">
+        <div class="splash-mist" aria-hidden="true"></div>
+        <div class="splash-sigil">
+          <img src="./logo.svg" alt="" width="168" height="168" draggable="false" />
+        </div>
+        <h1 class="splash-brand">Ward</h1>
+        <p class="splash-tag">Gate of the ruined ward</p>
+        <div class="splash-bar" aria-hidden="true"><span id="splash-fill"></span></div>
+        <p id="splash-status" class="splash-status">Binding the gate…</p>
+        <button id="splash-enter" type="button" class="splash-enter hidden">Enter</button>
+      </section>
+
       <div id="hud" class="hidden">
         <header id="topbar">
           <div class="identity-block">
@@ -48,11 +64,13 @@
         </div>
       </div>
 
-      <section id="title" class="overlay">
+      <section id="title" class="overlay hidden">
         <div class="panel title-panel">
+          <div class="ornament" aria-hidden="true"></div>
           <p class="eyebrow">Gate Ward</p>
           <h1>Ward</h1>
           <p class="lede">An exile holds a ruined ward. Paths open on a wheel. Attributes are spent by hand.</p>
+          <div class="ornament thin" aria-hidden="true"></div>
           <div id="save-slots" class="save-slots">
             <article class="save-slot">
               <label class="slot-name">Slot 1<input id="slot-name-0" data-slot="0" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
@@ -77,6 +95,32 @@
             <li>Passives are always on. Actives, auras, and channels fill three slots. Hits shorten cooldowns.</li>
           </ul>
           <button id="open-privacy" type="button" class="text">Privacy</button>
+        </div>
+      </section>
+
+      <section id="create" class="overlay hidden" role="dialog" aria-label="Create character">
+        <div class="panel create-panel">
+          <header class="panel-head">
+            <h2>Create exile</h2>
+            <button id="create-back" type="button">Back</button>
+          </header>
+          <label class="create-name">Name<input id="create-name" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+          <div class="race-picker" aria-label="Choose race">
+            <button id="race-prev" type="button" class="race-arrow" aria-label="Previous race">‹</button>
+            <div class="race-stage">
+              <canvas id="race-view" width="320" height="360" aria-hidden="true"></canvas>
+              <div class="race-caption">
+                <strong id="race-name">Human</strong>
+                <span id="race-index" class="muted">1 / 8</span>
+              </div>
+            </div>
+            <button id="race-next" type="button" class="race-arrow" aria-label="Next race">›</button>
+          </div>
+          <p id="create-blurb" class="create-blurb">Choose a people of the ward.</p>
+          <div id="race-passives" class="race-passives" aria-live="polite"></div>
+          <div class="row-buttons">
+            <button id="create-enter" type="button" class="primary">Enter the gate</button>
+          </div>
         </div>
       </section>
 
@@ -286,6 +330,7 @@
               <button id="eq-neck" class="gear-slot" type="button"></button>
               <button id="eq-weapon" class="gear-slot" type="button"></button>
               <button id="eq-chest" class="gear-slot" type="button"></button>
+              <button id="eq-offhand" class="gear-slot" type="button"></button>
               <button id="eq-gloves" class="gear-slot" type="button"></button>
               <button id="eq-belt" class="gear-slot" type="button"></button>
               <button id="eq-ring1" class="gear-slot" type="button"></button>

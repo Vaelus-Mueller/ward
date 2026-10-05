@@ -4,13 +4,18 @@ import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materi
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
 import { readSlots } from "./game/save";
+import { RACES, raceById, raceName, type RaceId } from "./game/races";
 import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
 import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type SectorId, type SlotName } from "./game/types";
+import { RacePreview } from "./render/racePreview";
 
 export class Ui {
   treeFilter: SectorId | "all" = "all";
   selectedId: string | null = null;
+  createRace: RaceId = "human";
+  private createSlot = 0;
+  private racePreview: RacePreview | null = null;
   private session: Record<Attr, number> = { strength: 0, agility: 0, endurance: 0, wisdom: 0 };
   private treeKey = "";
   private packKey = "";
@@ -37,13 +42,16 @@ export class Ui {
   }
 
   blocking(): boolean {
-    return ["title", "sheet", "tree", "pack", "town", "dead", "privacy"].some((id) => this.open(id));
+    const splash = document.getElementById("splash");
+    if (splash && !splash.classList.contains("hidden") && !splash.classList.contains("fade-out")) return true;
+    return ["title", "create", "sheet", "tree", "pack", "town", "dead", "privacy"].some((id) => this.open(id));
   }
 
   closeTop(): boolean {
-    for (const id of ["privacy", "town", "pack", "tree", "sheet"]) {
+    for (const id of ["privacy", "town", "pack", "tree", "sheet", "create"]) {
       if (this.open(id)) {
-        this.hide(id);
+        if (id === "create") this.hideCreate();
+        else this.hide(id);
         return true;
       }
     }
@@ -51,19 +59,89 @@ export class Ui {
   }
 
   showTitle(): void {
+    this.racePreview?.stop();
+    this.hide("create");
     this.show("title");
     const slots = readSlots(localStorage);
     slots.forEach((slot, index) => {
       const input = must(`slot-name-${index}`) as HTMLInputElement;
       if (document.activeElement !== input) input.value = slot.name;
       const occupied = slot.save !== null;
-      text(`slot-meta-${index}`, occupied ? `Level ${slot.save?.character.level} · ${levelName(slot.save?.wave ?? 1)}` : "Empty");
+      const race = occupied ? raceName(slot.save?.character.race) : "";
+      text(
+        `slot-meta-${index}`,
+        occupied ? `${race} · Level ${slot.save?.character.level} · ${levelName(slot.save?.wave ?? 1)}` : "Empty",
+      );
       text(`slot-play-${index}`, occupied ? "Continue" : "New");
     });
   }
 
   hideTitle(): void {
+    this.racePreview?.stop();
     this.hide("title");
+    this.hide("create");
+  }
+
+  openCreate(slot: number, name: string): void {
+    this.createSlot = slot;
+    this.createRace = "human";
+    this.hide("title");
+    this.show("create");
+    const input = must("create-name") as HTMLInputElement;
+    input.value = name;
+    this.ensureRacePreview();
+    this.paintCreate();
+    input.focus();
+  }
+
+  hideCreate(): void {
+    this.racePreview?.stop();
+    this.hide("create");
+    this.showTitle();
+  }
+
+  createChoice(): { slot: number; name: string; race: RaceId } {
+    return {
+      slot: this.createSlot,
+      name: (must("create-name") as HTMLInputElement).value,
+      race: this.createRace,
+    };
+  }
+
+  private ensureRacePreview(): void {
+    if (this.racePreview) return;
+    this.racePreview = new RacePreview(must("race-view") as HTMLCanvasElement);
+  }
+
+  private stepRace(delta: number): void {
+    const index = RACES.findIndex((race) => race.id === this.createRace);
+    const next = (index + delta + RACES.length) % RACES.length;
+    this.createRace = RACES[next]!.id;
+    this.paintCreate();
+  }
+
+  private paintCreate(): void {
+    const race = raceById(this.createRace);
+    const index = RACES.findIndex((entry) => entry.id === race.id);
+    text("race-name", race.name);
+    text("race-index", `${index + 1} / ${RACES.length}`);
+    text("create-blurb", race.blurb);
+    const passives = must("race-passives");
+    passives.innerHTML = "";
+    const good = document.createElement("div");
+    good.className = "race-good";
+    good.textContent = `Passives: ${race.bonuses.join(" · ")}`;
+    const bad = document.createElement("div");
+    bad.className = "race-bad";
+    bad.textContent = `Drawbacks: ${race.penalties.join(" · ")}`;
+    passives.append(good, bad);
+    if (race.passive) {
+      const special = document.createElement("div");
+      special.className = "race-good";
+      special.textContent = race.passive;
+      passives.append(special);
+    }
+    this.racePreview?.show(race.id);
   }
 
   hideDead(): void {
@@ -78,7 +156,7 @@ export class Ui {
     const c = sim.character;
     const derived = sim.derived;
     const rank = c.paragon > 0 ? `L${c.level}  P${c.paragon}` : `L${c.level}`;
-    text("identity", `${c.name}  ·  ${classTitle(c)}  ·  ${rank}`);
+    text("identity", `${c.name}  ·  ${raceName(c.race)}  ·  ${classTitle(c)}  ·  ${rank}`);
     text("wave-label", sim.placeLabel);
     text("gold", `${c.gold}`);
     const bar = must("xp-fill");
@@ -178,6 +256,9 @@ export class Ui {
     });
     must("pack-list").addEventListener("scroll", () => this.placeTip(), { passive: true });
     must("open-privacy").addEventListener("click", () => this.show("privacy"));
+    must("create-back").addEventListener("click", () => this.hideCreate());
+    must("race-prev").addEventListener("click", () => this.stepRace(-1));
+    must("race-next").addEventListener("click", () => this.stepRace(1));
     for (const id of Object.keys(SECTORS) as SectorId[]) {
       document.querySelector(`[data-filter="${id}"]`)?.addEventListener("click", () => {
         this.treeFilter = id;
@@ -297,7 +378,12 @@ export class Ui {
     const c = sim.character;
     const d = derive(c, sim.mods);
     text("sheet-title", c.name);
-    text("sheet-level", c.paragon > 0 ? `${classTitle(c)}  ·  Level ${c.level}  ·  Paragon ${c.paragon}` : `${classTitle(c)}  ·  Level ${c.level}`);
+    text(
+      "sheet-level",
+      c.paragon > 0
+        ? `${raceName(c.race)}  ·  ${classTitle(c)}  ·  Level ${c.level}  ·  Paragon ${c.paragon}`
+        : `${raceName(c.race)}  ·  ${classTitle(c)}  ·  Level ${c.level}`,
+    );
     text("unspent-stats", `${c.unspentStats}`);
     text("unspent-skills", `${c.unspentSkills}`);
     text("sheet-gold", c.gold.toLocaleString());
@@ -683,6 +769,7 @@ export class Ui {
     const c = sim.character;
     const labels: Record<SlotName, string> = {
       weapon: "Weapon",
+      offhand: "Off-hand",
       head: "Head",
       chest: "Chest",
       belt: "Belt",
@@ -1123,14 +1210,26 @@ function gemIcon(): string {
 }
 
 function gearIcon(slot: string, style: string): string {
-  const kind = slot === "weapon" ? style : slot.startsWith("ring") ? "ring" : slot.startsWith("ear") ? "ear" : slot;
+  const kind =
+    slot === "weapon" || slot === "offhand"
+      ? style
+      : slot === "shield"
+        ? "shield"
+        : slot.startsWith("ring")
+          ? "ring"
+          : slot.startsWith("ear")
+            ? "ear"
+            : slot;
   const shapes: Record<string, string> = {
     head: `<path d="M5 14c0-5 3.2-9 7-9s7 4 7 9v3H5z"/><path d="M8 17c1.2 2 6.8 2 8 0"/>`,
     ear: `<circle cx="12" cy="8" r="2.4"/><path d="M12 10.5v6"/><circle cx="12" cy="18.2" r="1.4" fill="currentColor" stroke="none"/>`,
     neck: `<path d="M4 8c2.6 3.2 13.4 3.2 16 0"/><circle cx="12" cy="16" r="3"/>`,
     melee: `<path d="M12 2.5v11"/><path d="M8 7.5h8"/><path d="M10 14.5 12 21l2-6.5"/>`,
     bow: `<path d="M8 3.5c7 4 7 13 0 17"/><path d="M8 3.5v17"/><path d="M8 12h7"/>`,
+    handbow: `<path d="M7 5h10v4H7z"/><path d="M17 7h3"/><path d="M6 6.5 4 12h3"/>`,
+    thrown: `<path d="M6 18 18 6"/><path d="M14 6h4v4"/>`,
     focus: `<path d="M12 3.5 18.5 12 12 20.5 5.5 12z"/>`,
+    shield: `<path d="M12 3 19 6v5c0 5-3.2 8.5-7 10-3.8-1.5-7-5-7-10V6z"/>`,
     chest: `<path d="M6 5h12l2 14H4z"/><path d="M12 5v14"/>`,
     gloves: `<path d="M8 11V6.5M11 11V5.5M14 11V7"/><path d="M6 11h12v3c0 4-2.2 7-6 7s-6-3-6-7z"/>`,
     belt: `<path d="M3 10h18v4H3z"/><path d="M9 9h6v6H9z"/>`,

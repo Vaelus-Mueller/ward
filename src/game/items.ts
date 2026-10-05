@@ -1,6 +1,18 @@
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { meetsRequirements } from "./formulas";
-import type { Affix, ArmorType, Character, GemKind, Item, ItemSlot, MaterialId, Rarity, SlotName, WeaponStyle } from "./types";
+import type {
+  Affix,
+  ArmorType,
+  Character,
+  GemKind,
+  Item,
+  ItemSlot,
+  MaterialId,
+  Rarity,
+  SlotName,
+  WeaponHands,
+  WeaponStyle,
+} from "./types";
 import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, MATERIAL_LABEL, MATERIAL_ORDER, RARITY_LABEL } from "./types";
 
 /**
@@ -14,6 +26,7 @@ interface BaseItem {
   slot: ItemSlot;
   armorType: ArmorType | null;
   style: WeaponStyle;
+  hands: WeaponHands;
   damageMin: number;
   damageMax: number;
   armor: number;
@@ -25,14 +38,33 @@ interface BaseItem {
 }
 
 const WEAPONS: BaseItem[] = [
-  { name: "Ash Blade", slot: "weapon", armorType: null, style: "melee", damageMin: 5, damageMax: 9, armor: 0, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
-  { name: "Split Cleaver", slot: "weapon", armorType: null, style: "melee", damageMin: 8, damageMax: 14, armor: 0, speed: 0.84, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
-  { name: "Gate Spear", slot: "weapon", armorType: null, style: "melee", damageMin: 5, damageMax: 8, armor: 0, speed: 1.05, rangeBonus: 26, reqStr: 10, reqDex: 0, reqEne: 0 },
-  { name: "Reed Bow", slot: "weapon", armorType: null, style: "bow", damageMin: 4, damageMax: 8, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 14, reqEne: 0 },
-  { name: "Moon Focus", slot: "weapon", armorType: null, style: "focus", damageMin: 3, damageMax: 6, armor: 0, speed: 1.08, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 12 },
+  { name: "Ash Blade", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
+  { name: "Split Cleaver", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 8, damageMax: 14, armor: 0, speed: 0.84, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
+  { name: "Gate Spear", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 7, damageMax: 12, armor: 0, speed: 0.95, rangeBonus: 30, reqStr: 14, reqDex: 0, reqEne: 0 },
+  { name: "Oak Maul", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 11, damageMax: 18, armor: 0, speed: 0.78, rangeBonus: 0, reqStr: 22, reqDex: 0, reqEne: 0 },
+  { name: "Great Ashblade", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 10, damageMax: 16, armor: 0, speed: 0.88, rangeBonus: 0, reqStr: 20, reqDex: 0, reqEne: 0 },
+  { name: "Reed Bow", slot: "weapon", armorType: null, style: "bow", hands: 2, damageMin: 4, damageMax: 8, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 14, reqEne: 0 },
+  { name: "Palm Crossbow", slot: "weapon", armorType: null, style: "handbow", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 0.92, rangeBonus: 0, reqStr: 0, reqDex: 12, reqEne: 0 },
+  { name: "Throwing Knives", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 3, damageMax: 7, armor: 0, speed: 1.18, rangeBonus: 0, reqStr: 0, reqDex: 10, reqEne: 0 },
+  { name: "Bone Hatchet", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1.02, rangeBonus: 0, reqStr: 8, reqDex: 10, reqEne: 0 },
+  { name: "Moon Focus", slot: "weapon", armorType: null, style: "focus", hands: 1, damageMin: 3, damageMax: 6, armor: 0, speed: 1.08, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 12 },
 ];
 
-const ARMOR_ROWS: Record<ArmorType, Record<"head" | "chest" | "belt" | "boots" | "gloves", Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "rangeBonus" | "damageMin" | "damageMax"> & { armor: number }>> = {
+const SHIELDS: BaseItem[] = [
+  { name: "Wood Buckler", slot: "shield", armorType: "leather", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 8, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Targe", slot: "shield", armorType: "mail", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 14, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
+  { name: "Tower Plate", slot: "shield", armorType: "plate", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 22, speed: 1, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
+];
+
+const ARMOR_ROWS: Record<
+  ArmorType,
+  Record<
+    "head" | "chest" | "belt" | "boots" | "gloves",
+    Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "rangeBonus" | "damageMin" | "damageMax" | "hands"> & {
+      armor: number;
+    }
+  >
+> = {
   cloth: {
     head: { name: "Cloth Hood", armor: 3, reqStr: 0, reqDex: 0, reqEne: 0 },
     chest: { name: "Cloth Robe", armor: 8, reqStr: 0, reqDex: 0, reqEne: 8 },
@@ -64,12 +96,12 @@ const ARMOR_ROWS: Record<ArmorType, Record<"head" | "chest" | "belt" | "boots" |
 };
 
 const JEWELRY: BaseItem[] = [
-  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
 ];
 
 const DYES: Record<ArmorType, number[]> = {
@@ -91,6 +123,9 @@ const AFFIXES: { affix: Affix; prefix: string; weight: number }[] = [
   { prefix: "True", affix: { key: "attackRating", value: 12, label: "+12 Attack Rating" }, weight: 2 },
   { prefix: "Cruel", affix: { key: "crit", value: 0.03, label: "+3% Critical Chance" }, weight: 2 },
   { prefix: "Flowing", affix: { key: "manaRegen", value: 0.35, label: "+0.35 Mana Regeneration" }, weight: 2 },
+  { prefix: "Ember", affix: { key: "burn", value: 2.5, label: "+2.5 Fire Burn on Hit" }, weight: 2 },
+  { prefix: "Rime", affix: { key: "frost", value: 0.2, label: "Chill: 20% slow on Hit" }, weight: 2 },
+  { prefix: "Storm", affix: { key: "lightning", value: 4, label: "+4 Lightning Damage" }, weight: 2 },
 ];
 
 const TIER_AFFIXES: Record<Rarity, number> = {
@@ -176,6 +211,7 @@ function armorBases(): BaseItem[] {
         slot,
         armorType,
         style: "melee",
+        hands: 1,
         damageMin: 0,
         damageMax: 0,
         speed: 1,
@@ -186,7 +222,7 @@ function armorBases(): BaseItem[] {
   return list;
 }
 
-const BASES = [...WEAPONS, ...armorBases(), ...JEWELRY];
+const BASES = [...WEAPONS, ...SHIELDS, ...armorBases(), ...JEWELRY];
 
 interface UniqueDef {
   id: string;
@@ -194,6 +230,7 @@ interface UniqueDef {
   slot: ItemSlot;
   armorType: ArmorType | null;
   style: WeaponStyle;
+  hands?: WeaponHands;
   minWave: number;
   damageMin: number;
   damageMax: number;
@@ -441,7 +478,7 @@ export function uniqueChance(wave: number): number {
   return Math.min(0.04, 0.018 + Math.max(0, wave - 1) * 0.001);
 }
 
-function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "quality" | "sockets" | "gems"> & Partial<Item>): Item {
+function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "quality" | "sockets" | "gems" | "hands"> & Partial<Item>): Item {
   return {
     ethereal: false,
     uniqueId: null,
@@ -451,6 +488,7 @@ function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "
     quality: 0,
     sockets: 0,
     gems: [],
+    hands: 1,
     ...partial,
   };
 }
@@ -505,8 +543,8 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
     if (pool.length > 0) return makeUnique(pick(rng, pool), rng, uid, wave, level);
   }
   const slotRoll = rng();
-  const slotCut = [0.2, 0.31, 0.45, 0.53, 0.61, 0.69, 0.79, 0.89];
-  const slots: ItemSlot[] = ["weapon", "head", "chest", "belt", "boots", "gloves", "ring", "neck"];
+  const slotCut = [0.18, 0.26, 0.36, 0.49, 0.57, 0.65, 0.73, 0.82, 0.91];
+  const slots: ItemSlot[] = ["weapon", "shield", "head", "chest", "belt", "boots", "gloves", "ring", "neck"];
   let slot: ItemSlot = "earring";
   for (let i = 0; i < slotCut.length; i++) {
     if (slotRoll < slotCut[i]!) {
@@ -574,6 +612,7 @@ function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: num
     ethereal,
     uniqueId: unique.id,
     style: unique.style,
+    hands: unique.hands ?? defaultHands(unique.slot, unique.style, unique.name),
     damageMin: unique.damageMin,
     damageMax: unique.damageMax,
     armor: unique.armor,
@@ -671,7 +710,51 @@ function destination(c: Character, item: Item): SlotName | null {
     if (!c.equipment.ear2) return "ear2";
     return "ear1";
   }
-  return item.slot;
+  if (item.slot === "shield") return "offhand";
+  if (item.slot === "weapon") {
+    const main = c.equipment.weapon;
+    // Dual wield / Bull Grip: a second one-hand melee fills the off-hand when allowed.
+    if (isOffhandWeapon(item) && !c.equipment.offhand && main) {
+      if (canPairOffhand(c, main)) return "offhand";
+      // Still route to off-hand so equip can refuse a two-hander that isn't Bull Gripped.
+      if (itemHands(main) === 2) return "offhand";
+    }
+    return "weapon";
+  }
+  return item.slot as SlotName;
+}
+
+/** One-hand melee blades (not shields) that can sit in the off-hand. */
+export function isOffhandWeapon(item: Item): boolean {
+  return item.slot === "weapon" && item.style === "melee" && itemHands(item) === 1;
+}
+
+export function isShield(item: Item | null | undefined): boolean {
+  return !!item && item.slot === "shield";
+}
+
+export function itemHands(item: Item): WeaponHands {
+  return item.hands === 2 ? 2 : 1;
+}
+
+export function isRangedStyle(style: WeaponStyle): boolean {
+  return style === "bow" || style === "thrown" || style === "handbow";
+}
+
+/** Minotaur Bull Grip: 2H melee still leaves the off-hand free. */
+export function canPairOffhand(c: Character, main: Item | null | undefined): boolean {
+  if (!main) return true;
+  if (itemHands(main) === 1) return true;
+  return c.race === "minotaur" && main.style === "melee";
+}
+
+export function defaultHands(slot: ItemSlot, style: WeaponStyle, name = ""): WeaponHands {
+  if (slot === "shield") return 1;
+  if (style === "bow") return 2;
+  if (style === "thrown" || style === "handbow" || style === "focus") return 1;
+  const lower = name.toLowerCase();
+  if (lower.includes("great") || lower.includes("maul") || lower.includes("spear") || lower.includes("pike")) return 2;
+  return 1;
 }
 
 export function equipItem(c: Character, uid: string): string | null {
@@ -680,9 +763,26 @@ export function equipItem(c: Character, uid: string): string | null {
   const item = c.inventory[index]!;
   const slot = destination(c, item);
   if (!slot) return "Set a gem into an empty socket.";
+  if (slot === "offhand") {
+    if (!(isShield(item) || isOffhandWeapon(item))) {
+      return "Only a shield or one-hand melee fits the off-hand.";
+    }
+    if (!canPairOffhand(c, c.equipment.weapon)) {
+      return c.race === "minotaur"
+        ? "That main-hand needs both hands."
+        : "Two-handed weapons leave no room for an off-hand. Minotaurs can Bull Grip melee two-handers.";
+    }
+  }
   if (!meetsRequirements(c, item)) return "You do not meet the attribute requirement.";
+  // Two-handers that cannot pair (bows, non-minotaur 2H melee) free the off-hand.
+  if (slot === "weapon" && !canPairOffhand(c, item) && c.equipment.offhand) {
+    const cleared = unequipItem(c, "offhand");
+    if (cleared) return cleared;
+  }
+  const freshIndex = c.inventory.findIndex((entry) => entry.uid === uid);
+  if (freshIndex < 0) return "That item is not in the pack.";
   const previous = c.equipment[slot];
-  c.inventory.splice(index, 1);
+  c.inventory.splice(freshIndex, 1);
   c.equipment[slot] = item;
   if (previous) c.inventory.push(previous);
   return null;
@@ -721,9 +821,23 @@ export function itemSummary(item: Item, level = 1): string {
   const bits = [RARITY_LABEL[item.rarity], `item level ${Math.max(1, item.ilvl || 1)}`];
   if (item.armorType) bits.push(ARMOR_LABEL[item.armorType]);
   if (item.ethereal) bits.push(item.slot === "weapon" ? "+10% damage" : "+10% defence");
-  if (item.slot === "weapon") {
-    const style = item.style === "bow" ? "Bow" : item.style === "focus" ? "Focus" : "Melee";
-    bits.push(`${style} ${live.damageMin}–${live.damageMax}`);
+  if (item.slot === "weapon" || item.slot === "shield") {
+    const style =
+      item.slot === "shield"
+        ? "Shield"
+        : item.style === "bow"
+          ? "Bow"
+          : item.style === "handbow"
+            ? "Hand Crossbow"
+            : item.style === "thrown"
+              ? "Thrown"
+              : item.style === "focus"
+                ? "Focus"
+                : itemHands(item) === 2
+                  ? "Two-Hand"
+                  : "One-Hand";
+    if (item.slot === "shield") bits.push(`${style} ${live.armor} armor`);
+    else bits.push(`${style} ${live.damageMin}–${live.damageMax}`);
   } else if (live.armor > 0) bits.push(`${live.armor} armor`);
   if (item.sockets > 0) {
     const filled = item.gems.filter((gem) => gem).length;
@@ -759,10 +873,12 @@ const FRACTION_AFFIX = new Set([
   "bleedChance",
   "cdr",
   "attackSpeed",
+  "frost",
 ]);
 
 export function materialFor(item: Item): MaterialId {
   if (item.slot === "weapon") return "steel";
+  if (item.slot === "shield") return item.armorType === "plate" ? "plate" : item.armorType === "mail" ? "rings" : "hide";
   if (isJewelry(item.slot)) return "dust";
   if (item.armorType === "leather") return "hide";
   if (item.armorType === "mail") return "rings";
@@ -775,7 +891,16 @@ function isJewelry(slot: ItemSlot): boolean {
 }
 
 export function canUpgrade(item: Item): boolean {
-  return item.slot === "weapon" || item.slot === "head" || item.slot === "chest" || item.slot === "belt" || item.slot === "boots" || item.slot === "gloves" || isJewelry(item.slot);
+  return (
+    item.slot === "weapon" ||
+    item.slot === "shield" ||
+    item.slot === "head" ||
+    item.slot === "chest" ||
+    item.slot === "belt" ||
+    item.slot === "boots" ||
+    item.slot === "gloves" ||
+    isJewelry(item.slot)
+  );
 }
 
 export function upgradeCost(item: Item): number {

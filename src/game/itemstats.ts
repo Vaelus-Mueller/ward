@@ -52,8 +52,9 @@ export function gemAffixes(item: Item): Affix[] {
 export function socketCap(slot: ItemSlot, armorType: ArmorType | null, style: WeaponStyle, ilvl: number): number {
   if (slot !== "weapon" && slot !== "head" && slot !== "chest") return 0;
   let base = 2;
-  if (slot === "weapon") base = style === "focus" ? 2 : style === "bow" ? 4 : 3;
-  else if (slot === "head") base = armorType === "plate" ? 3 : armorType === "cloth" ? 1 : 2;
+  if (slot === "weapon") {
+    base = style === "focus" ? 2 : style === "bow" ? 4 : style === "handbow" ? 3 : style === "thrown" ? 2 : 3;
+  } else if (slot === "head") base = armorType === "plate" ? 3 : armorType === "cloth" ? 1 : 2;
   else base = armorType === "plate" ? 4 : armorType === "mail" ? 3 : 2;
   const byLevel = ilvl <= 25 ? 3 : ilvl <= 40 ? 4 : 6;
   return Math.min(base, byLevel);
@@ -148,6 +149,12 @@ function affixLabel(key: string, value: number): string {
       return `${Math.round(value * 100)}% cooldown reduction`;
     case "attackSpeed":
       return `${Math.round(value * 100)}% attack speed`;
+    case "burn":
+      return `+${value} Fire Burn on Hit`;
+    case "frost":
+      return `Chill: ${Math.round(value * 100)}% slow on Hit`;
+    case "lightning":
+      return `+${value} Lightning Damage`;
     default:
       return `+${value} ${key}`;
   }

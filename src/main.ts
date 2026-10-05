@@ -43,6 +43,18 @@ must("save-slots").addEventListener("change", (event) => {
   ui.showTitle();
 });
 
+must("create-enter").addEventListener("click", () => {
+  audio.hit();
+  const choice = ui.createChoice();
+  activeSlot = choice.slot;
+  const name = cleanName(choice.name);
+  (must(`slot-name-${choice.slot}`) as HTMLInputElement).value = name;
+  nameSlot(localStorage, choice.slot, name);
+  box.sim = new Sim(createCharacter(name, choice.race), Date.now() >>> 0 || 1);
+  box.sim.begin();
+  startRun();
+});
+
 must("retry").addEventListener("click", () => {
   box.sim.retry();
   ui.hideDead();
@@ -106,9 +118,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) persist();
 });
 
-ui.showTitle();
 paintMute();
 void nativeChrome();
+void bootSplash();
 
 let last = performance.now();
 function frame(now: number): void {
@@ -122,6 +134,10 @@ function frame(now: number): void {
     const result = box.sim.update(input.sample(), dt);
     if (result.enemyHit) audio.hit();
     if (result.playerHit) audio.hurt();
+    if (result.eliteAggro) audio.eliteAggro();
+    if (result.uniqueFind) audio.uniqueFind();
+    if (result.maxCritDealt) audio.maxCritDealt();
+    if (result.maxCritTaken) audio.maxCritTaken();
     if (result.leveled > 0) {
       audio.level();
       persist();
@@ -138,8 +154,78 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
+async function bootSplash(): Promise<void> {
+  const splash = must("splash");
+  const status = must("splash-status");
+  const fill = must("splash-fill");
+  const enter = must("splash-enter");
+  fill.style.width = "18%";
+  status.textContent = "Binding the gate…";
+
+  // Prefer music with the logo from first paint; browsers that block autoplay
+  // stay silent until the first tap, then the same theme starts.
+  let entered = false;
+  const ensureMusic = () => {
+    audio.startOminous();
+  };
+  ensureMusic();
+  const onGesture = () => ensureMusic();
+  splash.addEventListener("pointerdown", onGesture);
+  enter.addEventListener("click", (event) => {
+    event.preventDefault();
+    ensureMusic();
+  });
+
+  const ready = renderer.whenReady();
+  let fake = 18;
+  const tick = window.setInterval(() => {
+    fake = Math.min(88, fake + 3 + Math.random() * 8);
+    fill.style.width = `${fake}%`;
+  }, 220);
+
+  await ready;
+  window.clearInterval(tick);
+  splash.classList.add("ready");
+  fill.style.width = "100%";
+  status.textContent = "The gate is open";
+  enter.classList.remove("hidden");
+  splash.setAttribute("aria-busy", "false");
+
+  // Always require a tap so Chrome/Safari unlock the AudioContext if needed.
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      if (entered) return;
+      entered = true;
+      ensureMusic();
+      resolve();
+    };
+    enter.addEventListener("click", done, { once: true });
+    splash.addEventListener(
+      "pointerdown",
+      (event) => {
+        if ((event.target as HTMLElement).closest("#splash-enter")) return;
+        done();
+      },
+      { once: true },
+    );
+  });
+
+  status.textContent = "Enter the ruin";
+  await sleep(420);
+  splash.removeEventListener("pointerdown", onGesture);
+  splash.classList.add("fade-out");
+  ui.showTitle();
+  await sleep(920);
+  splash.classList.add("hidden");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function startRun(): void {
   box.started = true;
+  audio.stopOminous(1200);
   ui.hideTitle();
   must("hud").classList.remove("hidden");
   must("dead").classList.add("hidden");
@@ -155,11 +241,11 @@ function playSlot(index: number): void {
     existing.character.name = name;
     box.sim = new Sim(existing.character, 1);
     box.sim.applySnapshot(existing);
-  } else {
-    box.sim = new Sim(createCharacter(name), Date.now() >>> 0 || 1);
+    box.sim.begin();
+    startRun();
+    return;
   }
-  box.sim.begin();
-  startRun();
+  ui.openCreate(index, name);
 }
 
 function persist(): void {

@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
-import { derive, hitChance, mitigate, xpToNext } from "./formulas";
+import { attributes, derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
+import { RACES, raceAttrs } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, scaledActive, skillById, SKILLS } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
-import { STAT_POINTS_PER_LEVEL } from "./types";
+import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -110,11 +111,12 @@ describe("levels and attributes", () => {
 
   it("heals one health each second per level, plus one for every ten endurance", () => {
     const hero = createCharacter();
-    expect(derive(hero).lifeRegen).toBeCloseTo(2);
+    // Human starts with +2 endurance → 12 total, so regen is 1 + 1.2.
+    expect(derive(hero).lifeRegen).toBeCloseTo(2.2);
     hero.level = 8;
     hero.unspentStats = 20;
     for (let i = 0; i < 20; i++) spendStat(hero, "endurance");
-    expect(derive(hero).lifeRegen).toBeCloseTo(11);
+    expect(derive(hero).lifeRegen).toBeCloseTo(11.2);
   });
 
   it("reduces damage with armor, with a hard floor", () => {
@@ -207,6 +209,104 @@ describe("gear and saving", () => {
     expect(restored?.character.level).toBe(hero.level);
     expect(restored?.wave).toBe(4);
     expect(restored?.character.name).toBe("Exile");
+  });
+
+  it("applies each race’s attribute deltas on top of base", () => {
+    const attrs: Attr[] = ["strength", "agility", "endurance", "wisdom"];
+    expect(RACES).toHaveLength(8);
+    for (const race of RACES) {
+      const hero = createCharacter("Exile", race.id);
+      const totals = attributes(hero);
+      const mods = raceAttrs(race.id);
+      for (const attr of attrs) {
+        expect(totals[attr]).toBe(BASE_ATTR + mods[attr]);
+      }
+    }
+    const human = attributes(createCharacter("Exile", "human"));
+    expect(human.strength).toBe(BASE_ATTR + 2);
+    expect(human.agility).toBe(BASE_ATTR - 1);
+    expect(human.endurance).toBe(BASE_ATTR + 2);
+    expect(human.wisdom).toBe(BASE_ATTR - 1);
+  });
+
+  it("migrates missing race to human and round-trips a chosen race", () => {
+    const elf = createCharacter("Thorn", "elf");
+    const sim = new Sim(elf, 1);
+    sim.wave = 2;
+    const restored = deserialize(serialize(sim.toSnapshot()));
+    expect(restored?.character.race).toBe("elf");
+    expect(restored?.character.name).toBe("Thorn");
+    const bare = JSON.parse(serialize(sim.toSnapshot())) as Record<string, unknown>;
+    const character = bare.character as Record<string, unknown>;
+    delete character.race;
+    const migrated = deserialize(JSON.stringify(bare));
+    expect(migrated?.character.race).toBe("human");
+    character.race = "dragon";
+    const bad = deserialize(JSON.stringify(bare));
+    expect(bad?.character.race).toBe("human");
+  });
+
+  it("dual wields a second one-hand blade at half damage and keeps off-hand attributes", () => {
+    const hero = createCharacter("Ash", "human");
+    hero.spent.strength = 20;
+    const main = starterBlade("main");
+    const off = starterBlade("off");
+    off.damageMin = 10;
+    off.damageMax = 10;
+    off.affixes = [{ key: "strength", value: 5, label: "+5 Strength" }];
+    expect(tryAddItem(hero, main)).toBe(true);
+    expect(equipItem(hero, main.uid)).toBeNull();
+    expect(tryAddItem(hero, off)).toBe(true);
+    expect(equipItem(hero, off.uid)).toBeNull();
+    expect(hero.equipment.offhand?.uid).toBe("off");
+    const withOff = derive(hero);
+    const offPiece = hero.equipment.offhand;
+    hero.equipment.offhand = null;
+    const without = derive(hero);
+    hero.equipment.offhand = offPiece;
+    expect(withOff.strength).toBe(without.strength + 5);
+    expect(withOff.meleeMax).toBeGreaterThan(without.meleeMax);
+  });
+
+  it("lets minotaurs Bull Grip a two-hander with an off-hand", () => {
+    const bull = createCharacter("Horn", "minotaur");
+    bull.spent.strength = 30;
+    const two = starterBlade("maul");
+    two.name = "Oak Maul";
+    two.hands = 2;
+    two.damageMin = 12;
+    two.damageMax = 18;
+    const off = starterBlade("side");
+    expect(tryAddItem(bull, two)).toBe(true);
+    expect(equipItem(bull, two.uid)).toBeNull();
+    expect(tryAddItem(bull, off)).toBe(true);
+    expect(equipItem(bull, off.uid)).toBeNull();
+    expect(bull.equipment.weapon?.hands).toBe(2);
+    expect(bull.equipment.offhand?.uid).toBe("side");
+    const human = createCharacter("Soft", "human");
+    human.spent.strength = 30;
+    expect(tryAddItem(human, { ...two, uid: "maul2" })).toBe(true);
+    expect(equipItem(human, "maul2")).toBeNull();
+    expect(tryAddItem(human, { ...off, uid: "side2" })).toBe(true);
+    const blocked = equipItem(human, "side2");
+    expect(blocked).toMatch(/two-handed|Bull Grip|off-hand/i);
+    expect(human.equipment.weapon?.uid).toBe("maul2");
+  });
+
+  it("flags elite aggro and unique finds for voice cues", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    const elite = makeEnemy("brute", 5, sim.player.x + 40, sim.player.y, 99);
+    elite.elite = true;
+    elite.pack = "boss-pack";
+    elite.anchorX = elite.x;
+    elite.anchorY = elite.y;
+    elite.sight = 200;
+    elite.aggro = false;
+    sim.enemies = [elite];
+    const result = sim.update(emptyIntent(), 0.2);
+    expect(elite.aggro).toBe(true);
+    expect(result.eliteAggro).toBe(true);
   });
 
   it("keeps three named slots and folds the old save into the first", () => {
@@ -424,8 +524,9 @@ describe("the ward", () => {
     hero.spent.endurance = 10;
     hero.spent.wisdom = 20;
     const stats = derive(hero);
-    expect(stats.life).toBe(4 * 5 + (10 + 10));
-    expect(stats.mana).toBe(Math.round(16 + 4 + 30 * 0.5));
+    // Human: +2 endurance, −1 wisdom on top of base 10.
+    expect(stats.life).toBe(4 * 5 + (10 + 10 + 2));
+    expect(stats.mana).toBe(Math.round(16 + 4 + (10 + 20 - 1) * 0.5));
   });
 
   it("raises a piece by one item level and spends that many materials", () => {
