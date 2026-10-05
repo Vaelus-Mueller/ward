@@ -154,7 +154,7 @@ export class Renderer {
   lookAt(sim: Sim): void {
     const x = sim.player.x * SCALE;
     const z = sim.player.y * SCALE;
-    this.camera.position.set(x, 10.46, z + 9.5);
+    this.camera.position.set(x, 12.79, z + 11.88);
     this.camera.lookAt(x, 1.15, z);
     this.moon.position.set(x - 5, 14, z + 6);
     this.moon.target.position.set(x, 0, z);
