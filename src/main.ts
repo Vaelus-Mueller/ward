@@ -4,7 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { AudioBus } from "./audio";
 import { createCharacter } from "./game/character";
-import { cleanName, nameSlot, readSlots, writeSlot } from "./game/save";
+import { cleanName, clearSlot, nameSlot, readSlots, writeSlot } from "./game/save";
 import { Sim } from "./game/sim";
 import { Input } from "./input";
 import { Renderer } from "./render";
@@ -28,9 +28,22 @@ const input = new Input(canvas, must("joy"), (x, y) => renderer.pick(x, y));
 let activeSlot = 0;
 
 must("save-slots").addEventListener("click", (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-play]");
-  if (!button) return;
-  const index = Number(button.dataset.play);
+  const target = (event.target as HTMLElement).closest<HTMLElement>("[data-play], [data-delete]");
+  if (!target) return;
+  if (target.dataset.delete !== undefined) {
+    const index = Number(target.dataset.delete);
+    if (index < 0 || index > 2) return;
+    const slot = readSlots(localStorage)[index];
+    if (!slot?.save) return;
+    const label = slot.name || slot.save.character.name || `Slot ${index + 1}`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+    audio.hit();
+    clearSlot(localStorage, index);
+    (must(`slot-name-${index}`) as HTMLInputElement).value = "";
+    ui.showTitle();
+    return;
+  }
+  const index = Number(target.dataset.play);
   if (index < 0 || index > 2) return;
   audio.hit();
   playSlot(index);

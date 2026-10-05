@@ -78,6 +78,9 @@ export class Ui {
         occupied ? `${race} · Level ${slot.save?.character.level} · ${levelName(slot.save?.wave ?? 1)}` : "Empty",
       );
       text(`slot-play-${index}`, occupied ? "Continue" : "New");
+      const del = must(`slot-delete-${index}`) as HTMLButtonElement;
+      del.disabled = !occupied;
+      del.hidden = false;
     });
   }
 

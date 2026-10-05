@@ -618,6 +618,30 @@ p { line-height: 1.5; }
   box-shadow: 0 0 0 1px rgba(224, 192, 120, 0.25);
 }
 .save-slot .muted { margin: 0; }
+.slot-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: stretch;
+}
+.slot-delete {
+  min-width: 72px;
+  padding: 0 10px;
+  color: var(--ash, #c8b8a8);
+  background: linear-gradient(180deg, #2a1818, #140c0c);
+  border: 1px solid rgba(140, 60, 50, 0.65);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.slot-delete:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.slot-delete:not(:disabled):active {
+  border-color: #e07060;
+  color: #f0d0c8;
+}
 @media (max-width: 720px) and (orientation: portrait) {
   .save-slots { grid-template-columns: 1fr; }
 }

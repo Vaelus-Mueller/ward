@@ -4,7 +4,7 @@ import { attributes, derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
-import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
+import { clearSlot, deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, SECTORS, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
@@ -358,6 +358,19 @@ describe("gear and saving", () => {
     expect(slots[2]?.name).toBe("Mara");
     expect(slots[2]?.save?.wave).toBe(3);
     expect(slots[0]?.save?.character.level).toBe(6);
+  });
+
+  it("clears a slot so a new exile can take its place", () => {
+    const storage = memoryStorage();
+    const hero = createCharacter("Ash");
+    const sim = new Sim(hero, 1);
+    sim.wave = 4;
+    writeSlot(storage, 1, sim.toSnapshot());
+    expect(readSlots(storage)[1]?.save).not.toBeNull();
+    clearSlot(storage, 1);
+    const slots = readSlots(storage);
+    expect(slots[1]?.save).toBeNull();
+    expect(slots[1]?.name).toBe("");
   });
 });
 

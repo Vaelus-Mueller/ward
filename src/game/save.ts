@@ -221,6 +221,16 @@ export function nameSlot(storage: Storage, index: number, raw: string): void {
   storage.setItem(SLOTS_KEY, JSON.stringify({ version: 1, slots: bank.slots }));
 }
 
+/** Wipe a save slot so you can create a fresh exile there. */
+export function clearSlot(storage: Storage, index: number): void {
+  if (index < 0 || index >= SLOT_COUNT) return;
+  const bank = loadBank(storage);
+  bank.slots[index] = { name: "", save: null };
+  storage.setItem(SLOTS_KEY, JSON.stringify({ version: 1, slots: bank.slots }));
+  // Drop the legacy single-save key if we just cleared the migrated first slot.
+  if (index === 0) storage.removeItem(SAVE_KEY);
+}
+
 function emptySlots(): SaveSlot[] {
   return Array.from({ length: SLOT_COUNT }, () => ({ name: "", save: null }));
 }
