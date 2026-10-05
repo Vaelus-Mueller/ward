@@ -1,5 +1,5 @@
 import { equipped, xpToNext } from "./formulas";
-import { SKILLS, SPEC_LABEL, SECTORS, skillById, type SkillNode } from "./skills";
+import { ACTIVES, SKILLS, SPEC_LABEL, SECTORS, skillById, type SkillNode } from "./skills";
 import {
   ATTRS,
   MAX_LEVEL,
@@ -135,24 +135,6 @@ export function canSpendSkill(c: Character, id: string): { ok: boolean; reason: 
       return { ok: false, reason: `Requires ${names}.` };
     }
   }
-  if (skill.sectorPoints > 0) {
-    const spent = pointsInSector(c, skill.sector);
-    if (spent < skill.sectorPoints) {
-      return {
-        ok: false,
-        reason: `Spend ${skill.sectorPoints} points in ${SECTORS[skill.sector].label} first (${spent} spent).`,
-      };
-    }
-  }
-  if (skill.specPoints > 0 && skill.spec) {
-    const spent = pointsInSpec(c, skill.spec);
-    if (spent < skill.specPoints) {
-      return {
-        ok: false,
-        reason: `Spend ${skill.specPoints} points in ${SPEC_LABEL[skill.spec]} first (${spent} spent).`,
-      };
-    }
-  }
   return { ok: true, reason: "" };
 }
 
@@ -166,7 +148,8 @@ export function spendSkill(c: Character, id: string): boolean {
 export function slotSkill(c: Character, id: string, index: 0 | 1 | 2): string | null {
   const skill = skillById(id);
   if (!skill) return "Unknown skill.";
-  if (skill.kind === "passive") return "Passives are always on. They do not use a slot.";
+  if (skill.kind === "passive" || skill.kind === "key") return "Passives and keys are always on. They do not use a slot.";
+  if (skill.kind === "capstone" && !ACTIVES[id]) return "This capstone is always on. It does not use a slot.";
   if ((c.skillRanks[id] ?? 0) < 1) return "Learn the skill before assigning it.";
   for (let i = 0; i < 3; i++) {
     if (c.slotted[i] === id) c.slotted[i] = null;

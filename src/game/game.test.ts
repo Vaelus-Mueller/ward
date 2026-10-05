@@ -5,7 +5,7 @@ import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, SECTORS, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
@@ -102,12 +102,29 @@ describe("levels and attributes", () => {
     expect(Math.hypot(sim.player.x - brute.x, sim.player.y - brute.y)).toBeGreaterThan(40);
   });
 
-  it("places an outer skill beyond each specialization", () => {
-    for (const id of ["citadel", "sundering", "hemorrhage", "deadeye", "inferno", "benediction"]) {
-      const skill = skillById(id);
-      expect(skill?.ring).toBe(4);
-      expect(skill?.levelGate).toBe(16);
+  it("places a unique 1-rank capstone on ring 7 of each cone", () => {
+    const caps = SKILLS.filter((skill) => skill.kind === "capstone");
+    expect(caps.length).toBe(7);
+    for (const skill of caps) {
+      expect(skill.ring).toBe(7);
+      expect(skill.maxRank).toBe(1);
+      expect(skill.requires.length + skill.requiresAny.length).toBeGreaterThan(0);
     }
+  });
+
+  it("keeps prerequisites strictly forward on the wheel", () => {
+    for (const skill of SKILLS) {
+      for (const req of [...skill.requires, ...skill.requiresAny]) {
+        const feeder = skillById(req)!;
+        expect(feeder.radius).toBeLessThan(skill.radius);
+      }
+    }
+  });
+
+  it("spreads the wheel across seven damage-pair cones", () => {
+    const sectors = new Set(SKILLS.map((skill) => skill.sector));
+    expect(sectors.size).toBe(7);
+    expect(Object.keys(SECTORS).sort()).toEqual(["air", "bleed", "fire", "holy", "poison", "unholy", "water"].sort());
   });
 
   it("heals one health each second per level, plus one for every ten stamina", () => {
@@ -142,26 +159,24 @@ describe("skill wheel", () => {
       for (const req of [...skill.requires, ...skill.requiresAny]) {
         expect(ids).toContain(req);
       }
-      if (skill.kind === "passive") expect(PASSIVE_PER_RANK[skill.id]).toBeTruthy();
-      else expect(ACTIVES[skill.id]).toBeTruthy();
+      const passive = PASSIVE_PER_RANK[skill.id];
+      const active = ACTIVES[skill.id];
+      expect(passive || active, skill.id).toBeTruthy();
     }
   });
 
-  it("opens the inner path at level 2 and gates specializations", () => {
+  it("opens the inner path at level 1 and gates keys by prerequisites only", () => {
     const hero = createCharacter();
-    expect(canSpendSkill(hero, "iron-oath").ok).toBe(false);
-    grantXp(hero, xpToNext(1));
+    hero.unspentSkills = 3;
+    expect(canSpendSkill(hero, "iron-oath").ok).toBe(true);
     expect(spendSkill(hero, "iron-oath")).toBe(true);
-    expect(canSpendSkill(hero, "heavy-blow").ok).toBe(false);
-    hero.unspentSkills = 1;
-    expect(spendSkill(hero, "heavy-blow")).toBe(true);
+    grantXp(hero, xpToNext(1));
+    hero.unspentSkills = Math.max(hero.unspentSkills, 2);
+    expect(spendSkill(hero, "braced-guard")).toBe(true);
     expect(slotSkill(hero, "iron-oath", 0)).toMatch(/always on/i);
-    expect(slotSkill(hero, "heavy-blow", 0)).toBeNull();
-    expect(hero.slotted[0]).toBe("heavy-blow");
 
     hero.level = 6;
-    hero.unspentSkills = 6;
-    hero.skillRanks = { "iron-oath": 1, "braced-guard": 3 };
+    hero.unspentSkills = 2;
     expect(spendSkill(hero, "bastion")).toBe(true);
     const fresh = createCharacter();
     fresh.level = 6;
@@ -533,7 +548,8 @@ describe("the ward", () => {
 
   it("caps ranked skills at 20 and keeps the per-rank scaling", () => {
     for (const skill of SKILLS) {
-      expect(skill.maxRank).toBe(20);
+      if (skill.kind === "capstone") expect(skill.maxRank).toBe(1);
+      else expect(skill.maxRank).toBe(20);
     }
     const base = ACTIVES["heavy-blow"]!.mult;
     expect(scaledActive("heavy-blow", 20)?.mult).toBeCloseTo(base * (1 + 0.12 * 19));

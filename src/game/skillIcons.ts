@@ -4,6 +4,14 @@ import { SECTORS, skillById } from "./skills";
 /** Compact SVG glyph paths for skill-tree nodes (viewBox 0 0 64 64). */
 const GLYPH: Record<string, string> = {
   "iron-oath": "M32 10 L48 18 V34 C48 46 40 54 32 58 C24 54 16 46 16 34 V18 Z",
+  "blood-oath": "M32 12 C40 12 46 22 46 30 C46 42 32 54 32 54 C32 54 18 42 18 30 C18 22 24 12 32 12 Z",
+  "toxin-coat": "M24 14 H40 L36 34 L48 34 L32 54 L16 34 H28 Z",
+  "ash-plume": "M22 48 C24 34 18 28 32 12 C46 28 40 34 42 48 Z",
+  tide: "M14 36 C22 24 30 40 38 28 C46 40 52 30 54 36",
+  undertow: "M16 28 C24 40 32 24 40 40 C48 24 54 36 56 32",
+  "glacier-bolt": "M18 40 L46 16 L42 44 Z M30 34 L38 22",
+  maelstrom: "M32 14 A18 18 0 1 1 31.9 14 M32 24 A8 8 0 1 0 31.9 24",
+  deluge: "M12 40 C20 20 44 20 52 40 M18 48 C26 32 38 32 46 48",
   "braced-guard": "M20 18 H44 V30 C44 42 38 50 32 54 C26 50 20 42 20 30 Z M24 28 H40",
   "heavy-blow": "M18 42 L32 12 L46 42 Z M28 42 V52 H36 V42",
   "stone-skin": "M18 36 L26 16 H38 L46 36 L38 52 H26 Z",

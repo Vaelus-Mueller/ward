@@ -18,8 +18,8 @@ export type DamagePair =
   | "poison"
   | "bleed"
   | "unholy";
-/** Each skill-wheel cone will map onto one or two damage pairs. */
-export type SectorId = "bulwark" | "shade" | "rite";
+/** Skill-wheel cones map 1:1 onto damage pairs. */
+export type SectorId = DamagePair;
 export type SkillKind = "passive" | "active" | "aura" | "channel" | "key" | "capstone";
 export type EnemyKind = "hound" | "sentinel" | "archer" | "brute";
 

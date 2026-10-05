@@ -12,7 +12,7 @@ import {
 import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
-import { passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
 import {
   DESPAWN,
   LEASH,
@@ -291,7 +291,7 @@ export class Sim {
     for (const [id, rank] of Object.entries(this.character.skillRanks)) {
       if (!rank) continue;
       const skill = skillById(id);
-      if (skill?.kind === "passive") {
+      if (skill && (skill.kind === "passive" || skill.kind === "key" || (skill.kind === "capstone" && !ACTIVES[id]))) {
         const extra = passiveContribution(id, rank, this.character.skillRanks);
         for (const key of Object.keys(extra) as (keyof Mods)[]) {
           const value = extra[key];
