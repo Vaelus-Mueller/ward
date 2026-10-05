@@ -81,7 +81,11 @@ must("btn-mute").addEventListener("click", () => {
 });
 
 must("banner").addEventListener("click", () => {
-  if (box.sim.character.unspentStats > 0 || box.sim.character.unspentSkills > 0) {
+  if (
+    box.sim.character.unspentStats > 0 ||
+    box.sim.character.unspentSkills > 0 ||
+    (box.sim.character.unspentClass ?? 0) > 0
+  ) {
     must("btn-character").click();
   }
 });

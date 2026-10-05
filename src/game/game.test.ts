@@ -112,13 +112,30 @@ describe("levels and attributes", () => {
     expect(Math.hypot(sim.player.x - brute.x, sim.player.y - brute.y)).toBeGreaterThan(40);
   });
 
-  it("places a unique 1-rank capstone on ring 7 of each cone", () => {
+  it("places a unique 1-rank capstone on ring 7 of each cone after its keystone", () => {
     const caps = SKILLS.filter((skill) => skill.kind === "capstone");
+    const keys = SKILLS.filter((skill) => skill.kind === "key");
     expect(caps.length).toBe(7);
+    expect(keys.length).toBe(7);
     for (const skill of caps) {
       expect(skill.ring).toBe(7);
       expect(skill.maxRank).toBe(1);
-      expect(skill.requires.length + skill.requiresAny.length).toBeGreaterThan(0);
+      expect(skill.requires.length).toBe(1);
+      const key = skillById(skill.requires[0]!);
+      expect(key?.kind).toBe("key");
+      expect(key?.sector).toBe(skill.sector);
+      expect(PASSIVE_PER_RANK[skill.id]).toBeTruthy();
+      expect(ACTIVES[skill.id]).toBeUndefined();
+    }
+  });
+
+  it("places a single-rank class seal on ring 3 of each cone", () => {
+    const seals = SKILLS.filter((skill) => skill.classPoint);
+    expect(seals.length).toBe(7);
+    for (const skill of seals) {
+      expect(skill.ring).toBe(3);
+      expect(skill.maxRank).toBe(1);
+      expect(skill.kind).toBe("passive");
     }
   });
 
@@ -176,24 +193,42 @@ describe("skill wheel", () => {
     }
   });
 
-  it("opens the inner path at level 1 and gates keys by prerequisites only", () => {
+  it("opens the inner path with no level gates and spends class points on ring-3 seals", () => {
     const hero = createCharacter();
     hero.unspentSkills = 3;
     expect(canSpendSkill(hero, "iron-oath").ok).toBe(true);
     expect(spendSkill(hero, "iron-oath")).toBe(true);
-    grantXp(hero, xpToNext(1));
-    hero.unspentSkills = Math.max(hero.unspentSkills, 2);
     expect(spendSkill(hero, "braced-guard")).toBe(true);
     expect(slotSkill(hero, "iron-oath", 0)).toMatch(/always on/i);
 
-    hero.level = 6;
+    expect(canSpendSkill(hero, "oathbound").ok).toBe(false);
+    hero.unspentClass = 1;
+    expect(spendSkill(hero, "oathbound")).toBe(true);
+    expect(hero.unspentClass).toBe(0);
     hero.unspentSkills = 2;
     expect(spendSkill(hero, "bastion")).toBe(true);
+    expect(spendSkill(hero, "citadel")).toBe(true);
+
     const fresh = createCharacter();
-    fresh.level = 6;
     fresh.unspentSkills = 5;
+    fresh.unspentClass = 1;
     fresh.skillRanks = { "iron-oath": 1 };
     expect(canSpendSkill(fresh, "bastion").ok).toBe(false);
+  });
+
+  it("grants class points at levels 25 and 50", () => {
+    const hero = createCharacter();
+    hero.level = 24;
+    hero.xp = 0;
+    expect(grantXp(hero, xpToNext(24)).levels).toBe(1);
+    expect(hero.level).toBe(25);
+    expect(hero.unspentClass).toBe(1);
+    hero.level = 49;
+    hero.xp = 0;
+    hero.unspentClass = 1;
+    expect(grantXp(hero, xpToNext(49)).levels).toBe(1);
+    expect(hero.level).toBe(50);
+    expect(hero.unspentClass).toBe(2);
   });
 
   it("refunds the build on retrain and keeps the first one free", () => {
@@ -208,6 +243,7 @@ describe("skill wheel", () => {
     expect(hero.skillRanks["first-rite"]).toBeUndefined();
     expect(hero.unspentStats).toBe(10);
     expect(hero.unspentSkills).toBe(2);
+    expect(hero.unspentClass).toBe(0);
     expect(hero.gold).toBe(0);
   });
 });
@@ -605,7 +641,7 @@ describe("the ward", () => {
 
   it("caps ranked skills at 20 and keeps the per-rank scaling", () => {
     for (const skill of SKILLS) {
-      if (skill.kind === "capstone") expect(skill.maxRank).toBe(1);
+      if (skill.kind === "capstone" || skill.classPoint) expect(skill.maxRank).toBe(1);
       else expect(skill.maxRank).toBe(20);
     }
     const base = ACTIVES["heavy-blow"]!.mult;

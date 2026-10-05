@@ -933,7 +933,27 @@ p { line-height: 1.5; }
     rgba(8, 6, 12, 0.55);
   border: 1px solid rgba(110, 90, 62, 0.4);
 }
-.silhouette { position: absolute; top: 0; bottom: 0; left: 22%; right: 22%; width: auto; height: 100%; margin: 0 auto; z-index: 0; pointer-events: none; opacity: 0.85; }
+.doll-silhouette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.doll-silhouette .silhouette {
+  width: auto;
+  height: 100%;
+  max-width: 56%;
+  margin: 0 auto;
+  opacity: 0.9;
+}
+.doll[data-race="dwarf"] .doll-silhouette .silhouette,
+.doll[data-race="gnome"] .doll-silhouette .silhouette,
+.doll[data-race="hobbit"] .doll-silhouette .silhouette { max-width: 62%; }
+.doll[data-race="minotaur"] .doll-silhouette .silhouette,
+.doll[data-race="golem"] .doll-silhouette .silhouette { max-width: 64%; }
+.doll[data-race="insectoid"] .doll-silhouette .silhouette { max-width: 68%; }
 #eq-ear1 { grid-area: 1 / 1; }
 #eq-head { grid-area: 1 / 3; }
 #eq-ear2 { grid-area: 1 / 5; }
@@ -944,11 +964,20 @@ p { line-height: 1.5; }
 #eq-weapon3 { grid-area: 4 / 1; }
 #eq-gloves { grid-area: 4 / 5; }
 #eq-belt { grid-area: 4 / 3; }
-#eq-weapon4 { grid-area: 5 / 3; }
+#eq-weapon4 { grid-area: 4 / 5; }
 #eq-ring1 { grid-area: 5 / 1; }
 #eq-ring2 { grid-area: 5 / 5; }
 #eq-boots { grid-area: 6 / 3; }
-.gear-slot.insect-only { border-color: #6a8a3a; }
+/* Insectoid: lower arms flank the belt; gloves drop to the mid column. */
+.doll.insectoid #eq-weapon3 { grid-area: 4 / 1; }
+.doll.insectoid #eq-weapon4 { grid-area: 4 / 5; }
+.doll.insectoid #eq-gloves { grid-area: 5 / 3; }
+.doll:not(.insectoid) #eq-gloves { grid-area: 4 / 5; }
+.gear-slot.insect-only {
+  border-color: #6a8a3a;
+  box-shadow: inset 0 0 10px rgba(80, 120, 40, 0.35);
+}
+.gear-slot.insect-only.empty { opacity: 1; color: #8aab52; }
 .gear-slot {
   width: 44px;
   height: 44px;

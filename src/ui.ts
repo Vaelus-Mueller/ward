@@ -2,7 +2,7 @@ import { classTitle, refundStat, retrain, retrainCost, slotSkill, spendSkill, sp
 import { derive, requirementText, xpGoal } from "./game/formulas";
 import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
-import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { ACTIVES, describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
 import { appendSkillIcon } from "./game/skillIcons";
 import { readSlots } from "./game/save";
 import { RACES, raceById, raceName, type RaceId } from "./game/races";
@@ -11,6 +11,7 @@ import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
 import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
 import { RacePreview } from "./render/racePreview";
+import { raceDollSvg } from "./ui/dollSilhouette";
 
 export class Ui {
   treeFilter: SectorId | "all" = "all";
@@ -205,7 +206,7 @@ export class Ui {
     const life = must("life-globe");
     life.style.setProperty("--fill", String(sim.player.hp / Math.max(1, derived.life)));
     must("btn-character").classList.toggle("attention", c.unspentStats > 0);
-    must("btn-tree").classList.toggle("attention", c.unspentSkills > 0);
+    must("btn-tree").classList.toggle("attention", c.unspentSkills > 0 || (c.unspentClass ?? 0) > 0);
     const banner = must("banner");
     banner.classList.toggle("hidden", sim.bannerT <= 0 || sim.banner.length === 0);
     banner.textContent = sim.banner;
@@ -239,7 +240,7 @@ export class Ui {
 
     if (this.open("sheet")) this.paintSheet(sim);
     if (this.open("tree")) {
-      const key = `${this.treeFilter}:${this.selectedId}:${c.level}:${c.unspentSkills}:${JSON.stringify(c.skillRanks)}`;
+      const key = `${this.treeFilter}:${this.selectedId}:${c.level}:${c.unspentSkills}:${c.unspentClass ?? 0}:${JSON.stringify(c.skillRanks)}`;
       if (key !== this.treeKey) {
         this.treeKey = key;
         this.paintTree(sim);
@@ -507,19 +508,27 @@ export class Ui {
       });
     }
     if (filter === "all") {
+      const half = Math.PI / 7 - 0.04;
       for (const sector of Object.values(SECTORS)) {
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        const start = sector.angle - 1.02;
-        const end = sector.angle + 1.02;
+        const start = sector.angle - half;
+        const end = sector.angle + half;
         const r = reach * 0.98;
-        const large = 0;
         path.setAttribute(
           "d",
-          `M ${cx} ${cy} L ${cx + Math.cos(start) * r} ${cy + Math.sin(start) * r} A ${r} ${r} 0 ${large} 1 ${cx + Math.cos(end) * r} ${cy + Math.sin(end) * r} Z`,
+          `M ${cx} ${cy} L ${cx + Math.cos(start) * r} ${cy + Math.sin(start) * r} A ${r} ${r} 0 0 1 ${cx + Math.cos(end) * r} ${cy + Math.sin(end) * r} Z`,
         );
         path.setAttribute("fill", sector.color);
-        path.setAttribute("opacity", "0.08");
+        path.setAttribute("opacity", "0.1");
         svg.append(path);
+        const border = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        border.setAttribute("x1", String(cx));
+        border.setAttribute("y1", String(cy));
+        border.setAttribute("x2", String(cx + Math.cos(start) * r));
+        border.setAttribute("y2", String(cy + Math.sin(start) * r));
+        border.setAttribute("stroke", "rgba(232,214,196,0.22)");
+        border.setAttribute("stroke-width", "1.5");
+        svg.append(border);
       }
     }
     const line = (x1: number, y1: number, x2: number, y2: number, hot: boolean) => {
@@ -622,7 +631,7 @@ export class Ui {
 
   private paintCard(sim: Sim): void {
     const skill = this.selectedId ? skillById(this.selectedId) : undefined;
-    text("tree-points", pointLabel(sim.character.unspentSkills));
+    text("tree-points", pointLabel(sim.character.unspentSkills, sim.character.unspentClass ?? 0));
     const confirm = must("tree-confirm");
     if (!skill) {
       this.confirmSpend = false;
@@ -640,7 +649,8 @@ export class Ui {
     const rank = sim.character.skillRanks[skill.id] ?? 0;
     const gate = canSpendSkill(sim.character, skill.id);
     if (!gate.ok) this.confirmSpend = false;
-    text("tree-name", `${skill.name}  ·  ${skill.kind}  ·  ${rank}/${skill.maxRank}`);
+    const kindLabel = skill.classPoint ? "class" : skill.kind;
+    text("tree-name", `${skill.name}  ·  ${kindLabel}  ·  ${rank}/${skill.maxRank}`);
     text("tree-blurb", describeSkill(skill.id, Math.max(1, rank), sim.character.skillRanks));
     text(
       "tree-next",
@@ -654,16 +664,21 @@ export class Ui {
     const asking = this.confirmSpend && gate.ok;
     confirm.classList.toggle("hidden", !asking);
     if (asking) {
-      const left = Math.max(0, sim.character.unspentSkills - 1);
-      confirm.textContent = `Spend 1 skill point on ${skill.name}? Rank ${rank} becomes ${rank + 1}. ${pointLabel(left)} will remain.`;
+      if (skill.classPoint) {
+        const left = Math.max(0, (sim.character.unspentClass ?? 0) - 1);
+        confirm.textContent = `Spend 1 class point on ${skill.name}? ${left} class point${left === 1 ? "" : "s"} will remain.`;
+      } else {
+        const left = Math.max(0, sim.character.unspentSkills - 1);
+        confirm.textContent = `Spend 1 skill point on ${skill.name}? Rank ${rank} becomes ${rank + 1}. ${pointLabel(left)} will remain.`;
+      }
     }
     const invest = must("tree-invest") as HTMLButtonElement;
     invest.hidden = asking || rank >= skill.maxRank;
     invest.disabled = !gate.ok;
-    invest.textContent = rank === 0 ? "Learn" : "Spend point";
+    invest.textContent = rank === 0 ? "Learn" : skill.classPoint ? "Spend class point" : "Spend point";
     must("tree-confirm-yes").toggleAttribute("hidden", !asking);
     must("tree-cancel-spend").toggleAttribute("hidden", !asking);
-    const canSlot = skill.kind !== "passive" && rank > 0;
+    const canSlot = skill.kind !== "passive" && skill.kind !== "key" && !(skill.kind === "capstone" && !ACTIVES[skill.id]) && rank > 0;
     for (let i = 0; i < 3; i++) {
       const button = must(`assign-${i}`);
       button.toggleAttribute("hidden", !canSlot);
@@ -847,15 +862,27 @@ export class Ui {
       ear2: "Right earring",
     };
     const insect = c.race === "insectoid";
-    for (const slot of ["weapon3", "weapon4"] as const) {
-      must(`eq-${slot}`).classList.toggle("hidden", !insect);
+    const doll = must("doll");
+    doll.classList.toggle("insectoid", insect);
+    doll.dataset.race = c.race;
+    const sil = must("doll-silhouette");
+    if (sil.dataset.race !== c.race) {
+      sil.dataset.race = c.race;
+      sil.innerHTML = raceDollSvg(c.race);
     }
     for (const slot of GEAR_SLOTS) {
-      if ((slot === "weapon3" || slot === "weapon4") && !insect) continue;
-      const item = c.equipment[slot];
+      const extraArm = slot === "weapon3" || slot === "weapon4";
       const el = must(`eq-${slot}`) as HTMLButtonElement;
-      el.className = `gear-slot${item ? ` ${rarityClass(item)}` : " empty"}${this.tip && "slot" in this.tip && this.tip.slot === slot ? " on" : ""}${slot === "weapon3" || slot === "weapon4" ? " insect-only" : ""}`;
+      if (extraArm && !insect) {
+        el.className = "gear-slot insect-only hidden";
+        el.hidden = true;
+        continue;
+      }
+      const item = c.equipment[slot];
+      el.hidden = false;
+      el.className = `gear-slot${item ? ` ${rarityClass(item)}` : " empty"}${this.tip && "slot" in this.tip && this.tip.slot === slot ? " on" : ""}${extraArm ? " insect-only" : ""}`;
       el.innerHTML = gearIcon(slot, item?.style ?? "melee");
+      el.title = labels[slot];
       el.setAttribute("aria-label", item ? `${labels[slot]}, ${item.name}` : `${labels[slot]}, empty`);
     }
     must("pack-tab-gear").classList.toggle("on", this.packTab === "gear");
@@ -1456,11 +1483,11 @@ export class Ui {
 
 function spreadRadius(radius: number): number {
   if (radius < 0.35) return 0.18;
-  if (radius < 0.55) return 0.4;
-  if (radius < 0.72) return 0.58;
-  if (radius < 0.86) return 0.76;
-  if (radius < 0.96) return 0.78;
-  if (radius < 1.08) return 0.9;
+  if (radius < 0.5) return 0.38;
+  if (radius < 0.64) return 0.52;
+  if (radius < 0.8) return 0.68;
+  if (radius < 0.93) return 0.82;
+  if (radius < 1.08) return 0.92;
   return 1;
 }
 
@@ -1468,7 +1495,7 @@ function displayAngle(angle: number, sector: SectorId, filter: SectorId | "all")
   let rel = angle - SECTORS[sector].angle;
   while (rel > Math.PI) rel -= Math.PI * 2;
   while (rel < -Math.PI) rel += Math.PI * 2;
-  if (filter === "all") return SECTORS[sector].angle + rel * 1.55;
+  if (filter === "all") return SECTORS[sector].angle + rel * 1.15;
   if (sector !== filter) return angle;
   return rel * 4.6;
 }
@@ -1479,8 +1506,10 @@ function must(id: string): HTMLElement {
   return el;
 }
 
-function pointLabel(count: number): string {
-  return `${count} skill point${count === 1 ? "" : "s"}`;
+function pointLabel(skills: number, classPoints = 0): string {
+  const skillText = `${skills} skill point${skills === 1 ? "" : "s"}`;
+  if (classPoints <= 0) return skillText;
+  return `${skillText} · ${classPoints} class point${classPoints === 1 ? "" : "s"}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -1498,8 +1527,8 @@ function gemIcon(): string {
 
 function gearIcon(slot: string, style: string): string {
   const kind =
-    slot === "weapon" || slot === "offhand"
-      ? style
+    slot === "weapon" || slot === "offhand" || slot === "weapon3" || slot === "weapon4"
+      ? style || "melee"
       : slot === "shield"
         ? "shield"
         : slot.startsWith("ring")

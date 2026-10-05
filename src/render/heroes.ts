@@ -216,9 +216,10 @@ export function buildHero(race: RaceId): THREE.Group {
   addLimb(chest, "ArmLeft", -look.torso.w * 0.55, look.limb.arm, look.limb.thick * 0.9, null, skin, cloth, false);
   addLimb(chest, "ArmRight", look.torso.w * 0.55, look.limb.arm, look.limb.thick * 0.9, null, skin, cloth, false);
   if (race === "insectoid") {
-    // Lower blade-arms for the third and fourth weapons.
-    addLimb(chest, "ArmLeft2", -look.torso.w * 0.48, look.limb.arm * 0.88, look.limb.thick * 0.8, null, skin, cloth, false, "2", -0.12);
-    addLimb(chest, "ArmRight2", look.torso.w * 0.48, look.limb.arm * 0.88, look.limb.thick * 0.8, null, skin, cloth, false, "2", -0.12);
+    // Lower blade-arms: planted wider/lower/forward so they never hide under the upper pair.
+    const lowerX = Math.max(look.torso.w * 0.55 + 0.12, look.torso.w * 0.95);
+    addLimb(chest, "ArmLeft2", -lowerX, look.limb.arm * 0.9, look.limb.thick * 0.78, null, skin, cloth, false, "2", -0.26, 0.1);
+    addLimb(chest, "ArmRight2", lowerX, look.limb.arm * 0.9, look.limb.thick * 0.78, null, skin, cloth, false, "2", -0.26, 0.1);
   }
 
   // Plant feet on the ground after assembly.
@@ -362,13 +363,14 @@ function addLimb(
   isLeg: boolean,
   handSuffix = "",
   yOffset = 0,
+  zOffset = 0,
 ): void {
   const group = new THREE.Group();
   group.name = name;
-  group.position.set(x, isLeg ? 0 : 0.18 + yOffset, 0);
+  group.position.set(x, isLeg ? 0 : 0.18 + yOffset, zOffset);
   parent.add(group);
 
-  const upper = part(name, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 6, 12), isLeg ? cloth : skin);
+  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 6, 12), isLeg ? cloth : skin);
   upper.position.y = isLeg ? -length * 0.35 : -length * 0.28;
   group.add(upper);
 
@@ -546,21 +548,34 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
 
   const idle = limbClip("Idle", 1.6, (t, name) => {
     const breath = Math.sin(t * Math.PI * 2) * 0.04;
+    if (name === "ArmLeft2") return { x: breath * 0.4, y: 0.1, z: 0.32 };
+    if (name === "ArmRight2") return { x: breath * 0.4, y: -0.1, z: -0.32 };
     if (name.startsWith("Arm")) return { x: breath * 0.35, z: name.includes("Left") ? 0.08 : -0.08 };
     if (name.startsWith("Leg")) return { x: 0, z: 0 };
     return { x: breath * 0.15, z: 0 };
   }, [...arms, ...legs, "spine", "chest"]);
 
+  // Guard stance for character select — weapons up, weight forward, light breath.
+  const battle = limbClip("Idle_Combat", 2.2, (t, name) => {
+    const breath = Math.sin(t * Math.PI * 2) * 0.03;
+    if (name === "ArmRight") return { x: -1.05 + breath * 0.08, y: 0.55, z: -0.55 };
+    if (name === "ArmLeft") return { x: -0.55 + breath * 0.06, y: -0.35, z: 0.75 };
+    if (name === "ArmRight2") return { x: -0.95 + breath * 0.1, y: 0.7, z: -0.85 };
+    if (name === "ArmLeft2") return { x: -0.7 + breath * 0.1, y: -0.55, z: 0.95 };
+    if (name === "LegLeft") return { x: -0.18, z: 0.06 };
+    if (name === "LegRight") return { x: 0.22, z: -0.05 };
+    if (name === "spine") return { x: 0.08 + breath * 0.04, y: -0.12, z: 0 };
+    if (name === "chest") return { x: 0.06 + breath * 0.05, y: 0.18, z: 0 };
+    return { x: breath * 0.1, z: 0 };
+  }, [...arms, ...legs, "spine", "chest"]);
+
   const walk = limbClip("Running_A", 0.7, (t, name) => {
     const swing = Math.sin(t * Math.PI * 2);
-    if (name === "ArmLeft" || name === "ArmLeft2") {
-      const phase = name.endsWith("2") ? -swing : swing;
-      return { x: phase * 0.55, z: 0.12 };
-    }
-    if (name === "ArmRight" || name === "ArmRight2") {
-      const phase = name.endsWith("2") ? swing : -swing;
-      return { x: phase * 0.55, z: -0.12 };
-    }
+    if (name === "ArmLeft") return { x: swing * 0.55, z: 0.12 };
+    if (name === "ArmRight") return { x: -swing * 0.55, z: -0.12 };
+    // Lower blade-arms counter-phase and stay a little more flared.
+    if (name === "ArmLeft2") return { x: -swing * 0.7, y: 0.08, z: 0.28 };
+    if (name === "ArmRight2") return { x: swing * 0.7, y: -0.08, z: -0.28 };
     if (name === "LegLeft") return { x: -swing * 0.7, z: 0 };
     if (name === "LegRight") return { x: swing * 0.7, z: 0 };
     return { x: Math.sin(t * Math.PI * 4) * 0.03, z: 0 };
@@ -573,11 +588,12 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
     }
     const left = name.includes("Left");
     const lower = name.endsWith("2");
-    const lag = lower ? 0.85 : 1;
+    const lag = lower ? 0.75 : 1;
+    const flare = lower ? 0.55 : 0.35;
     return {
-      x: -wind * 1.15 * lag,
-      y: (left ? -1 : 1) * wind * 0.55 * lag,
-      z: (left ? 1 : -1) * (0.15 + wind * 0.35),
+      x: -wind * (lower ? 1.35 : 1.15) * lag,
+      y: (left ? -1 : 1) * wind * (lower ? 0.75 : 0.55) * lag,
+      z: (left ? 1 : -1) * (0.15 + wind * flare),
     };
   }, [...arms, "spine", "chest"]);
 
@@ -588,7 +604,7 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
     return { x: -flinch * 0.25, z: 0 };
   }, [...arms, ...legs, "spine", "chest"]);
 
-  return [idle, walk, attack, hit];
+  return [idle, battle, walk, attack, hit];
 }
 
 function limbClip(

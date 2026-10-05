@@ -1,6 +1,7 @@
 import { addGem, defaultHands } from "./items";
 import { isRaceId } from "./races";
 import {
+  classPointsForLevel,
   emptyEquipment,
   GEAR_SLOTS,
   type ArmorType,
@@ -12,6 +13,7 @@ import {
   type SocketGem,
   type WeaponStyle,
 } from "./types";
+import { SKILLS } from "./skills";
 import type { Snapshot } from "./sim";
 
 export const SAVE_KEY = "vaelus-save-v1";
@@ -39,6 +41,7 @@ export function deserialize(raw: string): SaveFile | null {
     if (!validCharacter(data.character)) return null;
     migrateGear(data.character);
     migrateAttributes(data.character);
+    migrateClassPoints(data.character);
     data.character.name = cleanName(data.character.name);
     data.character.race = isRaceId(data.character.race) ? data.character.race : "human";
     if (!Number.isFinite(data.character.paragon)) data.character.paragon = 0;
@@ -172,6 +175,22 @@ function migrateAttributes(character: Character): void {
   if (!("weapon4" in eq)) eq.weapon4 = null;
 }
 
+
+function migrateClassPoints(character: Character): void {
+  const earned = classPointsForLevel(character.level);
+  let spent = 0;
+  for (const skill of SKILLS) {
+    if (skill.classPoint) spent += character.skillRanks[skill.id] ?? 0;
+  }
+  if (!Number.isFinite(character.unspentClass)) {
+    character.unspentClass = Math.max(0, earned - spent);
+  } else {
+    character.unspentClass = Math.max(0, Math.min(earned, character.unspentClass));
+    if (character.unspentClass + spent > earned) {
+      character.unspentClass = Math.max(0, earned - spent);
+    }
+  }
+}
 
 function validCharacter(character: Character): boolean {
   return (

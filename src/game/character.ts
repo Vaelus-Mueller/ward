@@ -2,6 +2,8 @@ import { equipped, xpToNext } from "./formulas";
 import { ACTIVES, SKILLS, SPEC_LABEL, SECTORS, skillById, type SkillNode } from "./skills";
 import {
   ATTRS,
+  CLASS_POINT_LEVELS,
+  classPointsForLevel,
   MAX_LEVEL,
   PARAGON_CAP,
   PARAGON_SKILL_EVERY,
@@ -25,6 +27,7 @@ export function createCharacter(name = "Exile", race: RaceId = "human"): Charact
     spent: { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 },
     unspentStats: 0,
     unspentSkills: 0,
+    unspentClass: 0,
     skillRanks: {},
     slotted: [null, null, null],
     equipment: emptyEquipment(),
@@ -55,6 +58,7 @@ export function grantXp(c: Character, amount: number): LevelGain {
     c.level += 1;
     c.unspentStats += STAT_POINTS_PER_LEVEL;
     c.unspentSkills += SKILL_POINTS_PER_LEVEL;
+    if ((CLASS_POINT_LEVELS as readonly number[]).includes(c.level)) c.unspentClass += 1;
     levels += 1;
   }
   while (c.level >= MAX_LEVEL && c.paragon < PARAGON_CAP && c.xp >= xpToNext(MAX_LEVEL + c.paragon)) {
@@ -96,6 +100,7 @@ export function retrain(c: Character): boolean {
   c.unspentStats = (c.level - 1) * STAT_POINTS_PER_LEVEL + c.paragon * PARAGON_STAT_POINTS;
   c.skillRanks = {};
   c.unspentSkills = (c.level - 1) * SKILL_POINTS_PER_LEVEL + Math.floor(c.paragon / PARAGON_SKILL_EVERY);
+  c.unspentClass = classPointsForLevel(c.level);
   c.slotted = [null, null, null];
   return true;
 }
@@ -121,8 +126,11 @@ export function canSpendSkill(c: Character, id: string): { ok: boolean; reason: 
   if (!skill) return { ok: false, reason: "Unknown skill." };
   const rank = c.skillRanks[id] ?? 0;
   if (rank >= skill.maxRank) return { ok: false, reason: "Already at max rank." };
-  if (c.unspentSkills <= 0) return { ok: false, reason: "No skill points left." };
-  if (c.level < skill.levelGate) return { ok: false, reason: `Requires level ${skill.levelGate}.` };
+  if (skill.classPoint) {
+    if ((c.unspentClass ?? 0) <= 0) return { ok: false, reason: "No class points left." };
+  } else if (c.unspentSkills <= 0) {
+    return { ok: false, reason: "No skill points left." };
+  }
   for (const req of skill.requires) {
     if ((c.skillRanks[req] ?? 0) < 1) {
       return { ok: false, reason: `Requires ${skillById(req)?.name ?? req}.` };
@@ -140,8 +148,10 @@ export function canSpendSkill(c: Character, id: string): { ok: boolean; reason: 
 
 export function spendSkill(c: Character, id: string): boolean {
   if (!canSpendSkill(c, id).ok) return false;
+  const skill = skillById(id)!;
   c.skillRanks[id] = (c.skillRanks[id] ?? 0) + 1;
-  c.unspentSkills -= 1;
+  if (skill.classPoint) c.unspentClass = Math.max(0, (c.unspentClass ?? 0) - 1);
+  else c.unspentSkills -= 1;
   return true;
 }
 
@@ -187,7 +197,12 @@ export function classTitle(c: Character): string {
 }
 
 export function knownActives(c: Character): SkillNode[] {
-  return SKILLS.filter((skill) => skill.kind !== "passive" && (c.skillRanks[skill.id] ?? 0) > 0);
+  return SKILLS.filter((skill) => {
+    if ((c.skillRanks[skill.id] ?? 0) <= 0) return false;
+    if (skill.kind === "passive" || skill.kind === "key") return false;
+    if (skill.kind === "capstone" && !ACTIVES[skill.id]) return false;
+    return true;
+  });
 }
 
 export function gearCount(c: Character): number {

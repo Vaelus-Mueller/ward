@@ -2,9 +2,19 @@ export const ARENA = { width: 3600, height: 60000, margin: 160 };
 export const BASE_ATTR = 10;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;
+export const CLASS_POINT_LEVELS = [25, 50] as const;
 export const PARAGON_STAT_POINTS = 1;
 export const PARAGON_SKILL_EVERY = 5;
 export const MAX_LEVEL = 100;
+
+/** Class points earned from character level (one at 25, another at 50). */
+export function classPointsForLevel(level: number): number {
+  let total = 0;
+  for (const gate of CLASS_POINT_LEVELS) {
+    if (level >= gate) total += 1;
+  }
+  return total;
+}
 export const PARAGON_CAP = 200;
 export const INVENTORY_CAP = 16;
 export const GEM_QUALITIES = 20;
@@ -241,6 +251,7 @@ export interface Character {
   spent: Record<Attr, number>;
   unspentStats: number;
   unspentSkills: number;
+  unspentClass: number;
   skillRanks: Record<string, number>;
   slotted: [string | null, string | null, string | null];
   equipment: Record<SlotName, Item | null>;

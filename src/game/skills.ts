@@ -16,6 +16,8 @@ export interface SkillNode {
   sectorPoints: number;
   specPoints: number;
   hub: boolean;
+  /** Ring-3 class seal: costs a class point (levels 25 / 50), not a skill point. */
+  classPoint: boolean;
   blurb: string;
 }
 
@@ -126,15 +128,16 @@ function node(
     ring: 1 | 2 | 3 | 4 | 5 | 6 | 7;
     spec?: string | null;
     maxRank?: number;
-    levelGate?: number;
     requires?: string[];
     requiresAny?: string[];
     sectorPoints?: number;
     specPoints?: number;
     hub?: boolean;
+    classPoint?: boolean;
   },
 ): SkillNode {
   const spot = place(partial.sector, partial.offset, partial.radius);
+  const classPoint = partial.classPoint ?? false;
   return {
     id: partial.id,
     name: partial.name,
@@ -144,87 +147,96 @@ function node(
     ring: partial.ring,
     angle: spot.angle,
     radius: spot.radius,
-    maxRank: partial.maxRank ?? (partial.kind === "capstone" ? 1 : 20),
-    levelGate: partial.levelGate ?? (partial.hub ? 1 : 2),
+    maxRank: partial.maxRank ?? (partial.kind === "capstone" || classPoint ? 1 : 20),
+    levelGate: 1,
     requires: partial.requires ?? [],
     requiresAny: partial.requiresAny ?? [],
-    sectorPoints: 0,
-    specPoints: 0,
+    sectorPoints: partial.sectorPoints ?? 0,
+    specPoints: partial.specPoints ?? 0,
     hub: partial.hub ?? false,
+    classPoint,
     blurb: partial.blurb,
   };
 }
 
 export const SKILLS: SkillNode[] = [
-  // —— Holy ——
-  node({ id: "iron-oath", name: "Iron Oath", kind: "passive", sector: "holy", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "Swear to the gate. Armor and melee blows thicken." }),
-  node({ id: "braced-guard", name: "Braced Guard", kind: "passive", sector: "holy", offset: -18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Set your stance. Flat armor each rank." }),
-  node({ id: "stone-skin", name: "Stone Skin", kind: "passive", sector: "holy", offset: 18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Hide hardens. More armor and life." }),
-  node({ id: "bulwark-aura", name: "Bulwark", kind: "aura", sector: "holy", offset: 0, radius: 0.58, ring: 3, requires: ["stone-skin"], blurb: "Hold a warding stance. Drains energy." }),
-  node({ id: "bastion", name: "Bastion", kind: "key", sector: "holy", spec: "bastion", offset: -16, radius: 0.72, ring: 4, levelGate: 6, requires: ["braced-guard"], blurb: "The key of walls. Armor and slow mending." }),
-  node({ id: "iron-blood", name: "Iron Blood", kind: "passive", sector: "holy", spec: "bastion", offset: -22, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "Life pooled behind the wall." }),
-  node({ id: "shield-bash", name: "Shield Bash", kind: "active", sector: "holy", spec: "bastion", offset: -8, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "A short arc that stuns." }),
-  node({ id: "aegis", name: "Aegis", kind: "active", sector: "holy", spec: "bastion", offset: -14, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["iron-blood", "shield-bash"], blurb: "A shell of life that soaks the next blows." }),
-  node({ id: "citadel", name: "Citadel", kind: "capstone", sector: "holy", spec: "bastion", offset: -14, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["aegis"], blurb: "The outer wall. Armor and blows turned aside." }),
+  // —— Holy (offsets positive = away from bleed) ——
+  node({ id: "iron-oath", name: "Iron Oath", kind: "passive", sector: "holy", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "Swear to the gate. Armor and melee blows thicken." }),
+  node({ id: "braced-guard", name: "Braced Guard", kind: "passive", sector: "holy", offset: 8, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Set your stance. Flat armor each rank." }),
+  node({ id: "stone-skin", name: "Stone Skin", kind: "passive", sector: "holy", offset: 20, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Hide hardens. More armor and life." }),
+  node({ id: "oathbound", name: "Oathbound", kind: "passive", sector: "holy", offset: 12, radius: 0.56, ring: 3, classPoint: true, requiresAny: ["braced-guard", "stone-skin"], blurb: "Class seal of the ward. Armor and melee harden." }),
+  node({ id: "bastion", name: "Bastion", kind: "key", sector: "holy", spec: "bastion", offset: 12, radius: 0.72, ring: 4, requires: ["oathbound"], blurb: "Final keystone of walls. Percent armor and melee." }),
+  node({ id: "iron-blood", name: "Iron Blood", kind: "passive", sector: "holy", spec: "bastion", offset: 4, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "Life pooled behind the wall." }),
+  node({ id: "shield-bash", name: "Shield Bash", kind: "active", sector: "holy", spec: "bastion", offset: 16, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "A short arc that stuns." }),
+  node({ id: "bulwark-aura", name: "Bulwark", kind: "aura", sector: "holy", spec: "bastion", offset: 10, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "Hold a warding stance. Drains energy." }),
+  node({ id: "aegis", name: "Aegis", kind: "active", sector: "holy", spec: "bastion", offset: 12, radius: 1.0, ring: 6, requiresAny: ["iron-blood", "shield-bash"], blurb: "A shell of life that soaks the next blows." }),
+  node({ id: "citadel", name: "Citadel", kind: "capstone", sector: "holy", spec: "bastion", offset: 12, radius: 1.14, ring: 7, maxRank: 1, requires: ["bastion"], blurb: "After the Bastion keystone. Percent armor and blows turned aside." }),
 
-  // —— Bleed ——
-  node({ id: "blood-oath", name: "Blood Oath", kind: "passive", sector: "bleed", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "Swear in steel. Melee blows bite deeper." }),
-  node({ id: "heavy-blow", name: "Heavy Blow", kind: "active", sector: "bleed", offset: 0, radius: 0.42, ring: 2, requires: ["blood-oath"], blurb: "A committed strike that staggers." }),
-  node({ id: "cleave", name: "Cleave", kind: "active", sector: "bleed", offset: -16, radius: 0.58, ring: 3, requires: ["heavy-blow"], blurb: "A wide cut in front of you." }),
-  node({ id: "ravager", name: "Ravager", kind: "key", sector: "bleed", spec: "ravager", offset: 16, radius: 0.72, ring: 4, levelGate: 6, requires: ["cleave"], blurb: "The key of breaking. Melee hits harder." }),
-  node({ id: "wrath-speed", name: "Wrath Pace", kind: "passive", sector: "bleed", spec: "ravager", offset: 8, radius: 0.86, ring: 5, requires: ["ravager"], blurb: "Faster swings." }),
-  node({ id: "ruin-strike", name: "Ruin Strike", kind: "active", sector: "bleed", spec: "ravager", offset: 22, radius: 0.86, ring: 5, requires: ["ravager"], blurb: "One heavy blow. Long recovery." }),
-  node({ id: "breaker", name: "Breaker", kind: "active", sector: "bleed", spec: "ravager", offset: 14, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["wrath-speed", "ruin-strike"], blurb: "A shockwave around you." }),
-  node({ id: "sundering", name: "Sundering", kind: "capstone", sector: "bleed", spec: "ravager", offset: 14, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["breaker"], blurb: "A wider shock that staggers everything close." }),
+  // —— Bleed (offsets negative = away from holy) ——
+  node({ id: "blood-oath", name: "Blood Oath", kind: "passive", sector: "bleed", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "Swear in steel. Melee blows bite deeper." }),
+  node({ id: "heavy-blow", name: "Heavy Blow", kind: "active", sector: "bleed", offset: -8, radius: 0.42, ring: 2, requires: ["blood-oath"], blurb: "A committed strike that staggers." }),
+  node({ id: "cleave", name: "Cleave", kind: "active", sector: "bleed", offset: -20, radius: 0.42, ring: 2, requires: ["blood-oath"], blurb: "A wide cut in front of you." }),
+  node({ id: "bloodmarked", name: "Bloodmarked", kind: "passive", sector: "bleed", offset: -12, radius: 0.56, ring: 3, classPoint: true, requiresAny: ["heavy-blow", "cleave"], blurb: "Class seal of steel. Melee damage rises." }),
+  node({ id: "ravager", name: "Ravager", kind: "key", sector: "bleed", spec: "ravager", offset: -12, radius: 0.72, ring: 4, requires: ["bloodmarked"], blurb: "Final keystone of breaking. Percent melee damage." }),
+  node({ id: "wrath-speed", name: "Wrath Pace", kind: "passive", sector: "bleed", spec: "ravager", offset: -4, radius: 0.86, ring: 5, requires: ["ravager"], blurb: "Faster swings." }),
+  node({ id: "ruin-strike", name: "Ruin Strike", kind: "active", sector: "bleed", spec: "ravager", offset: -18, radius: 0.86, ring: 5, requires: ["ravager"], blurb: "One heavy blow. Long recovery." }),
+  node({ id: "breaker", name: "Breaker", kind: "active", sector: "bleed", spec: "ravager", offset: -12, radius: 1.0, ring: 6, requiresAny: ["wrath-speed", "ruin-strike"], blurb: "A shockwave around you." }),
+  node({ id: "sundering", name: "Sundering", kind: "capstone", sector: "bleed", spec: "ravager", offset: -12, radius: 1.14, ring: 7, maxRank: 1, requires: ["ravager"], blurb: "After the Ravager keystone. Percent melee damage." }),
 
   // —— Air ——
-  node({ id: "keen-edge", name: "Keen Edge", kind: "passive", sector: "air", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "The first cut is the true one. Crit and a lighter step." }),
-  node({ id: "fleet-step", name: "Fleet Step", kind: "passive", sector: "air", offset: -18, radius: 0.42, ring: 2, requires: ["keen-edge"], blurb: "Move faster each rank." }),
-  node({ id: "lunge", name: "Lunge", kind: "active", sector: "air", offset: 0, radius: 0.42, ring: 2, requires: ["keen-edge"], blurb: "Dash and strike along your facing." }),
-  node({ id: "knife-fan", name: "Knife Fan", kind: "active", sector: "air", offset: -12, radius: 0.58, ring: 3, requires: ["lunge"], blurb: "Three knives in a spread." }),
-  node({ id: "slip", name: "Slip", kind: "active", sector: "air", offset: 14, radius: 0.58, ring: 3, requires: ["fleet-step"], blurb: "A brief step out of harm and a burst of speed." }),
-  node({ id: "marksman", name: "Marksman", kind: "key", sector: "air", spec: "marksman", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requiresAny: ["knife-fan", "lunge"], blurb: "The key of thrown and shot weapons." }),
-  node({ id: "keen-eye", name: "Keen Eye", kind: "passive", sector: "air", spec: "marksman", offset: -10, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "Attack rating, so fewer swings miss." }),
-  node({ id: "piercing-throw", name: "Piercing Throw", kind: "active", sector: "air", spec: "marksman", offset: 12, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "A hard thrown blade." }),
-  node({ id: "ash-rain", name: "Ash Rain", kind: "active", sector: "air", spec: "marksman", offset: 0, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["keen-eye", "piercing-throw"], blurb: "Blades outward in a ring." }),
-  node({ id: "deadeye", name: "Deadeye", kind: "capstone", sector: "air", spec: "marksman", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["ash-rain"], blurb: "Thrown weapons bite deeper, and crit more often." }),
+  node({ id: "keen-edge", name: "Keen Edge", kind: "passive", sector: "air", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "The first cut is the true one. Crit and a lighter step." }),
+  node({ id: "fleet-step", name: "Fleet Step", kind: "passive", sector: "air", offset: -14, radius: 0.42, ring: 2, requires: ["keen-edge"], blurb: "Move faster each rank." }),
+  node({ id: "lunge", name: "Lunge", kind: "active", sector: "air", offset: 10, radius: 0.42, ring: 2, requires: ["keen-edge"], blurb: "Dash and strike along your facing." }),
+  node({ id: "windmark", name: "Windmark", kind: "passive", sector: "air", offset: 0, radius: 0.56, ring: 3, classPoint: true, requiresAny: ["fleet-step", "lunge"], blurb: "Class seal of the gale. Projectile and thrown damage." }),
+  node({ id: "marksman", name: "Marksman", kind: "key", sector: "air", spec: "marksman", offset: 0, radius: 0.72, ring: 4, requires: ["windmark"], blurb: "Final keystone of thrown and shot weapons." }),
+  node({ id: "knife-fan", name: "Knife Fan", kind: "active", sector: "air", offset: -14, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "Three knives in a spread." }),
+  node({ id: "slip", name: "Slip", kind: "active", sector: "air", offset: 14, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "A brief step out of harm and a burst of speed." }),
+  node({ id: "keen-eye", name: "Keen Eye", kind: "passive", sector: "air", spec: "marksman", offset: -6, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "Attack rating, so fewer swings miss." }),
+  node({ id: "piercing-throw", name: "Piercing Throw", kind: "active", sector: "air", spec: "marksman", offset: 6, radius: 0.86, ring: 5, requires: ["marksman"], blurb: "A hard thrown blade." }),
+  node({ id: "ash-rain", name: "Ash Rain", kind: "active", sector: "air", spec: "marksman", offset: 0, radius: 1.0, ring: 6, requiresAny: ["keen-eye", "piercing-throw"], blurb: "Blades outward in a ring." }),
+  node({ id: "deadeye", name: "Deadeye", kind: "capstone", sector: "air", spec: "marksman", offset: 0, radius: 1.14, ring: 7, maxRank: 1, requires: ["marksman"], blurb: "After the Marksman keystone. Percent projectile damage and crit." }),
 
   // —— Poison ——
-  node({ id: "open-vein", name: "Open Vein", kind: "passive", sector: "poison", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "Hits can bleed and poison the wound." }),
-  node({ id: "toxin-coat", name: "Toxin Coat", kind: "passive", sector: "poison", offset: -14, radius: 0.42, ring: 2, requires: ["open-vein"], blurb: "Bleeds land more readily." }),
-  node({ id: "cutpurse", name: "Cutpurse", kind: "key", sector: "poison", spec: "cutpurse", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requires: ["toxin-coat"], blurb: "The key of bleeding targets and found coin." }),
+  node({ id: "open-vein", name: "Open Vein", kind: "passive", sector: "poison", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "Hits can bleed and poison the wound." }),
+  node({ id: "toxin-coat", name: "Toxin Coat", kind: "passive", sector: "poison", offset: -10, radius: 0.42, ring: 2, requires: ["open-vein"], blurb: "Bleeds land more readily." }),
+  node({ id: "venomark", name: "Venomark", kind: "passive", sector: "poison", offset: 0, radius: 0.56, ring: 3, classPoint: true, requires: ["toxin-coat"], blurb: "Class seal of venom. Bleed chance and melee bite." }),
+  node({ id: "cutpurse", name: "Cutpurse", kind: "key", sector: "poison", spec: "cutpurse", offset: 0, radius: 0.72, ring: 4, requires: ["venomark"], blurb: "Final keystone of bleeding targets." }),
   node({ id: "deep-cut", name: "Deep Cut", kind: "passive", sector: "poison", spec: "cutpurse", offset: -12, radius: 0.86, ring: 5, requires: ["cutpurse"], blurb: "Bleeds land more often." }),
   node({ id: "tendon-cut", name: "Tendon Cut", kind: "active", sector: "poison", spec: "cutpurse", offset: 12, radius: 0.86, ring: 5, requires: ["cutpurse"], blurb: "A cut that slows." }),
-  node({ id: "veiled-strike", name: "Veiled Strike", kind: "active", sector: "poison", spec: "cutpurse", offset: 0, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["deep-cut", "tendon-cut"], blurb: "Dash through them. Far more likely to critical." }),
-  node({ id: "hemorrhage", name: "Hemorrhage", kind: "capstone", sector: "poison", spec: "cutpurse", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["veiled-strike"], blurb: "Opened wounds bleed harder and more often." }),
+  node({ id: "veiled-strike", name: "Veiled Strike", kind: "active", sector: "poison", spec: "cutpurse", offset: 0, radius: 1.0, ring: 6, requiresAny: ["deep-cut", "tendon-cut"], blurb: "Dash through them. Far more likely to critical." }),
+  node({ id: "hemorrhage", name: "Hemorrhage", kind: "capstone", sector: "poison", spec: "cutpurse", offset: 0, radius: 1.14, ring: 7, maxRank: 1, requires: ["cutpurse"], blurb: "After the Cutpurse keystone. Percent bleed chance and melee." }),
 
   // —— Fire ——
-  node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "fire", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "A coal under the ash. Energy returns faster." }),
-  node({ id: "kindling", name: "Kindling", kind: "passive", sector: "fire", offset: -12, radius: 0.42, ring: 2, requires: ["ember-flow"], blurb: "Spells burn hotter." }),
-  node({ id: "pyre", name: "Pyre", kind: "key", sector: "fire", spec: "pyre", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requires: ["kindling"], blurb: "The key of fire." }),
+  node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "fire", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "A coal under the ash. Energy returns faster." }),
+  node({ id: "kindling", name: "Kindling", kind: "passive", sector: "fire", offset: -10, radius: 0.42, ring: 2, requires: ["ember-flow"], blurb: "Spells burn hotter." }),
+  node({ id: "ashmark", name: "Ashmark", kind: "passive", sector: "fire", offset: 0, radius: 0.56, ring: 3, classPoint: true, requires: ["kindling"], blurb: "Class seal of flame. Percent spell damage." }),
+  node({ id: "pyre", name: "Pyre", kind: "key", sector: "fire", spec: "pyre", offset: 0, radius: 0.72, ring: 4, requires: ["ashmark"], blurb: "Final keystone of fire. Percent spell damage." }),
   node({ id: "cinder-lance", name: "Cinder Lance", kind: "active", sector: "fire", spec: "pyre", offset: -10, radius: 0.86, ring: 5, requires: ["pyre"], blurb: "A burning lance." }),
   node({ id: "ash-plume", name: "Ash Plume", kind: "passive", sector: "fire", spec: "pyre", offset: 12, radius: 0.86, ring: 5, requires: ["pyre"], blurb: "Spell power from the rising ash." }),
-  node({ id: "conflagration", name: "Conflagration", kind: "active", sector: "fire", spec: "pyre", offset: 0, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["cinder-lance", "ash-plume"], blurb: "Fire in every direction." }),
-  node({ id: "inferno", name: "Inferno", kind: "capstone", sector: "fire", spec: "pyre", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["conflagration"], blurb: "A larger fire that keeps burning." }),
+  node({ id: "conflagration", name: "Conflagration", kind: "active", sector: "fire", spec: "pyre", offset: 0, radius: 1.0, ring: 6, requiresAny: ["cinder-lance", "ash-plume"], blurb: "Fire in every direction." }),
+  node({ id: "inferno", name: "Inferno", kind: "capstone", sector: "fire", spec: "pyre", offset: 0, radius: 1.14, ring: 7, maxRank: 1, requires: ["pyre"], blurb: "After the Pyre keystone. Percent spell damage." }),
 
   // —— Water ——
-  node({ id: "reservoir", name: "Reservoir", kind: "passive", sector: "water", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "A deep well of energy." }),
-  node({ id: "spark", name: "Spark", kind: "active", sector: "water", offset: 0, radius: 0.42, ring: 2, requires: ["reservoir"], blurb: "A fast bolt of cold light." }),
-  node({ id: "frost-ring", name: "Rime Ring", kind: "active", sector: "water", offset: -12, radius: 0.58, ring: 3, requires: ["spark"], blurb: "A cold ring that slows." }),
-  node({ id: "mend", name: "Mend", kind: "channel", sector: "water", offset: 14, radius: 0.58, ring: 3, requires: ["reservoir"], blurb: "Channel to knit wounds. Stun or knockback breaks it." }),
-  node({ id: "tide", name: "Tide", kind: "key", sector: "water", spec: "tide", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requiresAny: ["frost-ring", "mend"], blurb: "The key of tides and frost breath." }),
-  node({ id: "undertow", name: "Undertow", kind: "passive", sector: "water", spec: "tide", offset: -10, radius: 0.86, ring: 5, requires: ["tide"], blurb: "Slows linger; energy wells deeper." }),
+  node({ id: "reservoir", name: "Reservoir", kind: "passive", sector: "water", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "A deep well of energy." }),
+  node({ id: "spark", name: "Spark", kind: "active", sector: "water", offset: -8, radius: 0.42, ring: 2, requires: ["reservoir"], blurb: "A fast bolt of cold light." }),
+  node({ id: "mend", name: "Mend", kind: "channel", sector: "water", offset: 12, radius: 0.42, ring: 2, requires: ["reservoir"], blurb: "Channel to knit wounds. Stun or knockback breaks it." }),
+  node({ id: "tidemark", name: "Tidemark", kind: "passive", sector: "water", offset: 0, radius: 0.56, ring: 3, classPoint: true, requiresAny: ["spark", "mend"], blurb: "Class seal of the tide. Percent spell damage." }),
+  node({ id: "tide", name: "Tide", kind: "key", sector: "water", spec: "tide", offset: 0, radius: 0.72, ring: 4, requires: ["tidemark"], blurb: "Final keystone of tides. Percent frost spell damage." }),
+  node({ id: "frost-ring", name: "Rime Ring", kind: "active", sector: "water", offset: -12, radius: 0.86, ring: 5, requires: ["tide"], blurb: "A cold ring that slows." }),
+  node({ id: "undertow", name: "Undertow", kind: "passive", sector: "water", spec: "tide", offset: -4, radius: 0.86, ring: 5, requires: ["tide"], blurb: "Slows linger; energy wells deeper." }),
   node({ id: "glacier-bolt", name: "Glacier Bolt", kind: "active", sector: "water", spec: "tide", offset: 12, radius: 0.86, ring: 5, requires: ["tide"], blurb: "A heavy frost bolt." }),
-  node({ id: "maelstrom", name: "Maelstrom", kind: "active", sector: "water", spec: "tide", offset: 0, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["undertow", "glacier-bolt"], blurb: "A spinning ring of ice and tide." }),
-  node({ id: "deluge", name: "Deluge", kind: "capstone", sector: "water", spec: "tide", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["maelstrom"], blurb: "A crushing wave that freezes the field." }),
+  node({ id: "maelstrom", name: "Maelstrom", kind: "active", sector: "water", spec: "tide", offset: 0, radius: 1.0, ring: 6, requiresAny: ["undertow", "glacier-bolt"], blurb: "A spinning ring of ice and tide." }),
+  node({ id: "deluge", name: "Deluge", kind: "capstone", sector: "water", spec: "tide", offset: 0, radius: 1.14, ring: 7, maxRank: 1, requires: ["tide"], blurb: "After the Tide keystone. Percent spell damage." }),
 
   // —— Unholy ——
-  node({ id: "first-rite", name: "First Rite", kind: "passive", sector: "unholy", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "The opening verse. Spell power and energy." }),
-  node({ id: "cantor", name: "Cantor", kind: "key", sector: "unholy", spec: "cantor", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requires: ["first-rite"], blurb: "The key of chants, wards, and breath." }),
+  node({ id: "first-rite", name: "First Rite", kind: "passive", sector: "unholy", offset: 0, radius: 0.26, ring: 1, hub: true, blurb: "The opening verse. Spell power and energy." }),
+  node({ id: "vespers", name: "Vespers", kind: "passive", sector: "unholy", offset: 0, radius: 0.42, ring: 2, requires: ["first-rite"], blurb: "A quiet verse. Spell power each rank." }),
+  node({ id: "darkmark", name: "Darkmark", kind: "passive", sector: "unholy", offset: 0, radius: 0.56, ring: 3, classPoint: true, requires: ["vespers"], blurb: "Class seal of the chant. Percent spell damage." }),
+  node({ id: "cantor", name: "Cantor", kind: "key", sector: "unholy", spec: "cantor", offset: 0, radius: 0.72, ring: 4, requires: ["darkmark"], blurb: "Final keystone of chants. Percent spell damage." }),
   node({ id: "breath", name: "Breath", kind: "passive", sector: "unholy", spec: "cantor", offset: -12, radius: 0.86, ring: 5, requires: ["cantor"], blurb: "A steadier return of energy." }),
   node({ id: "ward-chant", name: "Ward Chant", kind: "aura", sector: "unholy", spec: "cantor", offset: 12, radius: 0.86, ring: 5, requires: ["cantor"], blurb: "A sung ward. Drains energy while it holds." }),
-  node({ id: "litany", name: "Litany", kind: "channel", sector: "unholy", spec: "cantor", offset: 0, radius: 1.0, ring: 6, levelGate: 10, requiresAny: ["breath", "ward-chant"], blurb: "Channel life and energy. Stun or knockback breaks it." }),
-  node({ id: "benediction", name: "Benediction", kind: "capstone", sector: "unholy", spec: "cantor", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["litany"], blurb: "The outer chant. Life and energy return faster." }),
+  node({ id: "litany", name: "Litany", kind: "channel", sector: "unholy", spec: "cantor", offset: 0, radius: 1.0, ring: 6, requiresAny: ["breath", "ward-chant"], blurb: "Channel life and energy. Stun or knockback breaks it." }),
+  node({ id: "benediction", name: "Benediction", kind: "capstone", sector: "unholy", spec: "cantor", offset: 0, radius: 1.14, ring: 7, maxRank: 1, requires: ["cantor"], blurb: "After the Cantor keystone. Percent spell damage and recovery." }),
 ];
 
 const byId = new Map(SKILLS.map((skill) => [skill.id, skill]));
@@ -237,33 +249,44 @@ export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
   "iron-oath": { armor: 1.2, meleeMult: 0.005 },
   "braced-guard": { armor: 6 },
   "stone-skin": { armorPct: 0.04, life: 5 },
-  bastion: { armor: 1.6, lifeRegen: 0.055 },
+  oathbound: { armorPct: 0.06, meleeMult: 0.04 },
+  bastion: { armorPct: 0.02, meleeMult: 0.008 },
   "iron-blood": { life: 12 },
-  citadel: { armor: 40, damageReduction: 0.08 },
+  citadel: { armorPct: 0.15, damageReduction: 0.08 },
   "blood-oath": { meleeMult: 0.01, crit: 0.002 },
-  ravager: { meleeMult: 0.01 },
+  bloodmarked: { meleeMult: 0.06 },
+  ravager: { meleeMult: 0.012 },
   "wrath-speed": { attackSpeed: 0.045 },
+  sundering: { meleeMult: 0.18 },
   "keen-edge": { crit: 0.004, moveSpeed: 0.004 },
   "fleet-step": { moveSpeed: 0.05 },
-  marksman: { projectileMult: 0.01 },
+  windmark: { projectileMult: 0.06 },
+  marksman: { projectileMult: 0.012 },
   "keen-eye": { attackRating: 10 },
-  deadeye: { projectileMult: 0.12, crit: 0.04 },
+  deadeye: { projectileMult: 0.16, crit: 0.05 },
   "open-vein": { bleedChance: 0.07 },
   "toxin-coat": { bleedChance: 0.04 },
-  cutpurse: { crit: 0.003, goldFind: 0.012 },
+  venomark: { bleedChance: 0.08, meleeMult: 0.04 },
+  cutpurse: { bleedChance: 0.01, meleeMult: 0.008 },
   "deep-cut": { bleedChance: 0.06 },
-  hemorrhage: { bleedChance: 0.12 },
+  hemorrhage: { bleedChance: 0.14, meleeMult: 0.1 },
   "ember-flow": { energyRegen: 0.4 },
   kindling: { spellMult: 0.035 },
-  pyre: { spellMult: 0.01 },
+  ashmark: { spellMult: 0.06 },
+  pyre: { spellMult: 0.012 },
   "ash-plume": { spellMult: 0.02, energyRegen: 0.15 },
+  inferno: { spellMult: 0.18 },
   reservoir: { energy: 8 },
-  tide: { energy: 2, cdr: 0.004 },
+  tidemark: { spellMult: 0.06 },
+  tide: { spellMult: 0.01, cdr: 0.004 },
   undertow: { energy: 4, energyRegen: 0.2 },
+  deluge: { spellMult: 0.16 },
   "first-rite": { spellMult: 0.01, energy: 1 },
-  cantor: { energy: 1.2, cdr: 0.004 },
+  vespers: { spellMult: 0.02 },
+  darkmark: { spellMult: 0.06 },
+  cantor: { spellMult: 0.01, cdr: 0.004 },
   breath: { energyRegen: 0.45 },
-  benediction: { lifeRegen: 1.2, energyRegen: 0.8 },
+  benediction: { spellMult: 0.12, lifeRegen: 0.8, energyRegen: 0.5 },
 };
 
 /** Target (mult × shots / cooldown) for damaging actives at rank 1, before CDR. */
@@ -409,8 +432,6 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     aura: { damageReduction: 0.12, armor: 10 },
   }),
   litany: act({ kind: "channel", color: "#f3e9ff", energyCost: 0, cooldown: 12, channelTime: 2.4, healFrac: 0.16 }),
-  sundering: act({ kind: "nova", color: "#c4532a", energyCost: 22, cooldown: 14, mult: dpsMult(14), range: 180, stun: 0.45 }),
-  inferno: act({ kind: "nova", color: "#ff5a1f", energyCost: 24, cooldown: 13, scaling: "spell", mult: dpsMult(13), range: 210, burn: 7 }),
   "glacier-bolt": act({
     kind: "projectile",
     color: "#b9d4ff",
@@ -434,18 +455,6 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     slow: 0.4,
     slowDur: 2.2,
   }),
-  deluge: act({
-    kind: "nova",
-    color: "#6aa8ff",
-    energyCost: 24,
-    cooldown: 14,
-    scaling: "spell",
-    mult: dpsMult(14),
-    range: 220,
-    slow: 0.5,
-    slowDur: 2.8,
-    stun: 0.25,
-  }),
 };
 
 /**
@@ -465,230 +474,229 @@ export const SKILL_SYNERGIES: Record<string, SynergyLink[]> = {
   // Holy
   "braced-guard": [{ from: "iron-oath", powerPerRank: 0.02 }],
   "stone-skin": [{ from: "iron-oath", powerPerRank: 0.02 }],
-  "bulwark-aura": [
-    { from: "stone-skin", powerPerRank: 0.025 },
-    { from: "braced-guard", powerPerRank: 0.025 },
-    { from: "iron-oath", powerPerRank: 0.015 },
-  ],
-  bastion: [
+  oathbound: [
     { from: "braced-guard", powerPerRank: 0.02 },
     { from: "stone-skin", powerPerRank: 0.02 },
-    { from: "iron-oath", powerPerRank: 0.015 },
+  ],
+  bastion: [
+    { from: "oathbound", powerPerRank: 0.03 },
+    { from: "braced-guard", powerPerRank: 0.015 },
+    { from: "stone-skin", powerPerRank: 0.015 },
   ],
   "iron-blood": [
     { from: "bastion", powerPerRank: 0.025 },
     { from: "stone-skin", powerPerRank: 0.02 },
-    { from: "braced-guard", powerPerRank: 0.015 },
   ],
   "shield-bash": [
     { from: "bastion", powerPerRank: 0.03 },
-    { from: "braced-guard", powerPerRank: 0.025 },
-    { from: "iron-oath", powerPerRank: 0.015 },
+    { from: "braced-guard", powerPerRank: 0.02 },
+  ],
+  "bulwark-aura": [
+    { from: "bastion", powerPerRank: 0.025 },
+    { from: "stone-skin", powerPerRank: 0.02 },
   ],
   aegis: [
     { from: "shield-bash", powerPerRank: 0.025 },
     { from: "iron-blood", powerPerRank: 0.03 },
     { from: "bastion", powerPerRank: 0.02 },
-    { from: "braced-guard", powerPerRank: 0.015 },
   ],
   citadel: [
-    { from: "aegis", powerPerRank: 0.03 },
-    { from: "iron-blood", powerPerRank: 0.025 },
-    { from: "bastion", powerPerRank: 0.02 },
-    { from: "stone-skin", powerPerRank: 0.015 },
+    { from: "bastion", powerPerRank: 0.04 },
+    { from: "oathbound", powerPerRank: 0.03 },
+    { from: "iron-blood", powerPerRank: 0.02 },
   ],
 
   // Bleed
   "heavy-blow": [{ from: "blood-oath", powerPerRank: 0.035 }],
   cleave: [
-    { from: "heavy-blow", powerPerRank: 0.03 },
-    { from: "blood-oath", powerPerRank: 0.02 },
+    { from: "blood-oath", powerPerRank: 0.03 },
+  ],
+  bloodmarked: [
+    { from: "heavy-blow", powerPerRank: 0.025 },
+    { from: "cleave", powerPerRank: 0.025 },
   ],
   ravager: [
-    { from: "heavy-blow", powerPerRank: 0.025 },
-    { from: "cleave", powerPerRank: 0.02 },
-    { from: "blood-oath", powerPerRank: 0.015 },
+    { from: "bloodmarked", powerPerRank: 0.03 },
+    { from: "heavy-blow", powerPerRank: 0.02 },
+    { from: "cleave", powerPerRank: 0.015 },
   ],
   "wrath-speed": [
     { from: "ravager", powerPerRank: 0.025 },
-    { from: "heavy-blow", powerPerRank: 0.02 },
     { from: "blood-oath", powerPerRank: 0.015 },
   ],
   "ruin-strike": [
     { from: "ravager", powerPerRank: 0.03 },
-    { from: "heavy-blow", powerPerRank: 0.03 },
-    { from: "cleave", powerPerRank: 0.02 },
+    { from: "heavy-blow", powerPerRank: 0.025 },
   ],
   breaker: [
     { from: "ruin-strike", powerPerRank: 0.03 },
     { from: "cleave", powerPerRank: 0.025 },
     { from: "wrath-speed", powerPerRank: 0.02 },
-    { from: "heavy-blow", powerPerRank: 0.015 },
   ],
   sundering: [
-    { from: "breaker", powerPerRank: 0.035 },
-    { from: "ruin-strike", powerPerRank: 0.025 },
-    { from: "cleave", powerPerRank: 0.02 },
-    { from: "ravager", powerPerRank: 0.015 },
+    { from: "ravager", powerPerRank: 0.04 },
+    { from: "bloodmarked", powerPerRank: 0.03 },
+    { from: "ruin-strike", powerPerRank: 0.02 },
   ],
 
   // Air
   "fleet-step": [{ from: "keen-edge", powerPerRank: 0.02 }],
   lunge: [{ from: "keen-edge", powerPerRank: 0.035 }],
-  "knife-fan": [
-    { from: "lunge", powerPerRank: 0.03 },
-    { from: "keen-edge", powerPerRank: 0.02 },
-  ],
-  slip: [
-    { from: "fleet-step", powerPerRank: 0.03 },
-    { from: "keen-edge", powerPerRank: 0.02 },
+  windmark: [
+    { from: "fleet-step", powerPerRank: 0.025 },
+    { from: "lunge", powerPerRank: 0.025 },
   ],
   marksman: [
-    { from: "knife-fan", powerPerRank: 0.025 },
+    { from: "windmark", powerPerRank: 0.03 },
     { from: "lunge", powerPerRank: 0.02 },
     { from: "keen-edge", powerPerRank: 0.015 },
   ],
+  "knife-fan": [
+    { from: "marksman", powerPerRank: 0.03 },
+    { from: "lunge", powerPerRank: 0.02 },
+  ],
+  slip: [
+    { from: "marksman", powerPerRank: 0.025 },
+    { from: "fleet-step", powerPerRank: 0.025 },
+  ],
   "keen-eye": [
     { from: "marksman", powerPerRank: 0.025 },
-    { from: "knife-fan", powerPerRank: 0.02 },
     { from: "keen-edge", powerPerRank: 0.015 },
   ],
   "piercing-throw": [
     { from: "marksman", powerPerRank: 0.03 },
-    { from: "knife-fan", powerPerRank: 0.025 },
-    { from: "keen-eye", powerPerRank: 0.02 },
+    { from: "knife-fan", powerPerRank: 0.02 },
   ],
   "ash-rain": [
     { from: "piercing-throw", powerPerRank: 0.03 },
     { from: "knife-fan", powerPerRank: 0.025 },
-    { from: "keen-eye", powerPerRank: 0.02 },
     { from: "marksman", powerPerRank: 0.015 },
   ],
   deadeye: [
-    { from: "ash-rain", powerPerRank: 0.03 },
-    { from: "piercing-throw", powerPerRank: 0.025 },
-    { from: "keen-eye", powerPerRank: 0.02 },
-    { from: "marksman", powerPerRank: 0.015 },
+    { from: "marksman", powerPerRank: 0.04 },
+    { from: "windmark", powerPerRank: 0.03 },
+    { from: "piercing-throw", powerPerRank: 0.02 },
   ],
 
   // Poison
   "toxin-coat": [{ from: "open-vein", powerPerRank: 0.025 }],
-  cutpurse: [
-    { from: "toxin-coat", powerPerRank: 0.025 },
+  venomark: [
+    { from: "toxin-coat", powerPerRank: 0.03 },
     { from: "open-vein", powerPerRank: 0.02 },
+  ],
+  cutpurse: [
+    { from: "venomark", powerPerRank: 0.03 },
+    { from: "toxin-coat", powerPerRank: 0.02 },
   ],
   "deep-cut": [
     { from: "cutpurse", powerPerRank: 0.025 },
-    { from: "open-vein", powerPerRank: 0.025 },
-    { from: "toxin-coat", powerPerRank: 0.015 },
+    { from: "open-vein", powerPerRank: 0.02 },
   ],
   "tendon-cut": [
     { from: "cutpurse", powerPerRank: 0.03 },
-    { from: "open-vein", powerPerRank: 0.025 },
-    { from: "toxin-coat", powerPerRank: 0.015 },
+    { from: "toxin-coat", powerPerRank: 0.02 },
   ],
   "veiled-strike": [
     { from: "tendon-cut", powerPerRank: 0.03 },
     { from: "deep-cut", powerPerRank: 0.025 },
-    { from: "open-vein", powerPerRank: 0.02 },
-    { from: "toxin-coat", powerPerRank: 0.015 },
+    { from: "cutpurse", powerPerRank: 0.015 },
   ],
   hemorrhage: [
-    { from: "veiled-strike", powerPerRank: 0.03 },
-    { from: "deep-cut", powerPerRank: 0.025 },
-    { from: "open-vein", powerPerRank: 0.02 },
-    { from: "cutpurse", powerPerRank: 0.015 },
+    { from: "cutpurse", powerPerRank: 0.04 },
+    { from: "venomark", powerPerRank: 0.03 },
+    { from: "deep-cut", powerPerRank: 0.02 },
   ],
 
   // Fire
   kindling: [{ from: "ember-flow", powerPerRank: 0.025 }],
-  pyre: [
-    { from: "kindling", powerPerRank: 0.025 },
+  ashmark: [
+    { from: "kindling", powerPerRank: 0.03 },
     { from: "ember-flow", powerPerRank: 0.02 },
+  ],
+  pyre: [
+    { from: "ashmark", powerPerRank: 0.03 },
+    { from: "kindling", powerPerRank: 0.02 },
   ],
   "cinder-lance": [
     { from: "pyre", powerPerRank: 0.03 },
-    { from: "kindling", powerPerRank: 0.025 },
-    { from: "ember-flow", powerPerRank: 0.015 },
+    { from: "kindling", powerPerRank: 0.02 },
   ],
   "ash-plume": [
     { from: "pyre", powerPerRank: 0.025 },
-    { from: "kindling", powerPerRank: 0.02 },
     { from: "ember-flow", powerPerRank: 0.015 },
   ],
   conflagration: [
     { from: "cinder-lance", powerPerRank: 0.03 },
     { from: "ash-plume", powerPerRank: 0.025 },
-    { from: "kindling", powerPerRank: 0.02 },
     { from: "pyre", powerPerRank: 0.015 },
   ],
   inferno: [
-    { from: "conflagration", powerPerRank: 0.035 },
-    { from: "cinder-lance", powerPerRank: 0.025 },
-    { from: "kindling", powerPerRank: 0.02 },
-    { from: "ash-plume", powerPerRank: 0.015 },
+    { from: "pyre", powerPerRank: 0.04 },
+    { from: "ashmark", powerPerRank: 0.03 },
+    { from: "cinder-lance", powerPerRank: 0.02 },
   ],
 
   // Water
   spark: [{ from: "reservoir", powerPerRank: 0.035 }],
-  "frost-ring": [
-    { from: "spark", powerPerRank: 0.03 },
-    { from: "reservoir", powerPerRank: 0.02 },
-  ],
-  mend: [
-    { from: "reservoir", powerPerRank: 0.03 },
-    { from: "spark", powerPerRank: 0.015 },
+  mend: [{ from: "reservoir", powerPerRank: 0.03 }],
+  tidemark: [
+    { from: "spark", powerPerRank: 0.025 },
+    { from: "mend", powerPerRank: 0.025 },
   ],
   tide: [
-    { from: "frost-ring", powerPerRank: 0.025 },
-    { from: "mend", powerPerRank: 0.02 },
+    { from: "tidemark", powerPerRank: 0.03 },
     { from: "reservoir", powerPerRank: 0.015 },
+  ],
+  "frost-ring": [
+    { from: "tide", powerPerRank: 0.03 },
+    { from: "spark", powerPerRank: 0.02 },
   ],
   undertow: [
     { from: "tide", powerPerRank: 0.025 },
-    { from: "frost-ring", powerPerRank: 0.02 },
     { from: "reservoir", powerPerRank: 0.015 },
   ],
   "glacier-bolt": [
     { from: "tide", powerPerRank: 0.03 },
-    { from: "spark", powerPerRank: 0.025 },
-    { from: "frost-ring", powerPerRank: 0.02 },
+    { from: "spark", powerPerRank: 0.02 },
   ],
   maelstrom: [
     { from: "glacier-bolt", powerPerRank: 0.03 },
     { from: "undertow", powerPerRank: 0.025 },
-    { from: "frost-ring", powerPerRank: 0.02 },
     { from: "tide", powerPerRank: 0.015 },
   ],
   deluge: [
-    { from: "maelstrom", powerPerRank: 0.035 },
-    { from: "glacier-bolt", powerPerRank: 0.025 },
-    { from: "undertow", powerPerRank: 0.02 },
-    { from: "tide", powerPerRank: 0.015 },
+    { from: "tide", powerPerRank: 0.04 },
+    { from: "tidemark", powerPerRank: 0.03 },
+    { from: "maelstrom", powerPerRank: 0.02 },
   ],
 
   // Unholy
-  cantor: [{ from: "first-rite", powerPerRank: 0.03 }],
+  vespers: [{ from: "first-rite", powerPerRank: 0.025 }],
+  darkmark: [
+    { from: "vespers", powerPerRank: 0.03 },
+    { from: "first-rite", powerPerRank: 0.02 },
+  ],
+  cantor: [
+    { from: "darkmark", powerPerRank: 0.03 },
+    { from: "first-rite", powerPerRank: 0.02 },
+  ],
   breath: [
     { from: "cantor", powerPerRank: 0.025 },
-    { from: "first-rite", powerPerRank: 0.02 },
+    { from: "vespers", powerPerRank: 0.02 },
   ],
   "ward-chant": [
     { from: "cantor", powerPerRank: 0.03 },
-    { from: "breath", powerPerRank: 0.025 },
-    { from: "first-rite", powerPerRank: 0.015 },
+    { from: "breath", powerPerRank: 0.02 },
   ],
   litany: [
     { from: "ward-chant", powerPerRank: 0.03 },
     { from: "breath", powerPerRank: 0.025 },
     { from: "cantor", powerPerRank: 0.02 },
-    { from: "first-rite", powerPerRank: 0.015 },
   ],
   benediction: [
-    { from: "litany", powerPerRank: 0.03 },
-    { from: "breath", powerPerRank: 0.025 },
-    { from: "ward-chant", powerPerRank: 0.02 },
-    { from: "cantor", powerPerRank: 0.015 },
+    { from: "cantor", powerPerRank: 0.04 },
+    { from: "darkmark", powerPerRank: 0.03 },
+    { from: "litany", powerPerRank: 0.02 },
   ],
 };
 
@@ -821,11 +829,14 @@ export function describeSkill(id: string, rank: number, ranks: Record<string, nu
   const skill = skillById(id);
   if (!skill) return "";
   const shown = Math.max(1, rank);
-  if (skill.kind === "passive") {
+  const passiveLike =
+    skill.kind === "passive" || skill.kind === "key" || (skill.kind === "capstone" && !ACTIVES[id]);
+  if (passiveLike) {
     const text = formatMods(passiveContribution(id, shown, ranks));
     const tail = rank > 0 ? text : `${text} at rank 1`;
     const syn = describeSynergies(id, ranks);
-    return `${skill.blurb} ${tail}.${syn}`;
+    const seal = skill.classPoint ? " Costs a class point." : "";
+    return `${skill.blurb}${seal} ${tail}.${syn}`;
   }
   const spec = scaledActive(id, shown, ranks);
   if (!spec) return skill.blurb;

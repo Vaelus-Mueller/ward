@@ -102,7 +102,7 @@
           </div>
           <ul class="help">
             <li>Hold the phone sideways. Left thumb moves. Right thumb attacks.</li>
-            <li>Each level gives 5 attribute points and 1 skill point.</li>
+            <li>Each level gives 5 attribute points and 1 skill point. Class seals on ring 3 cost a class point (one at level 25, another at 50).</li>
             <li>The skill wheel has three paths. Specializations open after you invest in a path.</li>
             <li>Passives are always on. Actives, auras, and channels fill three slots. Hits shorten cooldowns.</li>
           </ul>
@@ -335,28 +335,18 @@
           </header>
           <div class="pack-body">
             <div class="doll" id="doll">
-              <svg class="silhouette" viewBox="0 0 100 220" aria-hidden="true">
-                <g fill="#2c261f" stroke="#8c7355" stroke-width="2" stroke-linejoin="round">
-                  <ellipse cx="50" cy="28" rx="16" ry="18"></ellipse>
-                  <path d="M42 44h16l-2 14H44z"></path>
-                  <path d="M30 62c-8 18-8 46 2 66h36c10-20 10-48 2-66-8-4-14-6-20-6s-12 2-20 6z"></path>
-                  <path d="M30 70 12 118l8 4 16-40z"></path>
-                  <path d="M70 70 88 118l-8 4-16-40z"></path>
-                  <path d="M38 128 32 202h12l6-62z"></path>
-                  <path d="M62 128 68 202H56l-6-62z"></path>
-                </g>
-              </svg>
+              <div id="doll-silhouette" class="doll-silhouette" aria-hidden="true"></div>
               <button id="eq-ear1" class="gear-slot" type="button"></button>
               <button id="eq-head" class="gear-slot" type="button"></button>
               <button id="eq-ear2" class="gear-slot" type="button"></button>
               <button id="eq-neck" class="gear-slot" type="button"></button>
-              <button id="eq-weapon" class="gear-slot" type="button"></button>
+              <button id="eq-weapon" class="gear-slot" type="button" title="Weapon"></button>
               <button id="eq-chest" class="gear-slot" type="button"></button>
-              <button id="eq-offhand" class="gear-slot" type="button"></button>
-              <button id="eq-weapon3" class="gear-slot insect-only hidden" type="button"></button>
+              <button id="eq-offhand" class="gear-slot" type="button" title="Off-hand"></button>
+              <button id="eq-weapon3" class="gear-slot insect-only hidden" type="button" title="Third arm" aria-label="Third arm"></button>
               <button id="eq-gloves" class="gear-slot" type="button"></button>
               <button id="eq-belt" class="gear-slot" type="button"></button>
-              <button id="eq-weapon4" class="gear-slot insect-only hidden" type="button"></button>
+              <button id="eq-weapon4" class="gear-slot insect-only hidden" type="button" title="Fourth arm" aria-label="Fourth arm"></button>
               <button id="eq-ring1" class="gear-slot" type="button"></button>
               <button id="eq-ring2" class="gear-slot" type="button"></button>
               <button id="eq-boots" class="gear-slot" type="button"></button>

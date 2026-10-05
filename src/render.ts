@@ -156,6 +156,7 @@ export class Renderer {
   private roadRough?: THREE.Texture;
   private roadNormal?: THREE.Texture;
   private roadAo?: THREE.Texture;
+  private roadDisp?: THREE.Texture;
   private stoneDisp?: THREE.Texture;
   private lavaDisp?: THREE.Texture;
   private wallDiff?: THREE.Texture;
@@ -291,8 +292,8 @@ export class Renderer {
   lookAt(sim: Sim): void {
     const x = sim.player.x * SCALE;
     const z = sim.player.y * SCALE;
-    this.camera.position.set(x, 12.79, z + 11.88);
-    this.camera.lookAt(x, 1.15, z);
+    this.camera.position.set(x, 9.55, z + 14.05);
+    this.camera.lookAt(x, 0.68, z);
     this.moon.position.set(x - 5, 14, z + 6);
     this.rim.position.set(x + 7, 6, z - 5);
     this.moon.target.position.set(x, 0, z);
@@ -443,6 +444,7 @@ export class Renderer {
         roadRough,
         roadNormal,
         roadAo,
+        roadDisp,
         wallDiff,
         wallRough,
         wallNormal,
@@ -462,6 +464,7 @@ export class Renderer {
         prefer("road_rough_8k.jpg", "road_rough_4k.jpg"),
         prefer("road_nor_gl_8k.jpg", "road_nor_gl_4k.jpg"),
         prefer("road_ao_8k.jpg", "road_ao_4k.jpg"),
+        loader.loadAsync(pbr("road_disp_8k.jpg")).catch(() => null),
         loader.loadAsync(pbr("wall_diff_8k.jpg")).catch(() => null),
         loader.loadAsync(pbr("wall_rough_8k.jpg")).catch(() => null),
         loader.loadAsync(pbr("wall_nor_gl_8k.jpg")).catch(() => null),
@@ -481,6 +484,7 @@ export class Renderer {
       this.roadRough = prepFloor(roadRough, false, anisotropy, 6);
       this.roadNormal = prepFloor(roadNormal, false, anisotropy, 6);
       this.roadAo = prepFloor(roadAo, false, anisotropy, 6);
+      this.roadDisp = roadDisp ? prepFloor(roadDisp, false, anisotropy, 6) : undefined;
       this.wallDiff = wallDiff ? prepFloor(wallDiff, true, anisotropy, 4) : undefined;
       this.wallRough = wallRough ? prepFloor(wallRough, false, anisotropy, 4) : undefined;
       this.wallNormal = wallNormal ? prepFloor(wallNormal, false, anisotropy, 4) : undefined;
@@ -519,18 +523,18 @@ export class Renderer {
       this.groundMat.displacementMap = this.stoneDisp ?? null;
       this.groundMat.displacementScale = this.stoneDisp ? 0.22 : 0;
       this.groundMat.displacementBias = this.stoneDisp ? -0.05 : 0;
-      if (this.groundMat.normalMap) this.groundMat.normalScale.set(1.35, 1.35);
+      if (this.groundMat.normalMap) this.groundMat.normalScale.set(1.7, 1.7);
       this.groundMat.emissiveMap = null;
       this.groundMat.emissive.set(0x000000);
       this.groundMat.emissiveIntensity = 0;
-      this.groundMat.color.set(0xe8e2d6);
+      this.groundMat.color.set(0xdce4ec);
       this.groundMat.roughness = 0.92;
       this.groundMat.metalness = 0.05;
-      this.groundMat.envMapIntensity = 0.55;
+      this.groundMat.envMapIntensity = 0.64;
       this.webgl.setClearColor(0x2e2a26);
       fog.color.set(0x6f675c);
       fog.near = 22;
-      fog.far = 88;
+      fog.far = 105;
       this.hemi.color.set(0xffe8d2);
       this.hemi.groundColor.set(0x4a4034);
       this.hemi.intensity = 1.05;
@@ -543,18 +547,21 @@ export class Renderer {
       this.ember.color.set(0xffa45a);
       this.ember.intensity = 28;
       this.ember.distance = 28;
-      this.tintScenery(0xb8b0a4, 0.88, 0.08, 0.55);
+      this.tintScenery(0xb8b0a4, 0.88, 0.08, 0.62);
       if (this.roadMat) {
         this.roadMat.map = this.roadDiff ?? null;
         this.roadMat.roughnessMap = this.roadRough ?? null;
         this.roadMat.normalMap = this.roadNormal ?? null;
         this.roadMat.aoMap = this.roadAo ?? null;
         this.roadMat.aoMapIntensity = this.roadAo ? 0.8 : 1;
+        this.roadMat.displacementMap = this.roadDisp ?? null;
+        this.roadMat.displacementScale = this.roadDisp ? 0.1 : 0;
+        this.roadMat.displacementBias = this.roadDisp ? -0.025 : 0;
         if (this.roadMat.normalMap) this.roadMat.normalScale.set(1.05, 1.05);
         this.roadMat.color.set(0xd8d0c4);
         this.roadMat.roughness = 0.9;
         this.roadMat.metalness = 0.06;
-        this.roadMat.envMapIntensity = 0.45;
+        this.roadMat.envMapIntensity = 0.52;
         this.roadMat.needsUpdate = true;
       }
     } else {
@@ -577,7 +584,7 @@ export class Renderer {
       this.webgl.setClearColor(0x2a0e0a);
       fog.color.set(0x5a1e12);
       fog.near = 14;
-      fog.far = 64;
+      fog.far = 82;
       this.hemi.color.set(0xffb088);
       this.hemi.groundColor.set(0x4a1408);
       this.hemi.intensity = 0.95;
@@ -590,16 +597,19 @@ export class Renderer {
       this.ember.color.set(0xff4a12);
       this.ember.intensity = 48;
       this.ember.distance = 36;
-      this.tintScenery(0xc4886e, 0.72, 0.14, 0.65);
+      this.tintScenery(0xc4886e, 0.72, 0.14, 0.72);
       if (this.roadMat) {
         this.roadMat.map = this.roadDiff ?? null;
         this.roadMat.roughnessMap = this.roadRough ?? null;
         this.roadMat.normalMap = this.roadNormal ?? null;
         this.roadMat.aoMap = this.roadAo ?? null;
+        this.roadMat.displacementMap = this.roadDisp ?? null;
+        this.roadMat.displacementScale = this.roadDisp ? 0.1 : 0;
+        this.roadMat.displacementBias = this.roadDisp ? -0.025 : 0;
         this.roadMat.color.set(0xc4886e);
         this.roadMat.roughness = 0.78;
         this.roadMat.metalness = 0.08;
-        this.roadMat.envMapIntensity = 0.5;
+        this.roadMat.envMapIntensity = 0.56;
         this.roadMat.needsUpdate = true;
       }
     }
@@ -620,13 +630,21 @@ export class Renderer {
         for (const material of materials) {
           const standard = material as THREE.MeshStandardMaterial;
           if (!standard.color) continue;
-          if (this.wallDiff && (key === "wall" || key === "wall-broken" || key === "wall-arch" || key === "doorway")) {
+          if (
+            this.wallDiff &&
+            (key === "wall" ||
+              key === "wall-broken" ||
+              key === "wall-arch" ||
+              key === "doorway" ||
+              key === "pillar" ||
+              key === "column")
+          ) {
             standard.map = this.wallDiff;
             standard.roughnessMap = this.wallRough ?? null;
             standard.normalMap = this.wallNormal ?? null;
             standard.aoMap = this.wallAo ?? null;
             standard.color.set(0xffffff);
-            if (standard.normalMap) standard.normalScale.set(1.2, 1.2);
+            if (standard.normalMap) standard.normalScale.set(1.45, 1.45);
           } else {
             standard.color.set(hex);
           }
@@ -709,6 +727,9 @@ export class Renderer {
       normalMap: this.roadNormal ?? null,
       aoMap: this.roadAo ?? null,
       aoMapIntensity: 0.8,
+      displacementMap: this.roadDisp ?? null,
+      displacementScale: this.roadDisp ? 0.1 : 0,
+      displacementBias: this.roadDisp ? -0.025 : 0,
     });
     if (this.roadMat.normalMap) this.roadMat.normalScale.set(1.05, 1.05);
     const road = new THREE.Mesh(
@@ -724,6 +745,23 @@ export class Renderer {
       roadGeo.setAttribute("uv2", roadGeo.getAttribute("uv").clone());
     }
     this.scene.add(road);
+    const borderKeys = ["wall", "wall-broken", "column", "pillar", "rubble", "rubble-half", "wall-arch"] as const;
+    const borderStep = 21;
+    const borderXs = [(ROAD_X - 200) * SCALE, (ROAD_X + 200) * SCALE];
+    const borderZHi = Math.max(spine.fromY, spine.toY) * SCALE;
+    const borderZLo = Math.min(spine.fromY, spine.toY) * SCALE;
+    let borderIdx = 0;
+    for (let bz = borderZHi; bz >= borderZLo; bz -= borderStep) {
+      for (let side = 0; side < 2; side++) {
+        const key = borderKeys[borderIdx % borderKeys.length]!;
+        const bx = borderXs[side]!;
+        const rot = (side === 0 ? Math.PI / 2 : -Math.PI / 2) + (borderIdx % 7) * 0.06;
+        const width =
+          key === "wall-arch" ? 3.1 : key === "pillar" || key === "column" ? 2.3 : key.startsWith("rubble") ? 2.6 : 2.5;
+        place(key, bx, bz, rot, width);
+        borderIdx += 1;
+      }
+    }
     // Emissive torch bowls + denser dressing at pack columns.
     const torchMat = new THREE.MeshStandardMaterial({
       color: 0x2a1c12,
@@ -1124,7 +1162,7 @@ function facingOf(enemy: Enemy, sim: Sim): number {
   return Math.atan2(sim.player.y - enemy.y, sim.player.x - enemy.x);
 }
 
-function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number, repeat = 16): THREE.Texture {
+function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number, repeat = 12): THREE.Texture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(repeat, repeat * 0.7);

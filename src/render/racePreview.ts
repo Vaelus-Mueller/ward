@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { RaceId } from "../game/types";
-import { buildHero, HERO_HEIGHT } from "./heroes";
+import { buildHero, heroAnimationClips, HERO_HEIGHT } from "./heroes";
 
 /** Lightweight spinning preview of the handcrafted race models for character creation. */
 export class RacePreview {
@@ -9,9 +9,11 @@ export class RacePreview {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly pivot = new THREE.Group();
   private hero: THREE.Group | null = null;
+  private mixer: THREE.AnimationMixer | null = null;
   private race: RaceId | null = null;
   private frame = 0;
   private running = false;
+  private lastTime = 0;
   private readonly onFrame = (time: number) => this.tick(time);
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -46,9 +48,17 @@ export class RacePreview {
       return;
     }
     if (this.hero) this.pivot.remove(this.hero);
+    this.mixer?.stopAllAction();
+    this.mixer = null;
     this.hero = buildHero(race);
     this.race = race;
     this.pivot.add(this.hero);
+    this.mixer = new THREE.AnimationMixer(this.hero);
+    const battle = heroAnimationClips(race).find((clip) => clip.name === "Idle_Combat");
+    if (battle) {
+      const action = this.mixer.clipAction(battle);
+      action.play();
+    }
     const height = HERO_HEIGHT[race];
     this.camera.position.set(0, height * 0.62, Math.max(2.6, height * 1.7));
     this.camera.lookAt(0, height * 0.52, 0);
@@ -59,6 +69,7 @@ export class RacePreview {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.lastTime = 0;
     this.frame = requestAnimationFrame(this.onFrame);
   }
 
@@ -70,6 +81,8 @@ export class RacePreview {
 
   dispose(): void {
     this.stop();
+    this.mixer?.stopAllAction();
+    this.mixer = null;
     if (this.hero) this.pivot.remove(this.hero);
     this.hero = null;
     this.race = null;
@@ -79,7 +92,10 @@ export class RacePreview {
   private tick(time: number): void {
     if (!this.running) return;
     this.frame = requestAnimationFrame(this.onFrame);
+    const dt = this.lastTime ? Math.min(0.05, (time - this.lastTime) / 1000) : 0;
+    this.lastTime = time;
     this.pivot.rotation.y = time * 0.00055;
+    this.mixer?.update(dt);
     this.draw();
   }
 
