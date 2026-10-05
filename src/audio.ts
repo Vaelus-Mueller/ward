@@ -10,9 +10,9 @@ const LINES: Record<VoiceLine, string[]> = {
 };
 
 /**
- * Procedural SFX + optional Web Speech cues.
- * No recorded assets — keeps the APK light and works offline in WebView.
- * Android WebView TTS is often missing or garbled, so speech is skipped there.
+ * Procedural SFX + a dark pipe-organ title bed (SotN-adjacent mood, original voicing).
+ * No recorded Castlevania assets — additive organ + cathedral impulse, offline-safe.
+ * Android WebView TTS is skipped (often garbled).
  */
 export class AudioBus {
   muted = false;
@@ -30,6 +30,8 @@ export class AudioBus {
   private themeOn = false;
   private master: GainNode | null = null;
   private sfxBus: GainNode | null = null;
+  private organBus: GainNode | null = null;
+  private chordIndex = 0;
   private nativeShell = Capacitor.isNativePlatform();
 
   toggle(): boolean {
@@ -48,35 +50,49 @@ export class AudioBus {
     return this.muted;
   }
 
-  /** Unlock audio (call from a user gesture) and start the splash / title drone. */
+  /** Unlock audio (call from a user gesture) and start the organ title bed. */
   startOminous(): void {
     this.themeOn = true;
     if (this.muted) return;
     const ctx = this.context();
     if (!ctx) return;
-    this.buildTheme();
+    void ctx.resume().then(() => this.buildTheme());
   }
 
   private buildTheme(): void {
     const ctx = this.ctx;
     if (!ctx || this.muted || this.themeNodes.length > 0) return;
+
     const master = ctx.createGain();
     master.gain.value = 0.0001;
     master.connect(ctx.destination);
     this.master = master;
-    master.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime + 2.4);
+    master.gain.exponentialRampToValueAtTime(0.7, ctx.currentTime + 1.8);
 
-    // Low pedal — a hollow fifth under a minor second for unease.
-    this.drone(ctx, master, 55, "sine", 0.045);
-    this.drone(ctx, master, 82.5, "triangle", 0.028);
-    this.drone(ctx, master, 110, "sine", 0.018);
-    this.drone(ctx, master, 164.8, "sine", 0.006);
+    // Cathedral space via a short synthetic impulse.
+    const wet = ctx.createGain();
+    const dry = ctx.createGain();
+    wet.gain.value = 0.55;
+    dry.gain.value = 0.7;
+    const convolver = ctx.createConvolver();
+    convolver.buffer = this.cathedralImpulse(ctx);
+    const organ = ctx.createGain();
+    organ.gain.value = 1;
+    this.organBus = organ;
+    organ.connect(dry);
+    organ.connect(convolver);
+    convolver.connect(wet);
+    dry.connect(master);
+    wet.connect(master);
+    this.themeNodes.push(organ, dry, wet, convolver);
 
-    // Slow breathing noise bed.
-    const noise = this.noiseBed(ctx, master, 0.01);
-    if (noise) this.themeNodes.push(noise);
+    // Deep pedal — D minor tonic / dominant under the chorale.
+    this.pipePedal(ctx, organ, 36.71, 0.07); // D1
+    this.pipePedal(ctx, organ, 55.0, 0.045); // A1
+    this.pipePedal(ctx, organ, 73.42, 0.03); // D2
 
-    this.scheduleBell(ctx, master);
+    this.chordIndex = 0;
+    this.scheduleChorale(ctx, organ);
   }
 
   stopOminous(fadeMs = 1800): void {
@@ -103,7 +119,7 @@ export class AudioBus {
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
-    this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, level * 0.55), now + 0.35);
+    this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, level * 0.7), now + 0.4);
   }
 
   private clearTheme(): void {
@@ -120,83 +136,115 @@ export class AudioBus {
     this.themeNodes = [];
     this.master?.disconnect();
     this.master = null;
+    this.organBus = null;
   }
 
-  private drone(
+  /** Slow D-minor gothic chorale — original progression, organ timbre. */
+  private scheduleChorale(ctx: AudioContext, dest: AudioNode): void {
+    if (!this.themeOn || this.muted) return;
+    // Dm · Bb · Am · Gm · Dm/A · C · A · Dm — solemn, castlevania-adjacent mood.
+    const chords: number[][] = [
+      [146.83, 174.61, 220.0], // D3 F3 A3
+      [116.54, 174.61, 233.08], // Bb2 F3 Bb3
+      [130.81, 164.81, 220.0], // A2 E3 A3
+      [123.47, 146.83, 196.0], // G2 D3 G3
+      [110.0, 146.83, 220.0], // A2 D3 A3
+      [130.81, 164.81, 196.0], // C3 E3 G3
+      [110.0, 164.81, 220.0], // A2 E3 A3
+      [146.83, 174.61, 220.0], // D3 F3 A3
+    ];
+    const chord = chords[this.chordIndex % chords.length]!;
+    this.chordIndex += 1;
+    const now = ctx.currentTime;
+    const hold = 3.6;
+    for (const freq of chord) {
+      this.pipeVoice(ctx, dest, freq, now, hold, 0.028);
+      // Soft quint mixture above for pipe glitter.
+      this.pipeVoice(ctx, dest, freq * 2, now + 0.04, hold - 0.1, 0.01);
+    }
+    this.themeTimer = window.setTimeout(() => this.scheduleChorale(ctx, dest), hold * 1000 - 180);
+  }
+
+  private pipePedal(ctx: AudioContext, dest: AudioNode, freq: number, gainValue: number): void {
+    const voice = this.makePipe(ctx, freq, gainValue * 0.85);
+    voice.gain.gain.value = gainValue;
+    voice.out.connect(dest);
+    voice.osc.start();
+    this.themeNodes.push(voice.osc, voice.filter, voice.gain, voice.out);
+  }
+
+  private pipeVoice(
     ctx: AudioContext,
     dest: AudioNode,
     freq: number,
-    type: OscillatorType,
-    gainValue: number,
+    when: number,
+    duration: number,
+    peak: number,
   ): void {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    osc.type = type;
-    osc.frequency.value = freq;
-    filter.type = "lowpass";
-    filter.frequency.value = 280;
-    filter.Q.value = 0.7;
-    gain.gain.value = gainValue;
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = "sine";
-    lfo.frequency.value = 0.07 + freq / 4000;
-    lfoGain.gain.value = 40;
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(dest);
-    osc.start();
-    lfo.start();
-    this.themeNodes.push(osc, lfo, filter, gain, lfoGain);
+    const voice = this.makePipe(ctx, freq, peak);
+    const g = voice.gain.gain;
+    g.setValueAtTime(0.0001, when);
+    g.exponentialRampToValueAtTime(peak, when + 0.35);
+    g.setValueAtTime(peak * 0.92, when + duration - 0.8);
+    g.exponentialRampToValueAtTime(0.0001, when + duration);
+    voice.out.connect(dest);
+    voice.osc.start(when);
+    voice.osc.stop(when + duration + 0.05);
+    // Don't keep stopped oscillators in themeNodes forever — schedule disconnect.
+    window.setTimeout(() => {
+      try {
+        voice.osc.disconnect();
+        voice.filter.disconnect();
+        voice.gain.disconnect();
+        voice.out.disconnect();
+      } catch {
+        // Already gone.
+      }
+    }, (duration + 0.2) * 1000);
   }
 
-  private noiseBed(ctx: AudioContext, dest: AudioNode, gainValue: number): AudioNode | null {
-    const seconds = 4;
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.4;
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 90;
-    filter.Q.value = 0.6;
-    const gain = ctx.createGain();
-    gain.gain.value = gainValue;
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(dest);
-    src.start();
-    this.themeNodes.push(src, filter, gain);
-    return src;
-  }
-
-  private scheduleBell(ctx: AudioContext, dest: AudioNode): void {
-    if (!this.themeOn || this.muted) return;
-    const notes = [110, 116.5, 82.4, 98, 73.4, 103.8];
-    const freq = notes[Math.floor(Math.random() * notes.length)]!;
+  /** Additive-ish organ: sine fundamental + odd harmonics through a gentle lowpass. */
+  private makePipe(
+    ctx: AudioContext,
+    freq: number,
+    _peak: number,
+  ): { osc: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; out: GainNode } {
+    // Use a custom periodic wave approximating wooden/flue pipe harmonics.
+    const real = new Float32Array([0, 1, 0.45, 0.28, 0.12, 0.08, 0.04, 0.025]);
+    const imag = new Float32Array(real.length);
+    const wave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
     const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    osc.type = "triangle";
+    osc.setPeriodicWave(wave);
     osc.frequency.value = freq;
+    const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 520;
-    const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.6);
+    filter.frequency.value = Math.min(3200, freq * 8);
+    filter.Q.value = 0.4;
+    const gain = ctx.createGain();
+    const out = ctx.createGain();
+    out.gain.value = 1;
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(dest);
-    osc.start(now);
-    osc.stop(now + 3.8);
-    const wait = 4200 + Math.random() * 3800;
-    this.themeTimer = window.setTimeout(() => this.scheduleBell(ctx, dest), wait);
+    gain.connect(out);
+    return { osc, filter, gain, out };
+  }
+
+  private cathedralImpulse(ctx: AudioContext): AudioBuffer {
+    const seconds = 2.4;
+    const rate = ctx.sampleRate;
+    const length = Math.floor(rate * seconds);
+    const buffer = ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        const t = i / rate;
+        const decay = Math.exp(-t * 2.1) * (1 - i / length);
+        // Sparse early reflections + noise tail.
+        const tick = i % Math.floor(rate * (0.029 + ch * 0.004)) === 0 ? 0.35 : 0;
+        data[i] = (Math.random() * 2 - 1) * 0.22 * decay + tick * decay;
+      }
+    }
+    return buffer;
   }
 
   private context(): AudioContext | null {
@@ -206,7 +254,7 @@ export class AudioBus {
       if (!Ctx) return null;
       this.ctx = new Ctx();
       this.sfxBus = this.ctx.createGain();
-      this.sfxBus.gain.value = 0.7;
+      this.sfxBus.gain.value = 0.65;
       this.sfxBus.connect(this.ctx.destination);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
@@ -214,40 +262,40 @@ export class AudioBus {
   }
 
   hit(): void {
-    this.blip(420, 0.035, "triangle", 0.045);
+    this.blip(420, 0.035, "triangle", 0.04);
   }
 
   hurt(): void {
-    this.blip(110, 0.07, "sine", 0.05);
+    this.blip(110, 0.07, "sine", 0.045);
   }
 
   level(): void {
-    this.blip(392, 0.07, "sine", 0.04);
-    window.setTimeout(() => this.blip(523, 0.09, "triangle", 0.035), 90);
+    this.blip(392, 0.07, "sine", 0.035);
+    window.setTimeout(() => this.blip(523, 0.09, "triangle", 0.03), 90);
   }
 
   eliteAggro(): void {
-    this.blip(140, 0.1, "triangle", 0.05);
-    window.setTimeout(() => this.blip(90, 0.14, "sine", 0.04), 70);
+    this.blip(140, 0.1, "triangle", 0.045);
+    window.setTimeout(() => this.blip(90, 0.14, "sine", 0.035), 70);
     this.speak("eliteAggro", 0.95, 0.7);
   }
 
   uniqueFind(): void {
-    this.blip(440, 0.06, "sine", 0.04);
-    window.setTimeout(() => this.blip(554, 0.07, "triangle", 0.035), 80);
-    window.setTimeout(() => this.blip(659, 0.1, "sine", 0.03), 160);
+    this.blip(440, 0.06, "sine", 0.035);
+    window.setTimeout(() => this.blip(554, 0.07, "triangle", 0.03), 80);
+    window.setTimeout(() => this.blip(659, 0.1, "sine", 0.025), 160);
     this.speak("uniqueFind", 1.05, 0.85);
   }
 
   maxCritDealt(): void {
-    this.blip(620, 0.045, "triangle", 0.04);
-    window.setTimeout(() => this.blip(880, 0.07, "sine", 0.03), 50);
+    this.blip(620, 0.045, "triangle", 0.035);
+    window.setTimeout(() => this.blip(880, 0.07, "sine", 0.025), 50);
     this.speak("maxCritDealt", 1.15, 1);
   }
 
   maxCritTaken(): void {
-    this.blip(85, 0.09, "sine", 0.05);
-    window.setTimeout(() => this.blip(60, 0.12, "triangle", 0.04), 60);
+    this.blip(85, 0.09, "sine", 0.045);
+    window.setTimeout(() => this.blip(60, 0.12, "triangle", 0.035), 60);
     this.speak("maxCritTaken", 0.9, 0.55);
   }
 

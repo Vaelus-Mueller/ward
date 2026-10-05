@@ -196,12 +196,11 @@ export const RACES: RaceDef[] = [
     blurb: "Bound clay and ward-stone. Hard to break, slower to think or turn.",
     attrs: { strength: 0.05, agility: -0.06, stamina: 0.03, luck: -0.03, spirit: -0.06 },
     lifePct: 0.06,
-    armorPct: 0.06,
-    innateArmor: 10,
+    armorPct: 0.1,
     cdr: -0.12,
     damageTaken: { bleed: 0.85, poison: 0.85, water: 1.12 },
     passive:
-      "Living Stone — sturdier life and armor, but skills wake slowly in clay. Construct flesh resists cuts and venom; water unbinds the seal.",
+      "Living Stone — +10% armor and sturdier life, but skills wake slowly in clay. Construct flesh resists cuts and venom; water unbinds the seal.",
   }),
   race({
     id: "lizard",

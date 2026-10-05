@@ -422,11 +422,17 @@ p { line-height: 1.5; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: calc(20px + var(--safe-t)) 24px calc(24px + var(--safe-b));
+  gap: clamp(4px, 1.2vh, 10px);
+  padding:
+    calc(12px + var(--safe-t))
+    calc(16px + var(--safe-r))
+    calc(16px + var(--safe-b))
+    calc(16px + var(--safe-l));
   text-align: center;
   pointer-events: auto;
   touch-action: manipulation;
+  overflow: hidden;
+  box-sizing: border-box;
   background:
     radial-gradient(ellipse 70% 55% at 50% 38%, rgba(90, 24, 32, 0.42), transparent 62%),
     radial-gradient(ellipse 100% 80% at 50% 100%, rgba(8, 4, 12, 0.95), transparent 55%),
@@ -454,8 +460,9 @@ p { line-height: 1.5; }
 .splash-sigil {
   position: relative;
   z-index: 1;
-  width: min(42vw, 168px);
-  height: min(42vw, 168px);
+  flex: 0 0 auto;
+  width: min(36vw, 22vh, 148px);
+  height: min(36vw, 22vh, 148px);
   animation: sigil-rise 1.4s ease-out both, sigil-pulse 5.5s ease-in-out 1.4s infinite;
   filter: drop-shadow(0 0 28px rgba(140, 32, 40, 0.45));
 }
@@ -477,10 +484,11 @@ p { line-height: 1.5; }
 .splash-brand {
   position: relative;
   z-index: 1;
-  margin: 4px 0 0;
-  font-size: clamp(40px, 12vw, 72px);
+  margin: 0;
+  font-size: clamp(28px, 8vh, 64px);
   letter-spacing: 0.42em;
   text-indent: 0.42em;
+  line-height: 1.05;
   animation: brand-in 1.2s ease-out 0.35s both;
 }
 @keyframes brand-in {
@@ -495,7 +503,7 @@ p { line-height: 1.5; }
   font-style: italic;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  font-size: 12px;
+  font-size: clamp(10px, 2.2vh, 12px);
   font-family: var(--font-display);
   animation: brand-in 1.2s ease-out 0.55s both;
 }
@@ -503,11 +511,12 @@ p { line-height: 1.5; }
   position: relative;
   z-index: 1;
   width: min(280px, 70vw);
-  height: 6px;
-  margin-top: 18px;
+  height: 5px;
+  margin-top: clamp(6px, 1.5vh, 14px);
   background: rgba(110, 90, 62, 0.28);
   overflow: hidden;
   border: 1px solid rgba(140, 110, 70, 0.35);
+  flex: 0 0 auto;
 }
 #splash-fill {
   display: block;
@@ -520,30 +529,32 @@ p { line-height: 1.5; }
 .splash-pct {
   position: relative;
   z-index: 1;
-  margin: 8px 0 0;
+  margin: 0;
   min-height: 1.1em;
   color: var(--gold);
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: clamp(12px, 2.4vh, 14px);
   letter-spacing: 0.18em;
   font-variant-numeric: tabular-nums;
 }
 .splash-status {
   position: relative;
   z-index: 1;
-  margin: 6px 0 0;
+  margin: 0;
   min-height: 1.2em;
   color: var(--brass);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: clamp(10px, 2.1vh, 11px);
   letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 .splash-enter {
   position: relative;
   z-index: 1;
-  margin-top: 18px;
-  min-width: 160px;
+  margin-top: clamp(6px, 1.5vh, 14px);
+  min-width: 140px;
+  min-height: 40px;
+  flex: 0 0 auto;
   animation: enter-breathe 2.8s ease-in-out infinite;
 }
 @keyframes enter-breathe {
@@ -551,6 +562,23 @@ p { line-height: 1.5; }
   50% { box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.14), 0 0 28px rgba(180, 48, 56, 0.45); }
 }
 .splash.ready #splash-fill { width: 100%; }
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .splash {
+    gap: 3px;
+    padding:
+      calc(8px + var(--safe-t))
+      calc(20px + var(--safe-r))
+      calc(10px + var(--safe-b))
+      calc(20px + var(--safe-l));
+  }
+  .splash-sigil {
+    width: min(18vh, 96px);
+    height: min(18vh, 96px);
+  }
+  .splash-brand { font-size: clamp(24px, 9vh, 40px); }
+  .splash-enter { margin-top: 4px; min-height: 36px; }
+}
 
 .overlay {
   position: absolute;
