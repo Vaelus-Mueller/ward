@@ -44,6 +44,10 @@
           <div id="gold">0</div>
         </header>
         <div id="banner" class="hidden"></div>
+        <div id="portal-cast" class="hidden" aria-live="polite">
+          <span>Opening portal</span>
+          <div class="portal-bar"><i id="portal-fill"></i></div>
+        </div>
         <div id="globes">
           <div id="life-globe" class="globe life" style="--fill: 1">
             <span id="hp-text">1</span>
@@ -355,13 +359,13 @@
         <div class="panel town-panel">
           <header class="panel-head">
             <div>
-              <h2>Sable's stall</h2>
-              <p class="muted">A quiet court off the ward. Weapons, armor, and jewelry can be raised one item level.</p>
+              <h2 id="town-title">Ashgate</h2>
+              <p id="town-sub" class="muted">A quiet court off the ward.</p>
             </div>
             <button id="close-town" type="button">Return</button>
           </header>
           <div id="town-materials" class="material-line"></div>
-          <div id="town-list"></div>
+          <div id="town-body"></div>
           <p id="town-note" class="muted"></p>
         </div>
       </section>

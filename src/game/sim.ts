@@ -408,6 +408,22 @@ export class Sim {
     this.hurtThisTick = false;
     this.tickTimers(dt);
     this.applyIntent(intent, dt);
+    if (this.player.portal) {
+      const stick = Math.hypot(intent.moveX, intent.moveY);
+      const busy =
+        stick > 0.18 ||
+        intent.attack ||
+        intent.skills.some(Boolean) ||
+        intent.dest !== null ||
+        intent.aimId !== null ||
+        this.hurtThisTick ||
+        this.player.stun > 0;
+      if (busy) {
+        this.breakPortal();
+        result.portalInterrupted = true;
+        this.float(this.player.x, this.player.y - 28, "Portal broken", "#9a8f9e");
+      }
+    }
     for (const edge of [0, 1, 2] as const) {
       if (intent.skills[edge]) this.trySkill(edge, result);
     }
@@ -421,6 +437,7 @@ export class Sim {
       !handsBusy;
     if (idle || intent.attack || this.player.aimId !== null) this.tryBasicAttack(result, idle);
     this.tickChannel(dt);
+    this.tickPortal(dt, result);
     this.tickAuras(dt);
     this.tickEnemies(dt, result);
     this.tickShots(dt, result);
@@ -501,6 +518,8 @@ export class Sim {
       p.aimId = intent.aimId;
       p.dest = null;
     }
+    // Town portal is a standing cast — movement is held until it finishes or breaks.
+    if (p.portal) return;
     const stick = Math.hypot(intent.moveX, intent.moveY);
     let vx = 0;
     let vy = 0;
@@ -758,6 +777,41 @@ export class Sim {
     if (channel.t <= 0) this.player.channel = null;
   }
 
+  /** Begin a 3s interruptible town portal cast. */
+  startPortal(): string | null {
+    if (this.phase !== "play") return "The gate will not open here.";
+    if (this.player.stun > 0) return "You cannot open a portal while stunned.";
+    if (this.player.portal) return null;
+    this.breakChannel();
+    this.player.dest = null;
+    this.player.aimId = null;
+    this.player.portal = { t: 3, total: 3 };
+    this.float(this.player.x, this.player.y - 30, "Opening portal…", "#c9a56a");
+    this.burst("ward", "#7a1c24", 1.2);
+    return null;
+  }
+
+  portalProgress(): number {
+    const portal = this.player.portal;
+    if (!portal) return 0;
+    return 1 - portal.t / portal.total;
+  }
+
+  private tickPortal(dt: number, result: TickResult): void {
+    const portal = this.player.portal;
+    if (!portal) return;
+    portal.t -= dt;
+    if (portal.t > 0) return;
+    this.player.portal = null;
+    result.townReady = true;
+    this.burst("ward", "#e0c078", 1.4);
+    this.float(this.player.x, this.player.y - 32, "Ashgate", "#e0c078");
+  }
+
+  private breakPortal(): void {
+    this.player.portal = null;
+  }
+
   private breakChannel(): void {
     this.player.channel = null;
   }
@@ -920,6 +974,11 @@ export class Sim {
     result.playerHit = true;
     if (maxHit) result.maxCritTaken = true;
     this.float(this.player.x, this.player.y - 22, `${Math.round(damage)}${maxHit ? "!" : ""}`, maxHit ? "#ff6a4a" : "#e15a4a");
+    if (this.player.portal) {
+      this.breakPortal();
+      result.portalInterrupted = true;
+      this.float(this.player.x, this.player.y - 34, "Portal broken", "#9a8f9e");
+    }
     if (blow.stun && blow.stun > 0) this.player.stun = Math.max(this.player.stun, blow.stun);
     if (blow.knockback && attacker) {
       const dx = this.player.x - attacker.x;

@@ -138,6 +138,7 @@ function frame(now: number): void {
     if (result.uniqueFind) audio.uniqueFind();
     if (result.maxCritDealt) audio.maxCritDealt();
     if (result.maxCritTaken) audio.maxCritTaken();
+    if (result.townReady) ui.arriveTown();
     if (result.leveled > 0) {
       audio.level();
       persist();

@@ -5,9 +5,10 @@ import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
 import { readSlots } from "./game/save";
 import { RACES, raceById, raceName, type RaceId } from "./game/races";
+import { buyPrice, buyStockItem, gambleBlurb, gambleCost, gambleItem, merchantStock, sellItem, sellPrice, TOWN_NAME, VENDORS, type TownVendor } from "./game/town";
 import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
-import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type SectorId, type SlotName } from "./game/types";
+import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
 import { RacePreview } from "./render/racePreview";
 
 export class Ui {
@@ -22,6 +23,9 @@ export class Ui {
   private packTab: "gear" | "gems" = "gear";
   private tip: { slot: SlotName } | { uid: string } | { gem: GemKind; quality: number } | null = null;
   private townKey = "";
+  private townVendor: TownVendor = "hub";
+  private merchantGoods: Item[] = [];
+  private merchantTag = "";
   private treeCenter = true;
   private fitOnPaint = true;
   private confirmSpend = false;
@@ -175,6 +179,10 @@ export class Ui {
     const banner = must("banner");
     banner.classList.toggle("hidden", sim.bannerT <= 0 || sim.banner.length === 0);
     banner.textContent = sim.banner;
+    const portal = must("portal-cast");
+    const casting = !!sim.player.portal;
+    portal.classList.toggle("hidden", !casting);
+    if (casting) must("portal-fill").style.width = `${Math.round(sim.portalProgress() * 100)}%`;
     const near = sim.nearestItemDrop();
     const loot = must("loot");
     loot.classList.toggle("hidden", !near);
@@ -230,8 +238,8 @@ export class Ui {
     must("btn-pack").addEventListener("click", () => {
       this.show("pack");
     });
-    must("btn-town").addEventListener("click", () => this.openTown());
-    must("close-town").addEventListener("click", () => this.hide("town"));
+    must("btn-town").addEventListener("click", () => this.requestTown());
+    must("close-town").addEventListener("click", () => this.leaveTown());
     must("pack-tab-gear").addEventListener("click", () => {
       this.packTab = "gear";
       this.packKey = "";
@@ -1048,10 +1056,55 @@ export class Ui {
     bar.append(bulk);
   }
 
-  private openTown(): void {
+  private requestTown(): void {
+    if (this.open("town")) {
+      this.leaveTown();
+      return;
+    }
+    const sim = current();
+    if (!sim || sim.phase !== "play") return;
+    const error = sim.startPortal();
+    if (error) {
+      sim.banner = error;
+      sim.bannerT = 2.2;
+    }
+    this.actions.changed();
+  }
+
+  arriveTown(): void {
+    this.townVendor = "hub";
     this.townKey = "";
+    this.refreshMerchantStock();
     this.show("town");
     this.actions.changed();
+  }
+
+  private leaveTown(): void {
+    this.hide("town");
+    this.townVendor = "hub";
+    this.townKey = "";
+    this.merchantTag = "";
+    this.merchantGoods = [];
+    this.actions.changed();
+  }
+
+  private refreshMerchantStock(): void {
+    const sim = current();
+    if (!sim) return;
+    const tag = `${sim.character.name}-${sim.character.level}-${sim.wave}`;
+    if (tag === this.merchantTag && this.merchantGoods.length > 0) return;
+    this.merchantTag = tag;
+    let seed = 1;
+    for (let i = 0; i < tag.length; i++) seed = (seed * 31 + tag.charCodeAt(i)) >>> 0;
+    const rng = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+    this.merchantGoods = merchantStock(sim.character.level, rng, `ash-${tag}`);
+  }
+
+  private openTown(): void {
+    this.arriveTown();
   }
 
   private paintTown(sim: Sim): void {
@@ -1064,8 +1117,64 @@ export class Ui {
       chip.textContent = `${MATERIAL_LABEL[id]} ${materialCount(c, id)}`;
       mats.append(chip);
     }
-    const list = must("town-list");
-    list.innerHTML = "";
+    const goldChip = document.createElement("span");
+    goldChip.textContent = `Gold ${c.gold}`;
+    mats.append(goldChip);
+
+    const body = must("town-body");
+    body.innerHTML = "";
+    text("town-note", "");
+
+    if (this.townVendor === "hub") {
+      text("town-title", TOWN_NAME);
+      text("town-sub", "A quiet court off the ward. Smith, merchant, and gambler keep the stalls.");
+      const grid = document.createElement("div");
+      grid.className = "town-vendors";
+      for (const vendor of VENDORS) {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "town-vendor";
+        card.innerHTML = `<strong>${vendor.name}</strong><em>${vendor.title}</em><span>${vendor.blurb}</span>`;
+        card.addEventListener("click", () => {
+          this.townVendor = vendor.id;
+          this.townKey = "";
+        });
+        grid.append(card);
+      }
+      body.append(grid);
+      return;
+    }
+
+    const back = document.createElement("button");
+    back.type = "button";
+    back.textContent = "Back to court";
+    back.addEventListener("click", () => {
+      this.townVendor = "hub";
+      this.townKey = "";
+    });
+    body.append(back);
+
+    if (this.townVendor === "smith") {
+      text("town-title", "Sable · Smith");
+      text("town-sub", "Raises item level with salvaged materials. Weapons, armor, shields, and jewelry.");
+      this.paintSmith(sim, body);
+      return;
+    }
+    if (this.townVendor === "merchant") {
+      text("town-title", "Merrick · Merchant");
+      text("town-sub", "Buys spare gear for gold. Stock refreshes when you leave the ward for town.");
+      this.paintMerchant(sim, body);
+      return;
+    }
+    text("town-title", "Nyx · Gambler");
+    text("town-sub", "Pays gold for a sealed parcel. Quality is a roll of the bones.");
+    this.paintGambler(sim, body);
+  }
+
+  private paintSmith(sim: Sim, body: HTMLElement): void {
+    const c = sim.character;
+    const list = document.createElement("div");
+    list.id = "town-list";
     const pieces = [
       ...GEAR_SLOTS.map((slot) => c.equipment[slot]).filter((item) => item && canUpgrade(item)),
       ...c.inventory.filter((item) => canUpgrade(item)),
@@ -1075,6 +1184,7 @@ export class Ui {
       empty.className = "muted";
       empty.textContent = "No weapons, armor, or jewelry to improve. Salvage spare gear in the pack to gather materials.";
       list.append(empty);
+      body.append(list);
       return;
     }
     for (const item of pieces) {
@@ -1111,14 +1221,120 @@ export class Ui {
       row.append(copy, button);
       list.append(row);
     }
+    body.append(list);
   }
 
-  private packSignature(sim: Sim): string {
+  private paintMerchant(sim: Sim, body: HTMLElement): void {
     const c = sim.character;
-    const worn = GEAR_SLOTS.map((slot) => c.equipment[slot]?.uid ?? "").join(",");
-    const bag = c.inventory.map((item) => `${item.uid}:${item.ilvl}:${item.gems.length}`).join(",");
-    const gems = (c.gems ?? []).map((stack) => `${stack.kind}:${stack.quality}:${stack.count}`).join(",");
-    return `${this.packTab}|${worn}|${bag}|${gems}|${(c.salvageMarks ?? []).join(",")}`;
+    this.refreshMerchantStock();
+    const list = document.createElement("div");
+    list.id = "town-list";
+
+    const stockHead = document.createElement("h3");
+    stockHead.textContent = "For sale";
+    list.append(stockHead);
+    if (this.merchantGoods.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "Merrick's board is bare. Return from the ward later.";
+      list.append(empty);
+    }
+    this.merchantGoods.forEach((item, index) => {
+      const row = document.createElement("div");
+      row.className = "town-row";
+      const copy = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = rarityClass(item);
+      name.textContent = item.name;
+      const meta = document.createElement("div");
+      meta.className = "muted";
+      const cost = buyPrice(item, c.level);
+      meta.textContent = `${RARITY_LABEL[item.rarity]} · ${cost} gold`;
+      copy.append(name, meta);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Buy";
+      button.disabled = c.gold < cost;
+      button.addEventListener("click", () => {
+        const error = buyStockItem(c, this.merchantGoods, index);
+        text("town-note", error ?? `Bought ${item.name}.`);
+        if (!error) {
+          this.townKey = "";
+          this.packKey = "";
+          this.actions.changed();
+        }
+      });
+      row.append(copy, button);
+      list.append(row);
+    });
+
+    const sellHead = document.createElement("h3");
+    sellHead.textContent = "Sell from pack";
+    list.append(sellHead);
+    const sellables = c.inventory.filter((item) => item.slot !== "gem");
+    if (sellables.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "Nothing in the pack Merrick will buy.";
+      list.append(empty);
+    }
+    for (const item of sellables) {
+      const row = document.createElement("div");
+      row.className = "town-row";
+      const copy = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = rarityClass(item);
+      name.textContent = item.name;
+      const meta = document.createElement("div");
+      meta.className = "muted";
+      meta.textContent = `${RARITY_LABEL[item.rarity]} · ${sellPrice(item, c.level)} gold`;
+      copy.append(name, meta);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Sell";
+      button.addEventListener("click", () => {
+        const price = sellPrice(item, c.level);
+        const error = sellItem(c, item.uid);
+        text("town-note", error ?? `Sold ${item.name} for ${price} gold.`);
+        if (!error) {
+          this.townKey = "";
+          this.packKey = "";
+          this.actions.changed();
+        }
+      });
+      row.append(copy, button);
+      list.append(row);
+    }
+    body.append(list);
+  }
+
+  private paintGambler(sim: Sim, body: HTMLElement): void {
+    const c = sim.character;
+    const cost = gambleCost(c.level);
+    const wrap = document.createElement("div");
+    wrap.className = "town-gamble";
+    const blurb = document.createElement("p");
+    blurb.className = "muted";
+    blurb.textContent = `Nyx draws a sealed parcel from the dark for ${cost} gold.`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "primary";
+    button.textContent = `Gamble (${cost} gold)`;
+    button.disabled = c.gold < cost;
+    button.addEventListener("click", () => {
+      const roll = gambleItem(c, Math.random, `nyx-${Date.now()}`);
+      if (roll.error) {
+        text("town-note", roll.error);
+        return;
+      }
+      text("town-note", roll.item ? `Nyx reveals ${gambleBlurb(roll.item)}.` : "The parcel was empty.");
+      sim.recompute();
+      this.townKey = "";
+      this.packKey = "";
+      this.actions.changed();
+    });
+    wrap.append(blurb, button);
+    body.append(wrap);
   }
 
   private townSignature(sim: Sim): string {
@@ -1128,7 +1344,16 @@ export class Ui {
       .map((item) => `${item!.uid}:${item!.ilvl}:${item!.damageMin}:${item!.armor}`)
       .join(",");
     const mats = MATERIAL_ORDER.map((id) => materialCount(c, id)).join(",");
-    return `${pieces}|${mats}`;
+    const stock = this.merchantGoods.map((item) => item.uid).join(",");
+    return `${this.townVendor}|${pieces}|${mats}|${c.gold}|${stock}|${c.inventory.length}`;
+  }
+
+  private packSignature(sim: Sim): string {
+    const c = sim.character;
+    const worn = GEAR_SLOTS.map((slot) => c.equipment[slot]?.uid ?? "").join(",");
+    const bag = c.inventory.map((item) => `${item.uid}:${item.ilvl}:${item.gems.length}`).join(",");
+    const gems = (c.gems ?? []).map((stack) => `${stack.kind}:${stack.quality}:${stack.count}`).join(",");
+    return `${this.packTab}|${worn}|${bag}|${gems}|${(c.salvageMarks ?? []).join(",")}`;
   }
 
   private socketButtons(sim: Sim, itemUid: string, host: HTMLElement): void {

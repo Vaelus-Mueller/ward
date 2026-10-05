@@ -393,6 +393,25 @@ describe("the ward", () => {
     expect(sim.player.hp).toBeLessThan(sim.derived.life);
   });
 
+  it("casts an interruptible three-second town portal", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    expect(sim.startPortal()).toBeNull();
+    expect(sim.player.portal?.total).toBe(3);
+    const mid = sim.update(emptyIntent(), 1);
+    expect(mid.townReady).toBe(false);
+    expect(sim.player.portal).not.toBeNull();
+    const move = emptyIntent();
+    move.moveX = 1;
+    const broken = sim.update(move, 0.1);
+    expect(broken.portalInterrupted).toBe(true);
+    expect(sim.player.portal).toBeNull();
+    expect(sim.startPortal()).toBeNull();
+    const done = sim.update(emptyIntent(), 3.1);
+    expect(done.townReady).toBe(true);
+    expect(sim.player.portal).toBeNull();
+  });
+
   it("scales hounds as the road goes on", () => {
     expect(makeEnemy("hound", 4, 0, 0, 1).maxHp).toBeGreaterThan(makeEnemy("hound", 1, 0, 0, 2).maxHp);
     expect(makeEnemy("hound", 1, 0, 0, 1).maxHp).toBeLessThan(28);
