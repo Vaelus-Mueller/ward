@@ -172,12 +172,26 @@ async function bootSplash(): Promise<void> {
   const splash = must("splash");
   const status = must("splash-status");
   const fill = must("splash-fill");
+  const pct = must("splash-pct");
+  const bar = must("splash-bar");
   const enter = must("splash-enter");
-  fill.style.width = "18%";
-  status.textContent = "Binding the gate…";
 
-  // Prefer music with the logo from first paint; browsers that block autoplay
-  // stay silent until the first tap, then the same theme starts.
+  const paintProgress = (ratio: number, label: string) => {
+    const installTick = (window as unknown as { __wardInstallTick?: number }).__wardInstallTick;
+    if (installTick) {
+      window.clearInterval(installTick);
+      (window as unknown as { __wardInstallTick?: number }).__wardInstallTick = undefined;
+    }
+    const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+    fill.style.width = `${percent}%`;
+    pct.textContent = `${percent}%`;
+    status.textContent = label;
+    bar.setAttribute("aria-valuenow", String(percent));
+  };
+
+  // Hand off from the HTML "Installing…" bootstrap into real asset load.
+  paintProgress(0.04, "Loading assets…");
+
   let entered = false;
   const ensureMusic = () => {
     audio.startOminous();
@@ -190,18 +204,14 @@ async function bootSplash(): Promise<void> {
     ensureMusic();
   });
 
-  const ready = renderer.whenReady();
-  let fake = 18;
-  const tick = window.setInterval(() => {
-    fake = Math.min(88, fake + 3 + Math.random() * 8);
-    fill.style.width = `${fake}%`;
-  }, 220);
+  renderer.onLoadProgress((info) => {
+    // Keep a little headroom so 100% only lands when fully ready.
+    paintProgress(Math.min(0.97, Math.max(0.04, info.ratio)), info.label);
+  });
 
-  await ready;
-  window.clearInterval(tick);
+  await renderer.whenReady();
+  paintProgress(1, "The gate is open");
   splash.classList.add("ready");
-  fill.style.width = "100%";
-  status.textContent = "The gate is open";
   enter.classList.remove("hidden");
   splash.setAttribute("aria-busy", "false");
 

@@ -17,6 +17,12 @@ const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
 /** Zoomed-out ARPG: advance skeletal clips in ~12 FPS steps; sim/render stay full rate. */
 const ANIM_STEP = 1 / 12;
 
+export interface LoadProgress {
+  ratio: number;
+  percent: number;
+  label: string;
+}
+
 const FILES: Record<string, string> = {
   knight: "knight.glb",
   rogue: "rogue.glb",
@@ -163,6 +169,9 @@ export class Renderer {
   private readonly quality = new AdaptiveQuality();
   private atmosphere: AtmosphereFx | null = null;
   private lastLevel = -1;
+  private loadHandler: ((info: LoadProgress) => void) | null = null;
+  private readonly loadPhase = { models: 0, floors: 0, hdr: 0 };
+  private lastProgress: LoadProgress = { ratio: 0, percent: 0, label: "Installing Ward…" };
 
   constructor(private canvas: HTMLCanvasElement) {
     this.readyPromise = new Promise((resolve) => {
@@ -234,13 +243,38 @@ export class Renderer {
     this.floatLayer = document.createElement("div");
     this.floatLayer.id = "float-layer";
     canvas.parentElement?.appendChild(this.floatLayer);
-    void Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]).finally(() =>
-      this.resolveReady(),
-    );
+    // Defer so splash can subscribe to progress in the same turn.
+    Promise.resolve().then(() => this.beginAssetLoads());
+  }
+
+  private beginAssetLoads(): void {
+    Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]).finally(() => {
+      this.emitProgress(1, "Ready");
+      this.resolveReady();
+    });
+  }
+
+  /** Subscribe to asset load progress (0-1) for the splash UI. */
+  onLoadProgress(handler: (info: LoadProgress) => void): void {
+    this.loadHandler = handler;
+    handler(this.lastProgress);
   }
 
   whenReady(): Promise<void> {
     return this.readyPromise;
+  }
+
+  private emitProgress(ratio: number, label: string): void {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    this.lastProgress = { ratio: clamped, label, percent: Math.round(clamped * 100) };
+    this.loadHandler?.(this.lastProgress);
+  }
+
+  private bumpPhase(phase: keyof typeof this.loadPhase, ratio: number, label: string): void {
+    this.loadPhase[phase] = Math.max(this.loadPhase[phase], Math.max(0, Math.min(1, ratio)));
+    // Models + textures dominate cold start; HDR is smaller.
+    const overall = this.loadPhase.models * 0.4 + this.loadPhase.floors * 0.45 + this.loadPhase.hdr * 0.15;
+    this.emitProgress(overall, label);
   }
 
   resize(): void {
@@ -357,9 +391,14 @@ export class Renderer {
   }
 
   private async loadHdrEnvironment(): Promise<void> {
+    this.bumpPhase("hdr", 0.05, "Lighting…");
     try {
       const url = `${import.meta.env.BASE_URL}textures/hdri/ward_env.hdr`;
-      const hdr = await new RGBELoader().loadAsync(url);
+      const manager = new THREE.LoadingManager();
+      manager.onProgress = (_url, loaded, total) => {
+        this.bumpPhase("hdr", total > 0 ? 0.1 + (loaded / total) * 0.85 : 0.5, "Lighting…");
+      };
+      const hdr = await new RGBELoader(manager).loadAsync(url);
       const pmrem = new THREE.PMREMGenerator(this.webgl);
       pmrem.compileEquirectangularShader();
       const env = pmrem.fromEquirectangular(hdr);
@@ -369,13 +408,20 @@ export class Renderer {
       hdr.dispose();
       pmrem.dispose();
       previous?.dispose();
+      this.bumpPhase("hdr", 1, "Lighting ready");
     } catch {
       // RoomEnvironment fallback already installed.
+      this.bumpPhase("hdr", 1, "Lighting ready");
     }
   }
 
   private async loadFloors(): Promise<void> {
-    const loader = new THREE.TextureLoader();
+    this.bumpPhase("floors", 0.02, "Textures…");
+    const manager = new THREE.LoadingManager();
+    manager.onProgress = (_url, loaded, total) => {
+      this.bumpPhase("floors", total > 0 ? loaded / total : 0.2, `Textures ${loaded}/${total}`);
+    };
+    const loader = new THREE.TextureLoader(manager);
     const url = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
     const pbr = (file: string) => `${import.meta.env.BASE_URL}textures/pbr/${file}`;
     const prefer = async (hi: string, lo: string) =>
@@ -458,6 +504,7 @@ export class Renderer {
         // Colored floor remains.
       }
     }
+    this.bumpPhase("floors", 1, "Textures ready");
   }
 
   private applyRealm(next: "dungeon" | "hell"): void {
@@ -593,17 +640,26 @@ export class Renderer {
   }
 
   private async loadModels(): Promise<void> {
-    const loader = new GLTFLoader();
+    this.bumpPhase("models", 0.02, "Models…");
+    const entries = Object.entries(FILES);
+    const total = entries.length;
+    let done = 0;
+    const manager = new THREE.LoadingManager();
+    const loader = new GLTFLoader(manager);
     await Promise.all(
-      Object.entries(FILES).map(async ([key, file]) => {
+      entries.map(async ([key, file]) => {
         try {
           const gltf = await loader.loadAsync(MODEL_URL(file));
           this.templates.set(key, { scene: gltf.scene, clips: gltf.animations });
         } catch {
           // A missing model falls back to a plain figure.
+        } finally {
+          done += 1;
+          this.bumpPhase("models", done / total, `Models ${done}/${total}`);
         }
       }),
     );
+    this.bumpPhase("models", 1, "Models ready");
     this.realm = "";
   }
 

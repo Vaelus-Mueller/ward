@@ -502,24 +502,36 @@ p { line-height: 1.5; }
 .splash-bar {
   position: relative;
   z-index: 1;
-  width: min(220px, 56vw);
-  height: 2px;
+  width: min(280px, 70vw);
+  height: 6px;
   margin-top: 18px;
-  background: rgba(110, 90, 62, 0.25);
+  background: rgba(110, 90, 62, 0.28);
   overflow: hidden;
+  border: 1px solid rgba(140, 110, 70, 0.35);
 }
 #splash-fill {
   display: block;
   height: 100%;
-  width: 8%;
+  width: 0%;
   background: linear-gradient(90deg, var(--blood), var(--gold));
   box-shadow: 0 0 12px rgba(196, 60, 72, 0.55);
-  transition: width 280ms ease;
+  transition: width 160ms ease-out;
+}
+.splash-pct {
+  position: relative;
+  z-index: 1;
+  margin: 8px 0 0;
+  min-height: 1.1em;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
 }
 .splash-status {
   position: relative;
   z-index: 1;
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   min-height: 1.2em;
   color: var(--brass);
   font-family: var(--font-display);
@@ -599,7 +611,7 @@ p { line-height: 1.5; }
   font-family: var(--font-display);
 }
 .save-slot input, .create-name input {
-  min-height: 40px;
+  min-height: 44px;
   width: 100%;
   padding: 0 10px;
   color: var(--ink);
@@ -611,6 +623,8 @@ p { line-height: 1.5; }
   user-select: text;
   -webkit-user-select: text;
   touch-action: manipulation;
+  pointer-events: auto;
+  caret-color: var(--gold);
 }
 .save-slot input:focus, .create-name input:focus {
   outline: none;

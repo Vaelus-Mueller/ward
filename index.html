@@ -22,8 +22,11 @@
         </div>
         <h1 class="splash-brand">Ward</h1>
         <p class="splash-tag">Gate of the ruined ward</p>
-        <div class="splash-bar" aria-hidden="true"><span id="splash-fill"></span></div>
-        <p id="splash-status" class="splash-status">Binding the gate…</p>
+        <div class="splash-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="splash-bar">
+          <span id="splash-fill"></span>
+        </div>
+        <p id="splash-pct" class="splash-pct">0%</p>
+        <p id="splash-status" class="splash-status">Installing Ward…</p>
         <button id="splash-enter" type="button" class="splash-enter hidden">Enter</button>
       </section>
 
@@ -73,7 +76,7 @@
           <div class="ornament thin" aria-hidden="true"></div>
           <div id="save-slots" class="save-slots">
             <article class="save-slot">
-              <label class="slot-name">Slot 1<input id="slot-name-0" data-slot="0" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <label class="slot-name">Slot 1<input id="slot-name-0" data-slot="0" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
               <p id="slot-meta-0" class="muted">Empty</p>
               <div class="slot-actions">
                 <button id="slot-play-0" data-play="0" type="button" class="primary">New</button>
@@ -81,7 +84,7 @@
               </div>
             </article>
             <article class="save-slot">
-              <label class="slot-name">Slot 2<input id="slot-name-1" data-slot="1" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <label class="slot-name">Slot 2<input id="slot-name-1" data-slot="1" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
               <p id="slot-meta-1" class="muted">Empty</p>
               <div class="slot-actions">
                 <button id="slot-play-1" data-play="1" type="button" class="primary">New</button>
@@ -89,7 +92,7 @@
               </div>
             </article>
             <article class="save-slot">
-              <label class="slot-name">Slot 3<input id="slot-name-2" data-slot="2" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+              <label class="slot-name">Slot 3<input id="slot-name-2" data-slot="2" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
               <p id="slot-meta-2" class="muted">Empty</p>
               <div class="slot-actions">
                 <button id="slot-play-2" data-play="2" type="button" class="primary">New</button>
@@ -113,7 +116,7 @@
             <h2>Create exile</h2>
             <button id="create-back" type="button">Back</button>
           </header>
-          <label class="create-name">Name<input id="create-name" maxlength="24" autocomplete="off" enterkeyhint="done" placeholder="Name" /></label>
+          <label class="create-name">Name<input id="create-name" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
           <div class="race-picker" aria-label="Choose race">
             <button id="race-prev" type="button" class="race-arrow" aria-label="Previous race">‹</button>
             <div class="race-stage">
@@ -408,5 +411,24 @@
       </section>
     </div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // Early bootstrap so install/load UI moves before the module bundle evaluates.
+      (function () {
+        var fill = document.getElementById("splash-fill");
+        var pct = document.getElementById("splash-pct");
+        var status = document.getElementById("splash-status");
+        var bar = document.getElementById("splash-bar");
+        var n = 0;
+        var timer = setInterval(function () {
+          n = Math.min(12, n + 1);
+          if (fill) fill.style.width = n + "%";
+          if (pct) pct.textContent = n + "%";
+          if (bar) bar.setAttribute("aria-valuenow", String(n));
+          if (status && n >= 4) status.textContent = "Installing Ward…";
+          if (n >= 12) clearInterval(timer);
+        }, 120);
+        window.__wardInstallTick = timer;
+      })();
+    </script>
   </body>
 </html>

@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 export type VoiceLine = "eliteAggro" | "uniqueFind" | "maxCritDealt" | "maxCritTaken";
 
 const LINES: Record<VoiceLine, string[]> = {
@@ -8,9 +10,9 @@ const LINES: Record<VoiceLine, string[]> = {
 };
 
 /**
- * Tiny voice cues via Web Speech, with tonal stingers underneath.
- * Procedural title drone for the splash — no recorded assets.
- * Keeps the APK light and works offline in WebView.
+ * Procedural SFX + optional Web Speech cues.
+ * No recorded assets — keeps the APK light and works offline in WebView.
+ * Android WebView TTS is often missing or garbled, so speech is skipped there.
  */
 export class AudioBus {
   muted = false;
@@ -27,11 +29,17 @@ export class AudioBus {
   private themeTimer: number | null = null;
   private themeOn = false;
   private master: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private nativeShell = Capacitor.isNativePlatform();
 
   toggle(): boolean {
     this.muted = !this.muted;
     if (this.muted) {
-      window.speechSynthesis?.cancel();
+      try {
+        window.speechSynthesis?.cancel();
+      } catch {
+        // WebView TTS stubs can throw.
+      }
       this.setThemeGain(0);
     } else if (this.themeOn) {
       if (this.themeNodes.length === 0) this.buildTheme();
@@ -44,7 +52,6 @@ export class AudioBus {
   startOminous(): void {
     this.themeOn = true;
     if (this.muted) return;
-    // Resume a suspended context from a gesture, then build or keep the bed.
     const ctx = this.context();
     if (!ctx) return;
     this.buildTheme();
@@ -57,16 +64,16 @@ export class AudioBus {
     master.gain.value = 0.0001;
     master.connect(ctx.destination);
     this.master = master;
-    master.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 2.4);
+    master.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime + 2.4);
 
     // Low pedal — a hollow fifth under a minor second for unease.
     this.drone(ctx, master, 55, "sine", 0.045);
     this.drone(ctx, master, 82.5, "triangle", 0.028);
     this.drone(ctx, master, 110, "sine", 0.018);
-    this.drone(ctx, master, 164.8, "sawtooth", 0.008);
+    this.drone(ctx, master, 164.8, "sine", 0.006);
 
     // Slow breathing noise bed.
-    const noise = this.noiseBed(ctx, master, 0.012);
+    const noise = this.noiseBed(ctx, master, 0.01);
     if (noise) this.themeNodes.push(noise);
 
     this.scheduleBell(ctx, master);
@@ -96,7 +103,7 @@ export class AudioBus {
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
-    this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, level), now + 0.35);
+    this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, level * 0.55), now + 0.35);
   }
 
   private clearTheme(): void {
@@ -131,7 +138,6 @@ export class AudioBus {
     filter.frequency.value = 280;
     filter.Q.value = 0.7;
     gain.gain.value = gainValue;
-    // Gentle tremolo via LFO on the filter.
     const lfo = ctx.createOscillator();
     const lfoGain = ctx.createGain();
     lfo.type = "sine";
@@ -182,7 +188,7 @@ export class AudioBus {
     filter.frequency.value = 520;
     const now = ctx.currentTime;
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.03, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.025, now + 0.08);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.6);
     osc.connect(filter);
     filter.connect(gain);
@@ -199,51 +205,54 @@ export class AudioBus {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return null;
       this.ctx = new Ctx();
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.gain.value = 0.7;
+      this.sfxBus.connect(this.ctx.destination);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
     return this.ctx;
   }
 
   hit(): void {
-    this.tone(210, 0.04, "square", 0.03);
+    this.blip(420, 0.035, "triangle", 0.045);
   }
 
   hurt(): void {
-    this.tone(90, 0.08, "sawtooth", 0.04);
+    this.blip(110, 0.07, "sine", 0.05);
   }
 
   level(): void {
-    this.tone(392, 0.08, "triangle", 0.04);
-    window.setTimeout(() => this.tone(523, 0.1, "triangle", 0.04), 90);
+    this.blip(392, 0.07, "sine", 0.04);
+    window.setTimeout(() => this.blip(523, 0.09, "triangle", 0.035), 90);
   }
 
   eliteAggro(): void {
-    this.tone(120, 0.12, "sawtooth", 0.05);
-    window.setTimeout(() => this.tone(70, 0.18, "square", 0.04), 70);
+    this.blip(140, 0.1, "triangle", 0.05);
+    window.setTimeout(() => this.blip(90, 0.14, "sine", 0.04), 70);
     this.speak("eliteAggro", 0.95, 0.7);
   }
 
   uniqueFind(): void {
-    this.tone(440, 0.07, "triangle", 0.045);
-    window.setTimeout(() => this.tone(554, 0.08, "triangle", 0.04), 80);
-    window.setTimeout(() => this.tone(659, 0.12, "sine", 0.035), 160);
+    this.blip(440, 0.06, "sine", 0.04);
+    window.setTimeout(() => this.blip(554, 0.07, "triangle", 0.035), 80);
+    window.setTimeout(() => this.blip(659, 0.1, "sine", 0.03), 160);
     this.speak("uniqueFind", 1.05, 0.85);
   }
 
   maxCritDealt(): void {
-    this.tone(620, 0.05, "square", 0.04);
-    window.setTimeout(() => this.tone(880, 0.08, "triangle", 0.035), 50);
+    this.blip(620, 0.045, "triangle", 0.04);
+    window.setTimeout(() => this.blip(880, 0.07, "sine", 0.03), 50);
     this.speak("maxCritDealt", 1.15, 1);
   }
 
   maxCritTaken(): void {
-    this.tone(70, 0.1, "sawtooth", 0.055);
-    window.setTimeout(() => this.tone(50, 0.14, "square", 0.04), 60);
+    this.blip(85, 0.09, "sine", 0.05);
+    window.setTimeout(() => this.blip(60, 0.12, "triangle", 0.04), 60);
     this.speak("maxCritTaken", 0.9, 0.55);
   }
 
   private speak(line: VoiceLine, rate: number, pitch: number): void {
-    if (this.muted) return;
+    if (this.muted || this.nativeShell) return;
     const synth = window.speechSynthesis;
     if (!synth) return;
     const now = performance.now();
@@ -253,30 +262,44 @@ export class AudioBus {
     const index = this.lineCursor[line] % options.length;
     this.lineCursor[line] = index + 1;
     const text = options[index]!;
-    synth.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = rate;
-    utter.pitch = pitch;
-    utter.volume = 0.85;
-    const voices = synth.getVoices();
-    const english = voices.find((voice) => /en(-|_|$)/i.test(voice.lang) && /male|daniel|david|fred|alex/i.test(voice.name))
-      ?? voices.find((voice) => /en(-|_|$)/i.test(voice.lang));
-    if (english) utter.voice = english;
-    synth.speak(utter);
+    try {
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = rate;
+      utter.pitch = pitch;
+      utter.volume = 0.85;
+      const voices = synth.getVoices();
+      const english =
+        voices.find((voice) => /en(-|_|$)/i.test(voice.lang) && /male|daniel|david|fred|alex/i.test(voice.name)) ??
+        voices.find((voice) => /en(-|_|$)/i.test(voice.lang));
+      if (english) utter.voice = english;
+      synth.speak(utter);
+    } catch {
+      // Some WebViews expose speechSynthesis but reject speak().
+    }
   }
 
-  private tone(freq: number, duration: number, type: OscillatorType, gainValue: number): void {
+  /** Soft filtered blip — avoids harsh square/saw that crackles on phone speakers. */
+  private blip(freq: number, duration: number, type: OscillatorType, gainValue: number): void {
     const ctx = this.context();
-    if (!ctx) return;
+    if (!ctx || !this.sfxBus) return;
     const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
     const gain = ctx.createGain();
     osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(gainValue, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.72), ctx.currentTime + duration);
+    filter.type = "lowpass";
+    filter.frequency.value = Math.min(2400, freq * 3.2);
+    filter.Q.value = 0.6;
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxBus);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
   }
 }

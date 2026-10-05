@@ -97,9 +97,39 @@ export class Ui {
     this.show("create");
     const input = must("create-name") as HTMLInputElement;
     input.value = name;
+    input.readOnly = false;
+    input.removeAttribute("readonly");
+    // Focus before WebGL preview work so Android keeps the user-gesture chain.
+    this.focusNameField(input);
     this.ensureRacePreview();
     this.paintCreate();
-    input.focus();
+    this.focusNameField(input);
+  }
+
+  /** Soft-keyboard friendly focus for Capacitor / Android WebView. */
+  focusNameField(input: HTMLInputElement = must("create-name") as HTMLInputElement): void {
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+    // Some WebViews only open the IME on a second tick after the overlay paints.
+    window.setTimeout(() => {
+      if (document.activeElement !== input) {
+        try {
+          input.focus({ preventScroll: true });
+        } catch {
+          input.focus();
+        }
+      }
+      // Place caret at end so typing is obvious.
+      const len = input.value.length;
+      try {
+        input.setSelectionRange(len, len);
+      } catch {
+        // Older WebViews may reject selection on type=text.
+      }
+    }, 40);
   }
 
   hideCreate(): void {
@@ -273,6 +303,9 @@ export class Ui {
     must("create-back").addEventListener("click", () => this.hideCreate());
     must("race-prev").addEventListener("click", () => this.stepRace(-1));
     must("race-next").addEventListener("click", () => this.stepRace(1));
+    const createName = must("create-name") as HTMLInputElement;
+    createName.addEventListener("pointerup", () => this.focusNameField(createName));
+    createName.addEventListener("touchend", () => this.focusNameField(createName), { passive: true });
     for (const id of Object.keys(SECTORS) as SectorId[]) {
       document.querySelector(`[data-filter="${id}"]`)?.addEventListener("click", () => {
         this.treeFilter = id;
