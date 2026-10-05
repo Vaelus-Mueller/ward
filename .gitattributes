@@ -1,0 +1,5 @@
+public/textures/pbr/** filter=lfs diff=lfs merge=lfs -text
+public/models/**/*.glb filter=lfs diff=lfs merge=lfs -text
+public/models/props/** filter=lfs diff=lfs merge=lfs -text
+public/models/races/** filter=lfs diff=lfs merge=lfs -text
+public/textures/hdri/** filter=lfs diff=lfs merge=lfs -text

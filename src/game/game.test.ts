@@ -440,8 +440,9 @@ describe("the ward", () => {
   it("scales hounds as the road goes on", () => {
     expect(makeEnemy("hound", 4, 0, 0, 1).maxHp).toBeGreaterThan(makeEnemy("hound", 1, 0, 0, 2).maxHp);
     expect(makeEnemy("hound", 1, 0, 0, 1).maxHp).toBeLessThan(28);
-    expect(makeEnemy("hound", 1, 0, 0, 1).damage).toBeLessThan(7);
-    expect(makeEnemy("hound", 6, 0, 0, 3).maxHp).toBe(Math.round(28 * (1 + 5 * 0.16)));
+    expect(makeEnemy("hound", 1, 0, 0, 1).damage).toBeLessThan(3);
+    expect(makeEnemy("hound", 10, 0, 0, 1).damage).toBeGreaterThan(makeEnemy("hound", 5, 0, 0, 2).damage);
+    expect(makeEnemy("hound", 10, 0, 0, 1).maxHp).toBe(Math.round(28 * (1 + 9 * 0.16)));
   });
 
   it("rolls attributes at half the previous value", () => {

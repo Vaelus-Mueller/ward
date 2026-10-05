@@ -365,14 +365,19 @@ function box(w: number, h: number, d: number): THREE.BufferGeometry {
   return new RoundedBoxGeometry(w, h, d, 3, safe);
 }
 
-function mat(color: number, metal: number, rough: number, emissive?: number, emit = 0): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
+function mat(color: number, metal: number, rough: number, emissive?: number, emit = 0): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
     color,
     metalness: metal,
     roughness: rough,
     emissive: emissive ?? 0x000000,
     emissiveIntensity: emit,
-    envMapIntensity: 0.9,
+    envMapIntensity: 1.05,
+    clearcoat: metal > 0.3 ? 0.45 : 0.1,
+    clearcoatRoughness: 0.4,
+    sheen: rough > 0.65 ? 0.25 : 0,
+    sheenRoughness: 0.7,
+    sheenColor: new THREE.Color(color),
   });
 }
 

@@ -1,11 +1,27 @@
-KayKit game assets by Kay Lousberg, used under CC0.
-https://github.com/KayKit-Game-Assets
+Ward art & asset credits
+========================
 
-Characters: Knight, Rogue, Mage. Each figure keeps one weapon from that file (sword and badge, twin knives, or wand).
-Enemies: Skeleton Minion, Warrior, Rogue, and Mage, used as the ward's dead, holding a knife, sword, crossbow, or staff taken from the same character set.
-Additional wave-1 foes (wolf, slime, gargoyle, wisp, imp, spider, cultist, sprig, whelp, hillock, lurker, lumen, flicker) are original procedural kitbashes in-game — not third-party D&D assets.
-Floors, CC0, from Poly Haven: broken castle brick for levels 1–20, cracked red ground after that.
-https://polyhaven.com/a/castle_brick_broken_06
-https://polyhaven.com/a/cracked_red_ground
+Original Ward geometry (heroes, procedural monsters, FX)
+--------------------------------------------------------
+Hand-authored Three.js meshes for all playable races and wave-1
+procedural foes (wolf/werewolf silhouette, demon/imp, slime, gargoyle,
+spider, cultist, sprig, whelp, hillock, lurker, lumen, flicker).
+Fantasy archetypes only — no third-party game IP.
 
-No files from Redeev or Oniro are included.
+Environment PBR (Poly Haven, CC0)
+---------------------------------
+https://polyhaven.com
+- castle_brick_broken_06 — dungeon ground (4K maps + 8K diffuse)
+- cracked_red_ground — hell ground (4K maps + 8K diffuse)
+- cobblestone_floor_03 — road (4K maps)
+
+KayKit (CC0) — dungeon dressing & undead GLBs
+---------------------------------------------
+Kay Lousberg — https://github.com/KayKit-Game-Assets
+Characters / undead already in public/models (hound, sentinel, archer,
+brute, knight, rogue, mage) and optional race GLB references under
+public/models/races/. Runtime heroes prefer original Ward meshes.
+Dungeon Remastered props under public/models/props/ (chests, barrels,
+banners, rubble, torches, tables, arches, doorways, stairs).
+
+No files from Redeev, Oniro, or other commercial games are included.

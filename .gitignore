@@ -11,3 +11,4 @@ android/captures
 android/.idea
 *.iml
 .idea
+_asset_packs/

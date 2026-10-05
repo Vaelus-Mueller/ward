@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { ARENA, type Item } from "./game/types";
@@ -13,11 +14,18 @@ import { buildMonster, isProceduralMonster } from "./render/monsters";
 
 const SCALE = 0.045;
 const MODEL_URL = (file: string) => `${import.meta.env.BASE_URL}models/${file}`;
+/** Zoomed-out ARPG: advance skeletal clips in ~12 FPS steps; sim/render stay full rate. */
+const ANIM_STEP = 1 / 12;
 
 const FILES: Record<string, string> = {
   knight: "knight.glb",
   rogue: "rogue.glb",
   mage: "mage.glb",
+  human: "races/human.glb",
+  elf: "races/elf.glb",
+  dwarf: "races/dwarf.glb",
+  gnome: "races/gnome.glb",
+  hobbit: "races/hobbit.glb",
   hound: "hound.glb",
   sentinel: "sentinel.glb",
   archer: "archer.glb",
@@ -27,6 +35,23 @@ const FILES: Record<string, string> = {
   "wall-broken": "wall-broken.glb",
   pillar: "pillar.glb",
   column: "column.glb",
+  // Dense KayKit dungeon dressing (CC0)
+  chest: "props/chest.glb",
+  "chest-gold": "props/chest_gold.glb",
+  barrel: "props/barrel_large.glb",
+  "barrel-small": "props/barrel_small.glb",
+  crates: "props/crates_stacked.glb",
+  rubble: "props/rubble_large.glb",
+  "rubble-half": "props/rubble_half.glb",
+  torch: "props/torch_mounted.glb",
+  "torch-lit": "props/torch_lit.glb",
+  banner: "props/banner_red.glb",
+  "banner-blue": "props/banner_blue.glb",
+  table: "props/table_medium.glb",
+  candle: "props/candle_lit.glb",
+  stairs: "props/stairs.glb",
+  "wall-arch": "props/wall_arched.glb",
+  doorway: "props/wall_doorway.glb",
 };
 
 const HEIGHT: Record<string, number> = {
@@ -73,6 +98,8 @@ interface Actor {
   armed: boolean;
   hitLeft: number;
   hurt: boolean;
+  /** Accumulated dt for stepped clip updates (zoomed-out low anim rate). */
+  animDebt: number;
   slash?: THREE.Mesh;
   blade?: THREE.Mesh;
   bar?: THREE.Group;
@@ -113,9 +140,24 @@ export class Renderer {
   private ember!: THREE.PointLight;
   private stone?: THREE.Texture;
   private stoneRough?: THREE.Texture;
+  private stoneNormal?: THREE.Texture;
+  private stoneAo?: THREE.Texture;
   private lava?: THREE.Texture;
   private lavaRough?: THREE.Texture;
+  private lavaNormal?: THREE.Texture;
+  private lavaAo?: THREE.Texture;
+  private roadDiff?: THREE.Texture;
+  private roadRough?: THREE.Texture;
+  private roadNormal?: THREE.Texture;
+  private roadAo?: THREE.Texture;
+  private stoneDisp?: THREE.Texture;
+  private lavaDisp?: THREE.Texture;
+  private wallDiff?: THREE.Texture;
+  private wallRough?: THREE.Texture;
+  private wallNormal?: THREE.Texture;
+  private wallAo?: THREE.Texture;
   private roadMat: THREE.MeshStandardMaterial | null = null;
+  private groundMesh: THREE.Mesh | null = null;
   private readonly readyPromise: Promise<void>;
   private resolveReady!: () => void;
   private readonly quality = new AdaptiveQuality();
@@ -158,7 +200,7 @@ export class Renderer {
     shadow.right = 14;
     shadow.top = 14;
     shadow.bottom = -14;
-    this.moon.shadow.radius = q.level === "high" ? 2.5 : 1.5;
+    this.moon.shadow.radius = q.level === "ultra" ? 3.2 : q.level === "high" ? 2.5 : 1.5;
     this.scene.add(this.moon);
     this.scene.add(this.moon.target);
     this.fill = new THREE.DirectionalLight(0xc9d4e4, 0.45);
@@ -174,19 +216,27 @@ export class Renderer {
       color: 0xffffff,
       roughness: 0.9,
       metalness: 0.04,
-      envMapIntensity: 0.4,
+      envMapIntensity: 0.55,
     });
     this.installEnvironment();
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE), this.groundMat);
+    // Dense tessellation so displacement maps actually sculpt the floor.
+    const groundGeo = new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE, 192, 192);
+    if (groundGeo.getAttribute("uv") && !groundGeo.getAttribute("uv2")) {
+      groundGeo.setAttribute("uv2", groundGeo.getAttribute("uv").clone());
+    }
+    const ground = new THREE.Mesh(groundGeo, this.groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((ARENA.width * SCALE) / 2, -0.02, (ARENA.height * SCALE) / 2);
     ground.receiveShadow = true;
+    this.groundMesh = ground;
     this.scene.add(ground);
     this.atmosphere = new AtmosphereFx(this.scene, this.webgl, () => this.quality.current());
     this.floatLayer = document.createElement("div");
     this.floatLayer.id = "float-layer";
     canvas.parentElement?.appendChild(this.floatLayer);
-    void Promise.all([this.loadModels(), this.loadFloors()]).finally(() => this.resolveReady());
+    void Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]).finally(() =>
+      this.resolveReady(),
+    );
   }
 
   whenReady(): Promise<void> {
@@ -283,9 +333,9 @@ export class Renderer {
       this.moon.shadow.map?.dispose();
       this.moon.shadow.map = null;
     }
-    // Keep ambient IBL soft on low so fill rate stays for gameplay FX.
-    this.scene.environmentIntensity = q.level === "low" ? 0.28 : q.level === "balanced" ? 0.38 : 0.48;
-    this.moon.shadow.radius = q.level === "high" ? 2.5 : q.level === "balanced" ? 1.75 : 1;
+    this.scene.environmentIntensity =
+      q.level === "ultra" ? 0.72 : q.level === "high" ? 0.55 : q.level === "balanced" ? 0.4 : 0.28;
+    this.moon.shadow.radius = q.level === "ultra" ? 3.2 : q.level === "high" ? 2.5 : q.level === "balanced" ? 1.75 : 1;
     this.atmosphere?.applyQuality(q);
     this.resize();
   }
@@ -295,7 +345,7 @@ export class Renderer {
     const room = new RoomEnvironment();
     const target = pmrem.fromScene(room, 0.04);
     this.scene.environment = target.texture;
-    this.scene.environmentIntensity = 0.45;
+    this.scene.environmentIntensity = 0.55;
     room.traverse((node) => {
       const mesh = node as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -306,24 +356,107 @@ export class Renderer {
     pmrem.dispose();
   }
 
+  private async loadHdrEnvironment(): Promise<void> {
+    try {
+      const url = `${import.meta.env.BASE_URL}textures/hdri/ward_env.hdr`;
+      const hdr = await new RGBELoader().loadAsync(url);
+      const pmrem = new THREE.PMREMGenerator(this.webgl);
+      pmrem.compileEquirectangularShader();
+      const env = pmrem.fromEquirectangular(hdr);
+      const previous = this.scene.environment;
+      this.scene.environment = env.texture;
+      this.scene.environmentIntensity = 0.7;
+      hdr.dispose();
+      pmrem.dispose();
+      previous?.dispose();
+    } catch {
+      // RoomEnvironment fallback already installed.
+    }
+  }
+
   private async loadFloors(): Promise<void> {
     const loader = new THREE.TextureLoader();
     const url = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
+    const pbr = (file: string) => `${import.meta.env.BASE_URL}textures/pbr/${file}`;
+    const prefer = async (hi: string, lo: string) =>
+      loader.loadAsync(pbr(hi)).catch(() => loader.loadAsync(pbr(lo)));
     try {
-      const [stone, stoneRough, lava, lavaRough] = await Promise.all([
-        loader.loadAsync(url("dungeon_diff.jpg")),
-        loader.loadAsync(url("dungeon_rough.jpg")),
-        loader.loadAsync(url("hell_diff.jpg")),
-        loader.loadAsync(url("hell_rough.jpg")),
+      const anisotropy = Math.min(16, this.webgl.capabilities.getMaxAnisotropy());
+      const [
+        stone,
+        stoneRough,
+        stoneNormal,
+        stoneAo,
+        stoneDisp,
+        lava,
+        lavaRough,
+        lavaNormal,
+        lavaAo,
+        lavaDisp,
+        roadDiff,
+        roadRough,
+        roadNormal,
+        roadAo,
+        wallDiff,
+        wallRough,
+        wallNormal,
+        wallAo,
+      ] = await Promise.all([
+        prefer("dungeon_diff_8k.jpg", "dungeon_diff_4k.jpg"),
+        prefer("dungeon_rough_8k.jpg", "dungeon_rough_4k.jpg"),
+        prefer("dungeon_nor_gl_8k.jpg", "dungeon_nor_gl_4k.jpg"),
+        prefer("dungeon_ao_8k.jpg", "dungeon_ao_4k.jpg"),
+        loader.loadAsync(pbr("dungeon_disp_8k.jpg")).catch(() => null),
+        prefer("hell_diff_8k.jpg", "hell_diff_4k.jpg"),
+        prefer("hell_rough_8k.jpg", "hell_rough_4k.jpg"),
+        prefer("hell_nor_gl_8k.jpg", "hell_nor_gl_4k.jpg"),
+        prefer("hell_ao_8k.jpg", "hell_ao_4k.jpg"),
+        loader.loadAsync(pbr("hell_disp_8k.jpg")).catch(() => null),
+        prefer("road_diff_8k.jpg", "road_diff_4k.jpg"),
+        prefer("road_rough_8k.jpg", "road_rough_4k.jpg"),
+        prefer("road_nor_gl_8k.jpg", "road_nor_gl_4k.jpg"),
+        prefer("road_ao_8k.jpg", "road_ao_4k.jpg"),
+        loader.loadAsync(pbr("wall_diff_8k.jpg")).catch(() => null),
+        loader.loadAsync(pbr("wall_rough_8k.jpg")).catch(() => null),
+        loader.loadAsync(pbr("wall_nor_gl_8k.jpg")).catch(() => null),
+        loader.loadAsync(pbr("wall_ao_8k.jpg")).catch(() => null),
       ]);
-      const anisotropy = Math.min(8, this.webgl.capabilities.getMaxAnisotropy());
-      this.stone = prepFloor(stone, true, anisotropy);
-      this.stoneRough = prepFloor(stoneRough, false, anisotropy);
-      this.lava = prepFloor(lava, true, anisotropy);
-      this.lavaRough = prepFloor(lavaRough, false, anisotropy);
+      this.stone = prepFloor(stone, true, anisotropy, 10);
+      this.stoneRough = prepFloor(stoneRough, false, anisotropy, 10);
+      this.stoneNormal = prepFloor(stoneNormal, false, anisotropy, 10);
+      this.stoneAo = prepFloor(stoneAo, false, anisotropy, 10);
+      this.stoneDisp = stoneDisp ? prepFloor(stoneDisp, false, anisotropy, 10) : undefined;
+      this.lava = prepFloor(lava, true, anisotropy, 10);
+      this.lavaRough = prepFloor(lavaRough, false, anisotropy, 10);
+      this.lavaNormal = prepFloor(lavaNormal, false, anisotropy, 10);
+      this.lavaAo = prepFloor(lavaAo, false, anisotropy, 10);
+      this.lavaDisp = lavaDisp ? prepFloor(lavaDisp, false, anisotropy, 10) : undefined;
+      this.roadDiff = prepFloor(roadDiff, true, anisotropy, 6);
+      this.roadRough = prepFloor(roadRough, false, anisotropy, 6);
+      this.roadNormal = prepFloor(roadNormal, false, anisotropy, 6);
+      this.roadAo = prepFloor(roadAo, false, anisotropy, 6);
+      this.wallDiff = wallDiff ? prepFloor(wallDiff, true, anisotropy, 4) : undefined;
+      this.wallRough = wallRough ? prepFloor(wallRough, false, anisotropy, 4) : undefined;
+      this.wallNormal = wallNormal ? prepFloor(wallNormal, false, anisotropy, 4) : undefined;
+      this.wallAo = wallAo ? prepFloor(wallAo, false, anisotropy, 4) : undefined;
       this.realm = "";
     } catch {
-      // The colored floor remains if a texture is missing.
+      try {
+        const [stone, stoneRough, lava, lavaRough] = await Promise.all([
+          loader.loadAsync(url("dungeon_diff.jpg")),
+          loader.loadAsync(url("dungeon_rough.jpg")),
+          loader.loadAsync(url("hell_diff.jpg")),
+          loader.loadAsync(url("hell_rough.jpg")),
+        ]);
+        const anisotropy = Math.min(8, this.webgl.capabilities.getMaxAnisotropy());
+        this.stone = prepFloor(stone, true, anisotropy);
+        this.stoneRough = prepFloor(stoneRough, false, anisotropy);
+        this.lava = prepFloor(lava, true, anisotropy);
+        this.lavaRough = prepFloor(lavaRough, false, anisotropy);
+        this.realm = "";
+      } catch {
+        // Colored floor remains.
+      }
     }
   }
 
@@ -333,13 +466,20 @@ export class Renderer {
     if (next === "dungeon") {
       this.groundMat.map = this.stone ?? null;
       this.groundMat.roughnessMap = this.stoneRough ?? null;
+      this.groundMat.normalMap = this.stoneNormal ?? null;
+      this.groundMat.aoMap = this.stoneAo ?? null;
+      this.groundMat.aoMapIntensity = this.stoneAo ? 0.9 : 1;
+      this.groundMat.displacementMap = this.stoneDisp ?? null;
+      this.groundMat.displacementScale = this.stoneDisp ? 0.22 : 0;
+      this.groundMat.displacementBias = this.stoneDisp ? -0.05 : 0;
+      if (this.groundMat.normalMap) this.groundMat.normalScale.set(1.35, 1.35);
       this.groundMat.emissiveMap = null;
       this.groundMat.emissive.set(0x000000);
       this.groundMat.emissiveIntensity = 0;
       this.groundMat.color.set(0xe8e2d6);
       this.groundMat.roughness = 0.92;
       this.groundMat.metalness = 0.05;
-      this.groundMat.envMapIntensity = 0.42;
+      this.groundMat.envMapIntensity = 0.55;
       this.webgl.setClearColor(0x2e2a26);
       fog.color.set(0x6f675c);
       fog.near = 22;
@@ -358,21 +498,35 @@ export class Renderer {
       this.ember.distance = 28;
       this.tintScenery(0xb8b0a4, 0.88, 0.08, 0.55);
       if (this.roadMat) {
-        this.roadMat.color.set(0x8a7f6e);
+        this.roadMat.map = this.roadDiff ?? null;
+        this.roadMat.roughnessMap = this.roadRough ?? null;
+        this.roadMat.normalMap = this.roadNormal ?? null;
+        this.roadMat.aoMap = this.roadAo ?? null;
+        this.roadMat.aoMapIntensity = this.roadAo ? 0.8 : 1;
+        if (this.roadMat.normalMap) this.roadMat.normalScale.set(1.05, 1.05);
+        this.roadMat.color.set(0xd8d0c4);
         this.roadMat.roughness = 0.9;
         this.roadMat.metalness = 0.06;
-        this.roadMat.envMapIntensity = 0.35;
+        this.roadMat.envMapIntensity = 0.45;
+        this.roadMat.needsUpdate = true;
       }
     } else {
       this.groundMat.map = this.lava ?? null;
       this.groundMat.roughnessMap = this.lavaRough ?? null;
+      this.groundMat.normalMap = this.lavaNormal ?? null;
+      this.groundMat.aoMap = this.lavaAo ?? null;
+      this.groundMat.aoMapIntensity = this.lavaAo ? 0.75 : 1;
+      this.groundMat.displacementMap = this.lavaDisp ?? null;
+      this.groundMat.displacementScale = this.lavaDisp ? 0.28 : 0;
+      this.groundMat.displacementBias = this.lavaDisp ? -0.06 : 0;
+      if (this.groundMat.normalMap) this.groundMat.normalScale.set(1.45, 1.45);
       this.groundMat.emissiveMap = this.lava ?? null;
       this.groundMat.emissive.set(0xff4a16);
       this.groundMat.emissiveIntensity = 0.72;
       this.groundMat.color.set(0xffebe0);
       this.groundMat.roughness = 0.68;
       this.groundMat.metalness = 0.1;
-      this.groundMat.envMapIntensity = 0.5;
+      this.groundMat.envMapIntensity = 0.6;
       this.webgl.setClearColor(0x2a0e0a);
       fog.color.set(0x5a1e12);
       fog.near = 14;
@@ -391,10 +545,15 @@ export class Renderer {
       this.ember.distance = 36;
       this.tintScenery(0xc4886e, 0.72, 0.14, 0.65);
       if (this.roadMat) {
-        this.roadMat.color.set(0x6a3a28);
+        this.roadMat.map = this.roadDiff ?? null;
+        this.roadMat.roughnessMap = this.roadRough ?? null;
+        this.roadMat.normalMap = this.roadNormal ?? null;
+        this.roadMat.aoMap = this.roadAo ?? null;
+        this.roadMat.color.set(0xc4886e);
         this.roadMat.roughness = 0.78;
         this.roadMat.metalness = 0.08;
-        this.roadMat.envMapIntensity = 0.4;
+        this.roadMat.envMapIntensity = 0.5;
+        this.roadMat.needsUpdate = true;
       }
     }
     this.groundMat.needsUpdate = true;
@@ -402,7 +561,7 @@ export class Renderer {
   }
 
   private tintScenery(hex: number, roughness: number, metalness: number, envMapIntensity: number): void {
-    for (const key of ["wall", "wall-broken", "pillar", "column"]) {
+    for (const key of ["wall", "wall-broken", "pillar", "column", "wall-arch", "doorway", "stairs"]) {
       const piece = this.templates.get(key);
       if (!piece) continue;
       piece.scene.traverse((node: THREE.Object3D) => {
@@ -414,10 +573,20 @@ export class Renderer {
         for (const material of materials) {
           const standard = material as THREE.MeshStandardMaterial;
           if (!standard.color) continue;
-          standard.color.set(hex);
+          if (this.wallDiff && (key === "wall" || key === "wall-broken" || key === "wall-arch" || key === "doorway")) {
+            standard.map = this.wallDiff;
+            standard.roughnessMap = this.wallRough ?? null;
+            standard.normalMap = this.wallNormal ?? null;
+            standard.aoMap = this.wallAo ?? null;
+            standard.color.set(0xffffff);
+            if (standard.normalMap) standard.normalScale.set(1.2, 1.2);
+          } else {
+            standard.color.set(hex);
+          }
           if ("roughness" in standard) standard.roughness = roughness;
           if ("metalness" in standard) standard.metalness = metalness;
           if ("envMapIntensity" in standard) standard.envMapIntensity = envMapIntensity;
+          standard.needsUpdate = true;
         }
       });
     }
@@ -475,20 +644,31 @@ export class Renderer {
     }
     const spine = roadSpine();
     this.roadMat = new THREE.MeshStandardMaterial({
-      color: 0x8a7f6e,
+      color: 0xd8d0c4,
       roughness: 0.9,
       metalness: 0.06,
-      envMapIntensity: 0.35,
+      envMapIntensity: 0.45,
+      map: this.roadDiff ?? null,
+      roughnessMap: this.roadRough ?? null,
+      normalMap: this.roadNormal ?? null,
+      aoMap: this.roadAo ?? null,
+      aoMapIntensity: 0.8,
     });
+    if (this.roadMat.normalMap) this.roadMat.normalScale.set(1.05, 1.05);
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE)),
+      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE), 1, 1),
       this.roadMat,
     );
     road.rotation.x = -Math.PI / 2;
     road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
     road.receiveShadow = true;
+    // aoMap needs a second UV channel — copy uv → uv2
+    const roadGeo = road.geometry as THREE.BufferGeometry;
+    if (roadGeo.getAttribute("uv") && !roadGeo.getAttribute("uv2")) {
+      roadGeo.setAttribute("uv2", roadGeo.getAttribute("uv").clone());
+    }
     this.scene.add(road);
-    // Sparse emissive torch bowls at pack columns (no extra lights — AdaptiveQuality budget).
+    // Emissive torch bowls + denser dressing at pack columns.
     const torchMat = new THREE.MeshStandardMaterial({
       color: 0x2a1c12,
       roughness: 0.8,
@@ -497,16 +677,24 @@ export class Renderer {
       emissive: 0xff6a28,
       emissiveIntensity: 0.55,
     });
+    const dressing = ["chest", "barrel", "crates", "rubble", "banner", "table", "candle", "torch"] as const;
     const seen = new Set<string>();
+    let dressIdx = 0;
     for (const pack of worldPacks()) {
       const key = pack.branch ? pack.id : `${pack.level}`;
       if (!pack.branch && pack.id !== `${pack.level}-0`) continue;
       if (seen.has(key)) continue;
       seen.add(key);
       const markX = (pack.branch ? pack.x : ROAD_X + 220) * SCALE;
-      place("column", markX, pack.y * SCALE, 0, 2.4);
-      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), torchMat);
-      bowl.position.set(markX, 2.1, pack.y * SCALE);
+      const markZ = pack.y * SCALE;
+      place("column", markX, markZ, 0, 2.4);
+      place(dressing[dressIdx % dressing.length]!, markX + 1.4, markZ + 0.6, dressIdx * 0.7, 1.1);
+      place(dressing[(dressIdx + 3) % dressing.length]!, markX - 1.2, markZ - 0.5, -dressIdx * 0.5, 1.0);
+      if (dressIdx % 2 === 0) place("banner-blue", markX + 0.2, markZ - 1.3, 0, 1.4);
+      if (dressIdx % 3 === 0) place("wall-arch", markX - 2.2, markZ, Math.PI / 2, 3.2);
+      dressIdx += 1;
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), torchMat);
+      bowl.position.set(markX, 2.1, markZ);
       bowl.castShadow = false;
       bowl.receiveShadow = false;
       this.scene.add(bowl);
@@ -644,6 +832,7 @@ export class Renderer {
       held: false,
       hitLeft: 0,
       hurt: false,
+      animDebt: 0,
       armed: hero || procedural || !GEAR[kind],
       slash,
       blade,
@@ -748,7 +937,12 @@ export class Renderer {
       actor.hurt = hurt;
       tintActor(actor.root, hurt);
     }
-    actor.mixer.update(dt);
+    // Skip animation frames — readable at distance, cheaper with many actors.
+    actor.animDebt += dt;
+    if (actor.animDebt >= ANIM_STEP) {
+      actor.mixer.update(actor.animDebt);
+      actor.animDebt = 0;
+    }
   }
 
   private syncShots(shots: Shot[]): void {
@@ -874,15 +1068,16 @@ function facingOf(enemy: Enemy, sim: Sim): number {
   return Math.atan2(sim.player.y - enemy.y, sim.player.x - enemy.x);
 }
 
-function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number): THREE.Texture {
+function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number, repeat = 16): THREE.Texture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(16, 11);
+  texture.repeat.set(repeat, repeat * 0.7);
   texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   texture.anisotropy = anisotropy;
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.generateMipmaps = true;
+  texture.needsUpdate = true;
   return texture;
 }
 

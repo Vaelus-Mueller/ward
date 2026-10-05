@@ -1,4 +1,6 @@
 #!/bin/sh
+command -v git-lfs >/dev/null 2>&1 && git lfs post-commit "$@"
+
 # After every commit on C:, push the branch to GitHub and the G: Drive copy.
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" = "HEAD" ]; then

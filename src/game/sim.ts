@@ -186,11 +186,20 @@ export function emptyIntent(): Intent {
   };
 }
 
+/** Ramp from a soft start to full power across the first ten waves. */
+export function earlyEase(wave: number, start: number, fullAt = 10): number {
+  if (wave >= fullAt) return 1;
+  if (wave <= 1) return start;
+  return start + (1 - start) * ((wave - 1) / (fullAt - 1));
+}
+
 export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, id: number): Enemy {
   const arch = ARCH[kind];
-  const ease = wave <= 5 ? 0.8 + (wave - 1) * 0.04 : 1;
-  const hpScale = (1 + (wave - 1) * 0.16) * ease;
-  const dmgScale = (1 + (wave - 1) * 0.1) * ease;
+  const hpEase = earlyEase(wave, 0.75);
+  const dmgEase = earlyEase(wave, 0.4);
+  const defEase = earlyEase(wave, 0.7);
+  const hpScale = (1 + (wave - 1) * 0.16) * hpEase;
+  const dmgScale = (1 + (wave - 1) * 0.1) * dmgEase;
   const hp = Math.round(arch.hp * hpScale);
   return {
     id,
@@ -199,8 +208,8 @@ export function makeEnemy(kind: EnemyKind, wave: number, x: number, y: number, i
     y,
     hp,
     maxHp: hp,
-    defense: Math.round(arch.def * (1 + (wave - 1) * 0.08) * ease),
-    armor: arch.armor * (1 + (wave - 1) * 0.1) * ease,
+    defense: Math.round(arch.def * (1 + (wave - 1) * 0.08) * defEase),
+    armor: arch.armor * (1 + (wave - 1) * 0.1) * defEase,
     damage: arch.dmg * dmgScale,
     speed: arch.speed,
     range: arch.range,
