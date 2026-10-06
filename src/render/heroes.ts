@@ -540,6 +540,11 @@ export function isHeroRace(kind: string): kind is RaceId {
   return kind in HERO_HEIGHT;
 }
 
+/** Full basic-attack window (windup + strike + recover). Keep in sync with sim pending hits. */
+export const HERO_ATTACK_DUR = 0.62;
+/** Fraction of the attack window when the weapon should connect. */
+export const HERO_ATTACK_IMPACT = 0.42;
+
 /** Procedural clips so every arm (incl. insectoid blade-arms) walks and swings. */
 export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
   const arms = ["ArmLeft", "ArmRight"];
@@ -581,21 +586,29 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
     return { x: Math.sin(t * Math.PI * 4) * 0.03, z: 0 };
   }, [...arms, ...legs, "spine"]);
 
-  const attack = limbClip("1H_Melee_Attack_Slice_Horizontal", 0.45, (t, name) => {
-    const wind = t < 0.35 ? t / 0.35 : t < 0.55 ? 1 : 1 - (t - 0.55) / 0.45;
-    if (!name.startsWith("Arm")) {
-      return { x: wind * 0.12, z: 0 };
-    }
+  // Wind → accelerate through impact → follow-through (weapons on handslots ride this).
+  const attack = limbClip("1H_Melee_Attack_Slice_Horizontal", HERO_ATTACK_DUR, (t, name) => {
+    const wind =
+      t < 0.38
+        ? Math.pow(t / 0.38, 1.65)
+        : t < 0.48
+          ? 1 + (t - 0.38) * 0.35
+          : Math.max(0, 1.12 - Math.pow((t - 0.48) / 0.52, 1.25) * 1.12);
+    if (name === "spine") return { x: wind * 0.18, y: -wind * 0.22, z: 0 };
+    if (name === "chest") return { x: wind * 0.12, y: wind * 0.28, z: 0 };
+    if (name === "LegLeft") return { x: -wind * 0.12, z: 0.04 };
+    if (name === "LegRight") return { x: wind * 0.18, z: -0.04 };
+    if (!name.startsWith("Arm")) return { x: wind * 0.1, z: 0 };
     const left = name.includes("Left");
     const lower = name.endsWith("2");
-    const lag = lower ? 0.75 : 1;
-    const flare = lower ? 0.55 : 0.35;
+    const lag = lower ? 0.72 : 1;
+    const lead = left ? 0.55 : 1;
     return {
-      x: -wind * (lower ? 1.35 : 1.15) * lag,
-      y: (left ? -1 : 1) * wind * (lower ? 0.75 : 0.55) * lag,
-      z: (left ? 1 : -1) * (0.15 + wind * flare),
+      x: -wind * (lower ? 1.55 : 1.35) * lag * lead,
+      y: (left ? -1 : 1) * wind * (lower ? 0.95 : 0.72) * lag,
+      z: (left ? 1 : -1) * (0.2 + wind * (lower ? 0.75 : 0.55)),
     };
-  }, [...arms, "spine", "chest"]);
+  }, [...arms, ...legs, "spine", "chest"]);
 
   const hit = limbClip("Hit_A", 0.28, (t, name) => {
     const flinch = Math.sin(Math.min(1, t) * Math.PI) * 0.45;
@@ -613,7 +626,7 @@ function limbClip(
   sample: (t: number, bone: string) => { x?: number; y?: number; z?: number },
   bones: string[],
 ): THREE.AnimationClip {
-  const steps = 8;
+  const steps = 12;
   const times: number[] = [];
   for (let i = 0; i <= steps; i++) times.push((i / steps) * duration);
   const tracks: THREE.KeyframeTrack[] = [];

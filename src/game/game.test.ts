@@ -78,8 +78,8 @@ describe("levels and attributes", () => {
     spendStat(hearty, "stamina");
     spendStat(hearty, "stamina");
     spendStat(hearty, "stamina");
-    // Human +4% stamina: three spent points land as four total after rounding.
-    expect(derive(hearty).life).toBe(derive(plain).life + 4);
+    // Human +3% stamina: three spent points still land as +3 life after rounding.
+    expect(derive(hearty).life).toBe(derive(plain).life + 3);
     expect(derive(hearty).armor).toBeGreaterThan(derive(plain).armor);
     const strong = createCharacter();
     strong.unspentStats = 5;
@@ -276,7 +276,7 @@ describe("gear and saving", () => {
 
   it("applies each race’s attribute percentages on innate stats", () => {
     const attrs: Attr[] = ["strength", "agility", "stamina", "luck", "spirit"];
-    expect(RACES).toHaveLength(8);
+    expect(RACES).toHaveLength(10);
     for (const race of RACES) {
       const hero = createCharacter("Exile", race.id);
       const totals = attributes(hero);
@@ -286,9 +286,9 @@ describe("gear and saving", () => {
       }
     }
     const human = attributes(createCharacter("Exile", "human"));
-    expect(human.strength).toBe(Math.round(BASE_ATTR * 1.04));
+    expect(human.strength).toBe(Math.round(BASE_ATTR * 1.03));
     expect(human.agility).toBe(Math.round(BASE_ATTR * 0.98));
-    expect(human.stamina).toBe(Math.round(BASE_ATTR * 1.04));
+    expect(human.stamina).toBe(Math.round(BASE_ATTR * 1.03));
     expect(human.spirit).toBe(Math.round(BASE_ATTR * 0.98));
     for (const race of RACES) {
       for (const attr of attrs) {
@@ -661,13 +661,14 @@ describe("the ward", () => {
 
   it("gives one life per endurance and five life per level, and energy from spirit", () => {
     const hero = createCharacter();
+    expect(derive(hero).life).toBe(50);
     hero.level = 4;
     hero.spent.stamina = 10;
     hero.spent.spirit = 20;
     const stats = derive(hero);
-    // Human: +4% stamina, −2% spirit on innate (base + spent).
-    const stamina = Math.round((10 + 10) * 1.04);
-    expect(stats.life).toBe(4 * 5 + stamina);
+    // Human: +3% stamina, −2% spirit on innate (base + spent).
+    const stamina = Math.round((10 + 10) * 1.03);
+    expect(stats.life).toBe(50 + (4 - 1) * 5 + (stamina - 10));
     // 24 + level*0.5 + spirit*0.4
     const spirit = Math.round((10 + 20) * 0.98);
     expect(stats.energy).toBe(Math.round(24 + 4 * 0.5 + spirit * 0.4));

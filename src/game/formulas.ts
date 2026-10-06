@@ -27,6 +27,7 @@ import {
   type SlotName,
   type WeaponStyle,
   BASE_ATTR,
+  BASE_LIFE,
   clamp,
   emptyMods,
   MAX_LEVEL,
@@ -120,7 +121,8 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const weapon = c.equipment.weapon ? liveItem(c.equipment.weapon, c.level) : null;
   const style: WeaponStyle = weapon?.style ?? "melee";
   const life = Math.round(
-    (c.level * 5 + attr.stamina + mods.life + gearNumber(c, "life")) * (1 + raceLifePct(c.race)),
+    (BASE_LIFE + (c.level - 1) * 5 + (attr.stamina - BASE_ATTR) + mods.life + gearNumber(c, "life")) *
+      (1 + raceLifePct(c.race)),
   );
   // Spirit feeds energy storage; passives/gear add more.
   const energy = Math.round(

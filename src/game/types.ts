@@ -1,5 +1,7 @@
 export const ARENA = { width: 3600, height: 60000, margin: 160 };
 export const BASE_ATTR = 10;
+/** Starting life at level 1 with innate stamina (before racial % and gear). */
+export const BASE_LIFE = 50;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;
 export const CLASS_POINT_LEVELS = [25, 50] as const;

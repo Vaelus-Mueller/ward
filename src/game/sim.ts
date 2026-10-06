@@ -1,4 +1,5 @@
 import { grantXp } from "./character";
+import { HERO_ATTACK_DUR, HERO_ATTACK_IMPACT } from "../render/heroes";
 import {
   ARENA,
   STAT_POINTS_PER_LEVEL,
@@ -160,6 +161,16 @@ interface PlayerBody {
   aimId: number | null;
   dest: { x: number; y: number } | null;
   swing: number;
+  /** Full length of the current swing window (for impact timing). */
+  swingTotal: number;
+  /** Melee blow waiting for the weapon to reach the strike pose. */
+  pendingMelee: {
+    enemyId: number;
+    damage: number;
+    burn: number;
+    frost: number;
+    frostDur: number;
+  } | null;
 }
 
 const ARCH = MONSTER_ARCH;
@@ -286,6 +297,8 @@ export class Sim {
       aimId: null,
       dest: null,
       swing: 0,
+      swingTotal: 0,
+      pendingMelee: null,
     };
     this.recompute();
     this.player.hp = this.derived.life;
@@ -417,6 +430,7 @@ export class Sim {
 
     this.hurtThisTick = false;
     this.tickTimers(dt);
+    this.resolvePendingMelee(result);
     this.applyIntent(intent, dt);
     if (this.player.portal) {
       const stick = Math.hypot(intent.moveX, intent.moveY);
@@ -569,7 +583,7 @@ export class Sim {
 
   private tryBasicAttack(result: TickResult, anyFacing = false): void {
     const p = this.player;
-    if (p.attackCd > 0 || p.channel || p.portal) return;
+    if (p.attackCd > 0 || p.channel || p.portal || p.pendingMelee || p.swing > 0) return;
     const style = this.derived.weaponStyle;
     const range = this.derived.weaponRange;
     const ranged = style === "bow" || style === "thrown" || style === "handbow";
@@ -578,36 +592,52 @@ export class Sim {
     if (!target && style !== "melee" && p.aimId === null) return;
     if (target) p.facing = Math.atan2(target.y - p.y, target.x - p.x);
     p.attackCd = this.derived.attackPeriod;
-    p.swing = 0.16;
     const burn = gearNumber(this.character, "burn");
     const frost = gearNumber(this.character, "frost");
     const lightning = gearNumber(this.character, "lightning");
     if (style === "melee") {
+      // Commit the swing; damage lands when the blade reaches the impact pose.
+      p.swingTotal = HERO_ATTACK_DUR;
+      p.swing = HERO_ATTACK_DUR;
       this.burst("slash", burn > 0 ? "#ff8a3d" : "#e7c39a", 1);
       if (target) {
-        this.hitEnemy(
-          target,
-          this.rollWeapon() + lightning,
-          false,
+        p.pendingMelee = {
+          enemyId: target.id,
+          damage: this.rollWeapon() + lightning,
           burn,
-          result,
-          0,
           frost,
-          frost > 0 ? 1.4 : 0,
-          0,
-          "bleed",
-        );
+          frostDur: frost > 0 ? 1.4 : 0,
+        };
       }
     } else if (style === "focus") {
+      p.swingTotal = 0.32;
+      p.swing = 0.32;
       const damage = this.rollSpell(1) + lightning;
       this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark");
       this.burst("arcane", "#c9b6ff", 0.7);
     } else if (ranged) {
+      p.swingTotal = 0.36;
+      p.swing = 0.36;
       const damage = this.rollWeapon() + lightning;
       const color = style === "thrown" ? "#d8c4a0" : "#f0e2c4";
       this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow");
       this.burst("slash", color, 0.7);
     }
+  }
+
+  private resolvePendingMelee(result: TickResult): void {
+    const p = this.player;
+    const pending = p.pendingMelee;
+    if (!pending || p.swingTotal <= 0) return;
+    const impactLeft = p.swingTotal * (1 - HERO_ATTACK_IMPACT);
+    if (p.swing > impactLeft) return;
+    p.pendingMelee = null;
+    const enemy = this.enemies.find((entry) => entry.id === pending.enemyId);
+    if (!enemy || enemy.hp <= 0) return;
+    const reach = this.derived.weaponRange + 48;
+    if (Math.hypot(enemy.x - p.x, enemy.y - p.y) > reach) return;
+    p.facing = Math.atan2(enemy.y - p.y, enemy.x - p.x);
+    this.hitEnemy(enemy, pending.damage, false, pending.burn, result, 0, pending.frost, pending.frostDur, 0, "bleed");
   }
 
   private trySkill(index: 0 | 1 | 2, result: TickResult): void {
@@ -637,7 +667,8 @@ export class Sim {
     const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr") + raceCdr(this.character.race), -0.35, 0.4);
     this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
-    this.player.swing = 0.18;
+    this.player.swingTotal = Math.max(0.28, Math.min(0.55, spec.cooldown * 0.08 + 0.28));
+    this.player.swing = this.player.swingTotal;
     this.castFx(spec);
     if (spec.kind === "channel") {
       this.breakChannel();

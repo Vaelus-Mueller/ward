@@ -6,7 +6,7 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { ARENA, type Item } from "./game/types";
 import { ROAD_X, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
-import { buildHero, heroAnimationClips, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { buildHero, heroAnimationClips, HERO_ATTACK_DUR, HERO_HEIGHT, isHeroRace } from "./render/heroes";
 import { syncHeroGear } from "./render/gear";
 import { AdaptiveQuality } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
@@ -807,7 +807,17 @@ export class Renderer {
     if (!this.player) return;
     const moved = Math.hypot(sim.player.x - this.lastPlayer.x, sim.player.y - this.lastPlayer.y) > 0.4;
     this.lastPlayer.set(sim.player.x, sim.player.y);
-    this.placeActor(this.player, sim.player.x, sim.player.y, sim.player.facing, dt, moved, sim.player.swing > 0, 0.5, false);
+    this.placeActor(
+      this.player,
+      sim.player.x,
+      sim.player.y,
+      sim.player.facing,
+      dt,
+      moved,
+      sim.player.swing > 0,
+      HERO_ATTACK_DUR,
+      false,
+    );
     this.paintGear(this.player, sim);
     const ward = this.player.root.getObjectByName("ward-shell");
     if (sim.player.shield > 0 && !ward) {
@@ -1019,23 +1029,48 @@ export class Renderer {
     }
     const swinging = actor.attackLeft > 0;
     const elapsed = swinging ? 1 - actor.attackLeft / Math.max(0.001, actor.attackDur) : 0;
-    if (actor.slash) actor.slash.visible = swinging;
+    const hero = isHeroRace(actor.kind);
+    const model = actor.root.children[0];
+    const equippedBlade = hero && !!model?.getObjectByName("gear-main")?.visible;
+    // Heroes swing real hand weapons; keep a faint trail on the hand, hide the ghost root blade.
+    if (hero && actor.slash && model) {
+      const hand = model.getObjectByName("handslot.r") ?? model.getObjectByName("hand.r");
+      if (hand && actor.slash.parent !== hand) {
+        hand.add(actor.slash);
+        actor.slash.position.set(0, 0.35, 0.02);
+        actor.slash.rotation.set(-Math.PI / 2, 0, 0);
+        actor.slash.scale.setScalar(0.55);
+      }
+      actor.slash.visible = swinging;
+      actor.slash.rotation.z = (elapsed - 0.5) * 1.4;
+      const slashMat = actor.slash.material as THREE.MeshBasicMaterial;
+      slashMat.opacity = swinging ? (equippedBlade ? 0.28 + elapsed * 0.25 : 0.7) : 0;
+    } else if (actor.slash) {
+      actor.slash.visible = swinging;
+    }
     if (actor.blade) {
-      actor.blade.visible = swinging;
-      actor.blade.rotation.y = (elapsed - 0.5) * 1.7;
-      const mat = actor.blade.material as THREE.MeshBasicMaterial;
-      mat.opacity = swinging ? 0.35 + elapsed * 0.55 : 0;
+      actor.blade.visible = swinging && !equippedBlade;
+      if (actor.blade.visible) {
+        actor.blade.rotation.y = (elapsed - 0.5) * 1.7;
+        const mat = actor.blade.material as THREE.MeshBasicMaterial;
+        mat.opacity = swinging ? 0.35 + elapsed * 0.55 : 0;
+      }
     }
     const hurt = hitPulse || actor.hitLeft > 0;
     if (hurt !== actor.hurt) {
       actor.hurt = hurt;
       tintActor(actor.root, hurt);
     }
-    // Skip animation frames — readable at distance, cheaper with many actors.
-    actor.animDebt += dt;
-    if (actor.animDebt >= ANIM_STEP) {
-      actor.mixer.update(actor.animDebt);
+    // Full-rate mixer while swinging so weapons arc smoothly; otherwise step for cost.
+    if (swinging || actor.hitLeft > 0) {
+      actor.mixer.update(dt);
       actor.animDebt = 0;
+    } else {
+      actor.animDebt += dt;
+      if (actor.animDebt >= ANIM_STEP) {
+        actor.mixer.update(actor.animDebt);
+        actor.animDebt = 0;
+      }
     }
   }
 
