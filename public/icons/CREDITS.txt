@@ -1,0 +1,15 @@
+Ward UI icons (CC0 / public domain)
+
+1. RPG skill icons by Viktor (CC0)
+   https://v-ktor.itch.io/rpg-skill-icons
+   Also on OpenGameArt: https://opengameart.org/content/rpg-icons-3
+   Used for skill-wheel glyphs and HUD skill buttons (64×64).
+
+2. 496 pixel art icons for medieval/fantasy RPG (CC0 / public domain)
+   Liberated Pixel Cup / OpenGameArt pack combining 7soul’s sets
+   https://lpc.opengameart.org/content/496-pixel-art-icons-for-medievalfantasy-rpg
+   Curated subset used for keystone, race, and class title marks.
+
+frosty_rabbid’s RPG Ability Icons (CC0 on itch) were preferred as a
+third pack but require an authenticated itch download in this environment;
+Viktor + LPC cover the needed skill and class surfaces.

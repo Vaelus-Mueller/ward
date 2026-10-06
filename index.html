@@ -110,6 +110,7 @@
             <div class="race-stage">
               <canvas id="race-view" width="320" height="360" aria-hidden="true"></canvas>
               <div class="race-caption">
+                <img id="race-icon" class="race-icon" alt="" width="36" height="36" />
                 <strong id="race-name">Human</strong>
                 <span id="race-index" class="muted">1 / 8</span>
               </div>
@@ -133,8 +134,13 @@
           </header>
           <div class="ledger-body">
             <aside class="ledger-side">
-              <div id="sheet-title">Exile</div>
-              <div id="sheet-level">Level 1</div>
+              <div class="sheet-identity">
+                <img id="sheet-class-icon" class="sheet-class-icon" alt="" width="40" height="40" />
+                <div>
+                  <div id="sheet-title">Exile</div>
+                  <div id="sheet-level">Level 1</div>
+                </div>
+              </div>
               <div class="xp sheet-xp"><div id="sheet-xp-fill"></div></div>
               <div id="sheet-xp" class="muted">0 / 0</div>
               <div class="summary-row">
@@ -181,85 +187,36 @@
                 <h3>Offence</h3>
                 <div class="statline"><span>Total Damage</span><b id="s-total">0</b></div>
                 <div class="statline"><span>Physical Damage</span><b id="s-phys">0</b></div>
-                <div class="statline"><span>Fire Damage</span><b id="s-fire">0</b></div>
-                <div class="statline"><span>Water Damage</span><b id="s-water">0</b></div>
-                <div class="statline"><span>Poison Damage</span><b id="s-poison">0</b></div>
-                <div class="statline"><span>Light Damage</span><b id="s-light">0</b></div>
-                <div class="statline"><span>Darkness Damage</span><b id="s-dark">0</b></div>
                 <div class="statline"><span>Damage Bonus</span><b id="s-dbonus">0</b></div>
                 <div class="statline"><span>Skill Damage Bonus</span><b id="s-sbonus">0</b></div>
                 <div class="statline"><span>Physical Skills Damage</span><b id="s-pskill">0</b></div>
-                <div class="statline"><span>Fire Skills Damage</span><b id="s-fskill">0</b></div>
-                <div class="statline"><span>Air Skills Damage</span><b id="s-askill">0</b></div>
-                <div class="statline"><span>Water Skills Damage</span><b id="s-wskill">0</b></div>
-                <div class="statline"><span>Light Skills Damage</span><b id="s-lskill">0</b></div>
-                <div class="statline"><span>Darkness Skills Damage</span><b id="s-dskill">0</b></div>
-                <h3>Bonus to races</h3>
-                <div class="statline"><span>Damage to Humans</span><b id="s-humans">0%</b></div>
-                <div class="statline"><span>Damage to Undead</span><b id="s-undead">0%</b></div>
-                <div class="statline"><span>Damage to Reptiles</span><b id="s-reptiles">0%</b></div>
-                <div class="statline"><span>Damage to Demons</span><b id="s-demons">0%</b></div>
-                <div class="statline"><span>Damage to Spirits</span><b id="s-spirits">0%</b></div>
-                <div class="statline"><span>Damage to Beasts</span><b id="s-beasts">0%</b></div>
-                <div class="statline"><span>Damage to Oceans</span><b id="s-oceans">0%</b></div>
-                <div class="statline"><span>Defence Penetration</span><b id="s-defpen">0%</b></div>
-                <div class="statline"><span>Elemental Penetration</span><b id="s-elepen">0%</b></div>
-              </section>
-              <section>
-                <h3>Defence</h3>
+                <div class="statline"><span>Spell Damage</span><b id="s-spell">0</b></div>
                 <div class="statline"><span>Attack Speed</span><b id="s-aspeed">0</b></div>
                 <div class="statline"><span>Critical Chance</span><b id="s-crit">0%</b></div>
                 <div class="statline"><span>Crit Damage Bonus</span><b id="s-critd">65%</b></div>
-                <div class="statline"><span>Area Damage</span><b id="s-area">0%</b></div>
                 <div class="statline"><span>Thorns</span><b id="s-thorns">0</b></div>
-                <div class="statline"><span>Health</span><b id="s-hp">0</b></div>
-                <div class="statline"><span>Health Regen</span><b id="s-hregen">0</b></div>
-                <div class="statline"><span>Skill Healing Bonus</span><b id="s-skillheal">0%</b></div>
-                <div class="statline"><span>Damage Reduction</span><b id="s-dr">0%</b></div>
-                <div class="statline"><span>Defence</span><b id="s-def">0</b></div>
-                <div class="statline"><span>Energy</span><b id="s-mana">0</b></div>
-                <h3>Elemental resistance</h3>
-                <div class="statline"><span>Physical Resistance</span><b id="s-pres">0</b></div>
-                <div class="statline"><span>Fire Resistance</span><b id="s-fres">0</b></div>
-                <div class="statline"><span>Air Resistance</span><b id="s-ares">0</b></div>
-                <div class="statline"><span>Water Resistance</span><b id="s-wres">0</b></div>
-                <div class="statline"><span>Poison Resistance</span><b id="s-pores">0</b></div>
-                <div class="statline"><span>Light Resistance</span><b id="s-lres">0</b></div>
-                <div class="statline"><span>Darkness Resistance</span><b id="s-dkres">0</b></div>
-                <h3>Status resistance</h3>
-                <div class="statline"><span>Stun Resistance</span><b id="s-stunr">0%</b></div>
-                <div class="statline"><span>Slow Resistance</span><b id="s-slowr">0%</b></div>
-                <div class="statline"><span>Bleed Resistance</span><b id="s-bleedr">0%</b></div>
-                <div class="statline"><span>Fear Resistance</span><b id="s-fearr">0%</b></div>
-                <div class="statline"><span>Silence Resistance</span><b id="s-silr">0%</b></div>
+                <div class="statline"><span>Attack Rating</span><b id="s-ar">0</b></div>
               </section>
               <section>
-                <h3>Bonus to races</h3>
-                <div class="statline"><span>Human Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Undead Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Reptile Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Demon Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Spirit Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Beast Resistance</span><b>0%</b></div>
-                <div class="statline"><span>Oceanic Resistance</span><b>0%</b></div>
+                <h3>Defence</h3>
+                <div class="statline"><span>Health</span><b id="s-hp">0</b></div>
+                <div class="statline"><span>Health Regen</span><b id="s-hregen">0</b></div>
+                <div class="statline"><span>Damage Reduction</span><b id="s-dr">0%</b></div>
+                <div class="statline"><span>Defence</span><b id="s-def">0</b></div>
                 <div class="statline"><span>Dodge Chance</span><b id="s-dodge">0%</b></div>
-                <div class="statline"><span>Block Chance</span><b id="s-block">0%</b></div>
+                <div class="statline"><span>Shield Absorb</span><b id="s-shield">0</b></div>
                 <h3>Resources</h3>
+                <div class="statline"><span>Energy</span><b id="s-energy">0</b></div>
                 <div class="statline"><span>Energy on Hit</span><b id="s-ehit">0</b></div>
                 <div class="statline"><span>Energy Cost Reduction</span><b id="s-ecdr">0%</b></div>
-                <div class="statline"><span>Timed Energy Regen</span><b id="s-eregen">—</b></div>
-                <div class="statline"><span>Energy on Kill</span><b id="s-ekill">0</b></div>
-                <div class="statline"><span>Life Steal</span><b id="s-steal">0%</b></div>
-                <div class="statline"><span>Life on Hit</span><b id="s-lhit">0</b></div>
-                <div class="statline"><span>Life on Kill</span><b id="s-lkill">0</b></div>
+              </section>
+              <section>
                 <h3>Utility</h3>
                 <div class="statline"><span>Magic Find</span><b id="s-mf">0%</b></div>
                 <div class="statline"><span>Gold Find</span><b id="s-gf">0%</b></div>
-                <div class="statline"><span>Globe Drop Chance</span><b id="s-globe">0%</b></div>
-                <div class="statline"><span>Experience Bonus</span><b id="s-xpb">0%</b></div>
-                <div class="statline"><span>Attack Rating</span><b id="s-ar">0</b></div>
+                <div class="statline"><span>Vendor Prices</span><b id="s-vprice">0%</b></div>
+                <div class="statline"><span>Vendor Quality</span><b id="s-vqual">0%</b></div>
                 <div class="statline"><span>Movement Speed</span><b id="s-move">0</b></div>
-                <div class="statline"><span>Spell Damage</span><b id="s-spell">0</b></div>
               </section>
             </div>
           </div>

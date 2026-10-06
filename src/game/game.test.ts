@@ -89,7 +89,7 @@ describe("levels and attributes", () => {
   it("keeps a channel through movement and ordinary hits, and drops it on a slam", () => {
     const sim = new Sim(createCharacter(), 1);
     sim.begin();
-    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreMana: false };
+    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreEnergy: false };
     const walking = emptyIntent();
     walking.moveX = 1;
     sim.update(walking, 0.1);
@@ -97,7 +97,7 @@ describe("levels and attributes", () => {
     const hound = makeEnemy("hound", 1, sim.player.x + 30, sim.player.y, 70);
     hound.cd = 0;
     sim.enemies = [hound];
-    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreMana: false };
+    sim.player.channel = { slot: 0, t: 2, total: 2, healFrac: 0.2, restoreEnergy: false };
     sim.update(emptyIntent(), 0.05);
     expect(sim.player.channel).not.toBeNull();
     const brute = makeEnemy("brute", 1, sim.player.x + 40, sim.player.y, 71);

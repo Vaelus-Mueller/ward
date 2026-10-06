@@ -387,6 +387,17 @@ p { line-height: 1.5; }
   box-shadow: 0 0 20px rgba(180, 48, 40, 0.4);
 }
 .skill { position: relative; overflow: visible; border-radius: 50%; }
+.skill .skill-icon {
+  position: absolute;
+  inset: 14%;
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.92;
+  image-rendering: pixelated;
+}
 .skill .skill-label {
   position: relative;
   z-index: 2;
@@ -394,6 +405,30 @@ p { line-height: 1.5; }
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.68rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.sheet-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+}
+.sheet-class-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid rgba(180, 140, 90, 0.35);
+  background: rgba(20, 12, 10, 0.55);
+  padding: 3px;
+}
+.race-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
 }
 .skill::after {
   content: none;
@@ -722,7 +757,7 @@ p { line-height: 1.5; }
   display: flex;
   width: 100%;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
 }
 .race-caption strong {

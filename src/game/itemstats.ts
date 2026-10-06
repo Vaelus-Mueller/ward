@@ -90,6 +90,11 @@ function roundAffix(key: string, value: number): number {
     key === "energyRegen" ||
     key === "lifeRegen" ||
     key === "goldFind" ||
+    key === "magicFind" ||
+    key === "vendorPrice" ||
+    key === "vendorQuality" ||
+    key === "frost" ||
+    key === "burn" ||
     key === "meleeMult" ||
     key === "spellMult" ||
     key === "evasion" ||
@@ -131,6 +136,10 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Life`;
     case "energy":
       return `+${value} Energy`;
+    case "energyMax":
+      return `+${value} Max Energy`;
+    case "chargeMax":
+      return `+${value} Skill Charges`;
     case "armor":
       return `+${value} Armor`;
     case "damage":
@@ -148,6 +157,12 @@ function affixLabel(key: string, value: number): string {
       return `+${value.toFixed(2)} Life Regeneration`;
     case "goldFind":
       return `+${Math.round(value * 100)}% Gold Find`;
+    case "magicFind":
+      return `+${Math.round(value * 100)}% Magic Find`;
+    case "vendorPrice":
+      return `+${Math.round(value * 100)}% Vendor Deals`;
+    case "vendorQuality":
+      return `+${Math.round(value * 100)}% Vendor Quality`;
     case "meleeMult":
       return `${Math.round(value * 100)}% more melee damage`;
     case "spellMult":

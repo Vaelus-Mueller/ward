@@ -73,6 +73,9 @@ export interface Shot {
   hit: number[];
   pierce: boolean;
   burn: number;
+  /** Chill fraction (Rime / frost gear) applied on hit. */
+  slow: number;
+  slowDur: number;
   bleed: boolean;
   style: "spark" | "fire" | "knife" | "arrow";
   /** Damage pair for resist/weak — never used for immunities. */
@@ -147,11 +150,9 @@ interface PlayerBody {
   hp: number;
   energy: number;
   attackCd: number;
-  /** @deprecated Unused — skills use skillBank charges, not time CDs. */
-  skillCd: [number, number, number];
   /** Energy banked toward charges for each skill slot (filled by basic hits). */
   skillBank: [number, number, number];
-  channel: { slot: number; t: number; total: number; healFrac: number; restoreMana: boolean } | null;
+  channel: { slot: number; t: number; total: number; healFrac: number; restoreEnergy: boolean } | null;
   portal: { t: number; total: number } | null;
   auras: [boolean, boolean, boolean];
   buffs: Buff[];
@@ -269,7 +270,6 @@ export class Sim {
       hp: 1,
       energy: 1,
       attackCd: 0,
-      skillCd: [0, 0, 0],
       skillBank: [0, 0, 0],
       channel: null,
       portal: null,
@@ -596,12 +596,26 @@ export class Sim {
       }
     } else if (style === "focus") {
       const damage = this.rollSpell(1) + lightning;
-      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark", "bleed", true);
+      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark", "bleed", true, frost, frost > 0 ? 1.4 : 0);
       this.burst("arcane", "#c9b6ff", 0.7);
     } else if (ranged) {
       const damage = this.rollWeapon() + lightning;
       const color = style === "thrown" ? "#d8c4a0" : "#f0e2c4";
-      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow", "bleed", true);
+      this.fire(
+        p.facing,
+        0,
+        1,
+        damage,
+        color,
+        burn,
+        false,
+        range,
+        style === "thrown" ? "knife" : "arrow",
+        "bleed",
+        true,
+        frost,
+        frost > 0 ? 1.4 : 0,
+      );
       this.burst("slash", color, 0.7);
     }
   }
@@ -642,7 +656,7 @@ export class Sim {
       return;
     }
     this.player.skillBank[index] = Math.max(0, this.player.skillBank[index]! - info.energyPerCharge);
-    this.player.energy = Math.max(0, this.player.energy - info.energyPerCharge);
+    // Pool is aura/channel display energy; charged skills spend banks only.
     this.breakChannel();
     this.player.swing = this.derived.weaponSwing;
     this.castFx(spec);
@@ -652,7 +666,7 @@ export class Sim {
         t: spec.channelTime,
         total: spec.channelTime,
         healFrac: spec.healFrac,
-        restoreMana: id === "litany",
+        restoreEnergy: id === "litany",
       };
       return;
     }
@@ -709,7 +723,21 @@ export class Sim {
     if (spec.kind === "projectile") {
       const damage = this.rollScaled(spec) * (spec.scaling === "melee" ? 1 + this.mods.projectileMult : 1);
       const style = spec.burn > 0 ? "fire" : spec.scaling === "spell" ? "spark" : "knife";
-      this.fire(p.facing, spec.shots, spec.shots, damage, spec.color, spec.burn, spec.radial, spec.range, style, pair);
+      this.fire(
+        p.facing,
+        spec.shots,
+        spec.shots,
+        damage,
+        spec.color,
+        spec.burn,
+        spec.radial,
+        spec.range,
+        style,
+        pair,
+        false,
+        spec.slow,
+        spec.slowDur,
+      );
     }
   }
 
@@ -763,6 +791,8 @@ export class Sim {
     style: Shot["style"],
     pair: DamagePair = "bleed",
     basic = false,
+    slow = 0,
+    slowDur = 0,
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -782,6 +812,8 @@ export class Sim {
         hit: [],
         pierce: count === 1 && speed >= 400,
         burn,
+        slow,
+        slowDur,
         bleed: false,
         style,
         pair,
@@ -794,7 +826,7 @@ export class Sim {
     if (!channel) return;
     const rate = channel.healFrac / channel.total;
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * rate * dt);
-    if (channel.restoreMana) {
+    if (channel.restoreEnergy) {
       this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.18 * dt);
     }
     channel.t -= dt;
@@ -930,6 +962,8 @@ export class Sim {
           hit: [],
           pierce: false,
           burn: 0,
+          slow: 0,
+          slowDur: 0,
           bleed: false,
           style: "arrow",
           pair: "bleed",
@@ -954,6 +988,8 @@ export class Sim {
           hit: [],
           pierce: false,
           burn: enemy.kind === "wisp" ? 2 : 0,
+          slow: 0,
+          slowDur: 0,
           bleed: false,
           style: "spark",
           pair: enemy.kind === "wisp" ? "fire" : "unholy",
@@ -981,7 +1017,19 @@ export class Sim {
       for (const enemy of this.enemies) {
         if (shot.hit.includes(enemy.id)) continue;
         if (Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <= enemy.radius + shot.radius) {
-          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair, shot.basic);
+          this.hitEnemy(
+            enemy,
+            shot.damage,
+            shot.bleed,
+            shot.burn,
+            result,
+            0,
+            shot.slow,
+            shot.slowDur,
+            0,
+            shot.pair,
+            shot.basic,
+          );
           shot.hit.push(enemy.id);
           if (!shot.pierce) shot.life = 0;
           break;

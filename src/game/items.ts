@@ -172,11 +172,16 @@ const AFFIXES: { affix: Affix; prefix: string; weight: number }[] = [
   { prefix: "Lucky", affix: { key: "luck", value: 3, label: "+3 Luck" }, weight: 3 },
   { prefix: "Stalwart", affix: { key: "life", value: 14, label: "+14 Life" }, weight: 4 },
   { prefix: "Well", affix: { key: "energy", value: 10, label: "+10 Energy" }, weight: 3 },
+  { prefix: "Deep", affix: { key: "energyMax", value: 8, label: "+8 Max Energy" }, weight: 2 },
   { prefix: "Plated", affix: { key: "armor", value: 8, label: "+8 Armor" }, weight: 3 },
   { prefix: "Keen", affix: { key: "damage", value: 2, label: "+2 Weapon Damage" }, weight: 3 },
   { prefix: "True", affix: { key: "attackRating", value: 12, label: "+12 Attack Rating" }, weight: 2 },
   { prefix: "Cruel", affix: { key: "crit", value: 0.03, label: "+3% Critical Chance" }, weight: 2 },
   { prefix: "Flowing", affix: { key: "energyOnHit", value: 0.35, label: "+0.35 Energy on Hit" }, weight: 2 },
+  { prefix: "Charged", affix: { key: "chargeMax", value: 1, label: "+1 Skill Charges" }, weight: 1 },
+  { prefix: "Seeking", affix: { key: "magicFind", value: 0.08, label: "+8% Magic Find" }, weight: 2 },
+  { prefix: "Haggler", affix: { key: "vendorPrice", value: 0.06, label: "+6% Vendor Deals" }, weight: 1 },
+  { prefix: "Broker", affix: { key: "vendorQuality", value: 0.05, label: "+5% Vendor Quality" }, weight: 1 },
   { prefix: "Ember", affix: { key: "burn", value: 2.5, label: "+2.5 Fire Burn on Hit" }, weight: 2 },
   { prefix: "Rime", affix: { key: "frost", value: 0.2, label: "Chill: 20% slow on Hit" }, weight: 2 },
   { prefix: "Storm", affix: { key: "lightning", value: 4, label: "+4 Lightning Damage" }, weight: 2 },
@@ -706,7 +711,17 @@ export function rolledAffixAmount(key: string, base: number, power: number): num
 }
 
 function roundStored(key: string, value: number): number {
-  if (key === "crit" || key === "energyOnHit") return Math.round(value * 100) / 100;
+  if (
+    key === "crit" ||
+    key === "energyOnHit" ||
+    key === "magicFind" ||
+    key === "vendorPrice" ||
+    key === "vendorQuality" ||
+    key === "frost" ||
+    key === "burn"
+  ) {
+    return Math.round(value * 100) / 100;
+  }
   return Math.max(1, Math.round(value));
 }
 
@@ -714,6 +729,13 @@ function storedLabel(key: string, value: number): string {
   if (key === "crit") return `+${Math.round(value * 100)}% Critical Chance`;
   if (key === "energyOnHit") return `+${value.toFixed(2)} Energy on Hit`;
   if (key === "energyRegen") return `+${value.toFixed(2)} Energy on Hit`;
+  if (key === "magicFind") return `+${Math.round(value * 100)}% Magic Find`;
+  if (key === "vendorPrice") return `+${Math.round(value * 100)}% Vendor Deals`;
+  if (key === "vendorQuality") return `+${Math.round(value * 100)}% Vendor Quality`;
+  if (key === "frost") return `Chill: ${Math.round(value * 100)}% slow on Hit`;
+  if (key === "burn") return `+${value.toFixed(1)} Fire Burn on Hit`;
+  if (key === "chargeMax") return `+${value} Skill Charges`;
+  if (key === "energyMax") return `+${value} Max Energy`;
   const names: Record<string, string> = {
     strength: "Strength",
     agility: "Agility",
@@ -725,6 +747,7 @@ function storedLabel(key: string, value: number): string {
     armor: "Armor",
     damage: "Weapon Damage",
     attackRating: "Attack Rating",
+    lightning: "Lightning Damage",
   };
   return `+${value} ${names[key] ?? key}`;
 }
@@ -1024,6 +1047,9 @@ const FRACTION_AFFIX = new Set([
   "energyRegen",
   "lifeRegen",
   "goldFind",
+  "magicFind",
+  "vendorPrice",
+  "vendorQuality",
   "meleeMult",
   "spellMult",
   "evasion",
@@ -1033,6 +1059,7 @@ const FRACTION_AFFIX = new Set([
   "cdr",
   "attackSpeed",
   "frost",
+  "burn",
 ]);
 
 export function materialFor(item: Item): MaterialId {

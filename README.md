@@ -6,15 +6,22 @@ Ward is a touch-first action RPG. You hold a ruined gate: move, strike, and spen
 
 It is an original game. The shape of the systems follows three references, without using their stories, items, or names:
 
-- **Oniro** — one character, several class paths, and a mix of passives, actives, auras, and channels. Three skills can be readied. Landing hits shortens cooldowns, so standing still is the weak choice.
-- **Diablo II** — each level gives 5 attribute points and 1 skill point. Points wait until you spend them. Attributes are Strength, Agility, Endurance, and Wisdom.
-- **Diablo I** — readable melee, life and mana, and positioning. Enemy slams are telegraphed so you walk out of them.
+- **Oniro** — one character, mixed skill kinds, three ready skills, hit-charged tempo.
+- **Diablo II** — level-up spendable points and loot depth.
+- **Diablo I** — readable melee and telegraphed enemy hits.
 
-Bulwark, Shade, and Rite are the three spokes of the skill wheel. At level 2 you can open a spoke. A specialization on that spoke asks for level 6 and four points already spent in the spoke. The outer skill asks for level 10 and four points in the specialization. Those gates are early on purpose so a single session can reach them.
+Attributes are Strength, Agility, Stamina, Luck, and Spirit. Skills spend **energy** charged from basic-attack hits (no timed skill cooldowns). The skill wheel has seven damage-pair cones (bleed, holy, air, fire, water, poison, unholy).
 
-The ward is now a 3D dark-fantasy dungeon. Models are Kay Lousberg's KayKit packs (CC0): a knight, rogue, and mage for the exile, and skeletons for the things that walk the ward. Floor, walls, and columns are from the same dungeon pack. See `public/models/CREDITS.txt`.
+The ward is a 3D dark-fantasy dungeon. Models are Kay Lousberg's KayKit packs (CC0). Floor textures include Poly Haven CC0 materials. See `public/models/CREDITS.txt`.
 
-Ward does not include Oniro's art, models, or writing. The interface is the original stone-and-ember layout: life and mana, three skill slots, the stick, and the skill wheel.
+Skill-button and skill-wheel icons use CC0 packs:
+
+- **Viktor** — RPG skill icons (CC0), [itch](https://v-ktor.itch.io/rpg-skill-icons) / [OpenGameArt](https://opengameart.org/content/rpg-icons-3)
+- **496 LPC fantasy icons** (CC0 / public domain), [Liberated Pixel Cup](https://lpc.opengameart.org/content/496-pixel-art-icons-for-medievalfantasy-rpg)
+
+See `public/icons/CREDITS.txt`.
+
+Ward does not include Oniro's art, models, or writing. The interface is the original stone-and-ember layout: life and energy, three skill slots, the stick, and the skill wheel.
 
 Play it on this computer with `npm run dev`. A phone build is a debug APK after `npm run android:sync` and a Gradle debug build.
 

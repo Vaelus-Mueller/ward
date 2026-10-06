@@ -3,7 +3,7 @@ import { attributes, derive, requirementText, xpGoal } from "./game/formulas";
 import { canUpgrade, equipChoices, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
 import { describeSkill, SECTORS, SKILLS, scaledActive, skillById, skillChargeInfo, skillNextChargeProgress, skillReadyCharges } from "./game/skills";
-import { appendSkillIcon } from "./game/skillIcons";
+import { appendSkillIcon, classIconUrl, raceIconUrl, skillIconUrl } from "./game/skillIcons";
 import { readSlots } from "./game/save";
 import { RACES, raceById, raceName, type RaceId } from "./game/races";
 import { buyPrice, buyStockItem, gambleBlurb, gambleCost, gambleItem, merchantStock, sellItem, sellPrice, TOWN_NAME, VENDORS, type TownVendor } from "./game/town";
@@ -131,6 +131,11 @@ export class Ui {
     text("race-name", race.name);
     text("race-index", `${index + 1} / ${RACES.length}`);
     text("create-blurb", race.blurb);
+    const raceIcon = document.getElementById("race-icon") as HTMLImageElement | null;
+    if (raceIcon) {
+      raceIcon.src = raceIconUrl(race.id);
+      raceIcon.alt = race.name;
+    }
     const passives = must("race-passives");
     passives.innerHTML = "";
     const good = document.createElement("div");
@@ -204,6 +209,15 @@ export class Ui {
       const cost = spec?.kind === "aura" ? spec.energyPerSec : info?.energyPerCharge ?? spec?.energyCost ?? 0;
       const charged = !spec || (spec.kind === "aura" ? sim.player.energy > 1 : ready >= 1);
       button.replaceChildren();
+      const iconUrl = id ? skillIconUrl(id) : null;
+      if (iconUrl) {
+        const icon = document.createElement("img");
+        icon.className = "skill-icon";
+        icon.src = iconUrl;
+        icon.alt = "";
+        icon.draggable = false;
+        button.append(icon);
+      }
       const label = document.createElement("span");
       label.className = "skill-label";
       label.textContent = skill ? skill.name : "Empty";
@@ -433,12 +447,18 @@ export class Ui {
     const c = sim.character;
     const d = derive(c, sim.mods);
     text("sheet-title", c.name);
+    const title = classTitle(c);
     text(
       "sheet-level",
       c.paragon > 0
-        ? `${raceName(c.race)}  ·  ${classTitle(c)}  ·  Level ${c.level}  ·  Paragon ${c.paragon}`
-        : `${raceName(c.race)}  ·  ${classTitle(c)}  ·  Level ${c.level}`,
+        ? `${raceName(c.race)}  ·  ${title}  ·  Level ${c.level}  ·  Paragon ${c.paragon}`
+        : `${raceName(c.race)}  ·  ${title}  ·  Level ${c.level}`,
     );
+    const classIcon = document.getElementById("sheet-class-icon") as HTMLImageElement | null;
+    if (classIcon) {
+      classIcon.src = classIconUrl(title);
+      classIcon.alt = title;
+    }
     text("unspent-stats", `${c.unspentStats}`);
     text("unspent-skills", `${c.unspentSkills}`);
     text("sheet-gold", c.gold.toLocaleString());
@@ -472,13 +492,15 @@ export class Ui {
     text("s-hregen", d.lifeRegen.toFixed(1));
     text("s-dr", pct(d.damageReduction));
     text("s-def", `${Math.round(d.armor)}`);
-    text("s-mana", `${d.energy}`);
+    text("s-energy", `${d.energy}`);
     text("s-dodge", pct(d.evasion));
+    text("s-shield", `${Math.round(sim.player.shield)}`);
     text("s-ecdr", pct(sim.mods.cdr));
-    text("s-eregen", "—");
     text("s-ehit", d.energyOnHit.toFixed(1));
     text("s-gf", pct(d.goldFind));
     text("s-mf", pct(d.magicFind));
+    text("s-vprice", pct(d.vendorPrice));
+    text("s-vqual", pct(d.vendorQuality));
     text("s-ar", `${d.attackRating}`);
     text("s-move", `${Math.round(d.moveSpeed)}`);
     text("s-spell", `${d.spellMin.toFixed(1)}–${d.spellMax.toFixed(1)}`);
@@ -1197,7 +1219,13 @@ export class Ui {
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 0x100000000;
     };
-    this.merchantGoods = merchantStock(sim.character.level, rng, `ash-${tag}`);
+    this.merchantGoods = merchantStock(
+      sim.character.level,
+      rng,
+      `ash-${tag}`,
+      sim.derived.vendorQuality,
+      sim.derived.magicFind,
+    );
   }
 
   private openTown(): void {
@@ -1345,7 +1373,7 @@ export class Ui {
       name.textContent = item.name;
       const meta = document.createElement("div");
       meta.className = "muted";
-      const cost = buyPrice(item, c.level);
+      const cost = buyPrice(item, c.level, sim.derived.vendorPrice);
       meta.textContent = `${RARITY_LABEL[item.rarity]} · ${cost} gold`;
       copy.append(name, meta);
       const button = document.createElement("button");
@@ -1353,7 +1381,7 @@ export class Ui {
       button.textContent = "Buy";
       button.disabled = c.gold < cost;
       button.addEventListener("click", () => {
-        const error = buyStockItem(c, this.merchantGoods, index);
+        const error = buyStockItem(c, this.merchantGoods, index, sim.derived.vendorPrice);
         text("town-note", error ?? `Bought ${item.name}.`);
         if (!error) {
           this.townKey = "";
@@ -1384,14 +1412,14 @@ export class Ui {
       name.textContent = item.name;
       const meta = document.createElement("div");
       meta.className = "muted";
-      meta.textContent = `${RARITY_LABEL[item.rarity]} · ${sellPrice(item, c.level)} gold`;
+      meta.textContent = `${RARITY_LABEL[item.rarity]} · ${sellPrice(item, c.level, sim.derived.vendorPrice)} gold`;
       copy.append(name, meta);
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = "Sell";
       button.addEventListener("click", () => {
-        const price = sellPrice(item, c.level);
-        const error = sellItem(c, item.uid);
+        const price = sellPrice(item, c.level, sim.derived.vendorPrice);
+        const error = sellItem(c, item.uid, sim.derived.vendorPrice);
         text("town-note", error ?? `Sold ${item.name} for ${price} gold.`);
         if (!error) {
           this.townKey = "";
@@ -1407,7 +1435,7 @@ export class Ui {
 
   private paintGambler(sim: Sim, body: HTMLElement): void {
     const c = sim.character;
-    const cost = gambleCost(c.level);
+    const cost = gambleCost(c.level, sim.derived.vendorPrice);
     const wrap = document.createElement("div");
     wrap.className = "town-gamble";
     const blurb = document.createElement("p");
@@ -1419,7 +1447,14 @@ export class Ui {
     button.textContent = `Gamble (${cost} gold)`;
     button.disabled = c.gold < cost;
     button.addEventListener("click", () => {
-      const roll = gambleItem(c, Math.random, `nyx-${Date.now()}`);
+      const roll = gambleItem(
+        c,
+        Math.random,
+        `nyx-${Date.now()}`,
+        sim.derived.vendorPrice,
+        sim.derived.vendorQuality,
+        sim.derived.magicFind,
+      );
       if (roll.error) {
         text("town-note", roll.error);
         return;
