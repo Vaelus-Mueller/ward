@@ -3,10 +3,12 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { ARENA, type Item } from "./game/types";
-import { ROAD_X, roadSpine, worldPacks } from "./game/world";
+import { borderInset, roadPathSamples, roadSpine, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
-import { buildHero, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { buildHero, HERO_HEIGHT, isHeroRace, poseHeroLimbs } from "./render/heroes";
 import { syncHeroGear } from "./render/gear";
+import { itemHands } from "./game/items";
+import type { RaceId } from "./game/types";
 import { AdaptiveQuality } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
 import { buildMonster, isProceduralMonster } from "./render/monsters";
@@ -440,10 +442,6 @@ export class Renderer {
 
   private buildDungeon(): void {
     this.propsBuilt = true;
-    const minX = ARENA.margin * SCALE;
-    const maxX = (ARENA.width - ARENA.margin) * SCALE;
-    const minZ = ARENA.margin * SCALE;
-    const maxZ = (ARENA.height - ARENA.margin) * SCALE;
     const place = (key: string, x: number, z: number, rot: number, width: number) => {
       const piece = this.templates.get(key);
       if (!piece) return;
@@ -463,31 +461,44 @@ export class Renderer {
       group.rotation.y = rot;
       this.scene.add(group);
     };
-    const step = 22;
-    for (let x = minX; x <= maxX; x += step) {
-      const broken = Math.round(x) % 44 === 0;
-      place(broken ? "wall-broken" : "wall", x, minZ, 0, step);
-      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, step);
+    const step = 20;
+    // North / south walls with variable inset and slight yaw jogs.
+    for (let x = 0; x <= ARENA.width; x += step) {
+      const north = borderInset(x, "north") * SCALE;
+      const south = (ARENA.height - borderInset(x, "south")) * SCALE;
+      const yaw = Math.sin(x * 0.015) * 0.12;
+      const broken = Math.round(x) % 48 === 0;
+      place(broken ? "wall-broken" : "wall", x * SCALE, north, yaw, step * SCALE);
+      place(broken ? "wall-broken" : "wall", x * SCALE, south, Math.PI + yaw, step * SCALE);
     }
-    for (let z = minZ + step; z <= maxZ - step; z += step) {
-      place("wall", minX, z, Math.PI / 2, step);
-      place("wall", maxX, z, -Math.PI / 2, step);
+    // East / west walls with twists along the long axis.
+    for (let z = 0; z <= ARENA.height; z += step) {
+      const left = borderInset(z, "left") * SCALE;
+      const right = (ARENA.width - borderInset(z, "right")) * SCALE;
+      const yaw = Math.PI / 2 + Math.sin(z * 0.011) * 0.14;
+      place("wall", left, z * SCALE, yaw, step * SCALE);
+      place("wall", right, z * SCALE, -yaw, step * SCALE);
     }
-    const spine = roadSpine();
+    const samples = roadPathSamples(160);
     this.roadMat = new THREE.MeshStandardMaterial({
       color: 0x8a7f6e,
       roughness: 0.9,
       metalness: 0.06,
       envMapIntensity: 0.35,
     });
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE)),
-      this.roadMat,
-    );
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
-    road.receiveShadow = true;
-    this.scene.add(road);
+    for (let i = 0; i < samples.length - 1; i++) {
+      const a = samples[i]!;
+      const b = samples[i + 1]!;
+      const dx = (b.x - a.x) * SCALE;
+      const dz = (b.y - a.y) * SCALE;
+      const len = Math.hypot(dx, dz) || 1;
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(7.2, len + 0.4), this.roadMat);
+      road.rotation.x = -Math.PI / 2;
+      road.rotation.z = Math.atan2(dx, dz);
+      road.position.set(((a.x + b.x) / 2) * SCALE, 0.02, ((a.y + b.y) / 2) * SCALE);
+      road.receiveShadow = true;
+      this.scene.add(road);
+    }
     // Sparse emissive torch bowls at pack columns (no extra lights — AdaptiveQuality budget).
     const torchMat = new THREE.MeshStandardMaterial({
       color: 0x2a1c12,
@@ -503,7 +514,7 @@ export class Renderer {
       if (!pack.branch && pack.id !== `${pack.level}-0`) continue;
       if (seen.has(key)) continue;
       seen.add(key);
-      const markX = (pack.branch ? pack.x : ROAD_X + 220) * SCALE;
+      const markX = (pack.branch ? pack.x : pack.x + 220) * SCALE;
       place("column", markX, pack.y * SCALE, 0, 2.4);
       const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), torchMat);
       bowl.position.set(markX, 2.1, pack.y * SCALE);
@@ -693,6 +704,7 @@ export class Renderer {
     tintNamed(model, ["Body"], eq.chest);
     tintNamed(model, ["ArmLeft", "ArmRight"], eq.gloves);
     tintNamed(model, ["LegLeft", "LegRight"], eq.boots);
+    model.userData.equipment = eq;
     syncHeroGear(model, eq, performance.now());
   }
 
@@ -742,6 +754,28 @@ export class Renderer {
       actor.blade.rotation.y = (elapsed - 0.5) * 1.7;
       const mat = actor.blade.material as THREE.MeshBasicMaterial;
       mat.opacity = swinging ? 0.35 + elapsed * 0.55 : 0;
+    }
+    if (isHeroRace(actor.kind)) {
+      const model = actor.root.children[0];
+      if (model) {
+        const eq = (actor as Actor & { _eq?: import("./game/types").Character["equipment"] })._eq;
+        // Equipment is painted separately; read live slots from userData if present.
+        const equipment = (model.userData.equipment ?? null) as import("./game/types").Character["equipment"] | null;
+        const hands = [
+          { slot: "weapon" as const, twoHand: equipment?.weapon ? itemHands(equipment.weapon) === 2 : false, empty: !equipment?.weapon },
+          { slot: "offhand" as const, twoHand: false, empty: !equipment?.offhand },
+          { slot: "weapon3" as const, twoHand: false, empty: !equipment?.weapon3 },
+          { slot: "weapon4" as const, twoHand: false, empty: !equipment?.weapon4 },
+        ];
+        poseHeroLimbs(model, {
+          time: performance.now() * 0.001,
+          moving,
+          attackT: swinging ? elapsed : -1,
+          race: actor.kind as RaceId,
+          hands,
+        });
+        void eq;
+      }
     }
     const hurt = hitPulse || actor.hitLeft > 0;
     if (hurt !== actor.hurt) {

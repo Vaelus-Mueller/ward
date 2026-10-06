@@ -3,12 +3,32 @@ import { MONSTER_ARCH } from "./monsters";
 
 export const PACK_GAP = 560;
 export const ROAD_X = 1800;
-export const LEASH = 500;
+/** Leash distance — 25% above the prior 500 so wider sight stays coherent. */
+export const LEASH = 625;
 export const SPAWN_IN = 750;
 export const DESPAWN = 1200;
 const MOVE = 172;
 const TARGET_SECONDS = 8 * 60;
 const LEVEL_SEAM = 180;
+
+/** Winding road centerline — soft S-curves, not a ruler-straight corridor. */
+export function roadXAt(y: number): number {
+  return ROAD_X + Math.sin(y * 0.00205) * 90 + Math.sin(y * 0.0055 + 1.2) * 42;
+}
+
+/**
+ * Variable border inset (world units). Average ~100 (was 160), with jogs so walls
+ * are not a uniform thick rim.
+ */
+export function borderInset(along: number, side: "left" | "right" | "north" | "south"): number {
+  const base = 88;
+  const wave =
+    side === "left" || side === "right"
+      ? Math.sin(along * 0.0031 + (side === "left" ? 0 : 1.7)) * 28 + Math.sin(along * 0.0077 + 0.4) * 16
+      : Math.sin(along * 0.0024 + (side === "north" ? 0.6 : 2.1)) * 22 + Math.sin(along * 0.006 + 1.1) * 12;
+  const jog = ((Math.floor(along / 180) * 17) % 37) - 18;
+  return Math.max(52, Math.min(140, base + wave + jog * 0.45));
+}
 
 export const SIGHT: Record<EnemyKind, number> = Object.fromEntries(
   (Object.keys(MONSTER_ARCH) as EnemyKind[]).map((kind) => [kind, MONSTER_ARCH[kind].sight]),
@@ -94,7 +114,7 @@ function buildPacks(): PackSpot[] {
         level: level.id,
         name: level.name,
         branch: false,
-        x: ROAD_X,
+        x: roadXAt(y),
         y,
         size: level.size,
         boss: (level.id === 5 && last) || lateBoss,
@@ -105,7 +125,7 @@ function buildPacks(): PackSpot[] {
     const side = level.offshoot;
     if (side) {
       const mouth = startY - PACK_GAP * Math.floor(level.packs / 2);
-      let x = ROAD_X + side.side * 720;
+      let x = roadXAt(mouth) + side.side * 720;
       for (let i = 0; i < side.packs; i++) {
         packs.push({
           id: `${level.id}-side-${i}`,
@@ -141,6 +161,15 @@ export function roadStart(): { x: number; y: number } {
 export function roadSpine(): { x: number; fromY: number; toY: number } {
   const mains = worldPacks().filter((pack) => !pack.branch);
   return { x: ROAD_X, fromY: mains[0]!.y, toY: mains[mains.length - 1]!.y };
+}
+
+/** Sampled winding road polyline for scenery (world units). */
+export function roadPathSamples(step = 140): { x: number; y: number }[] {
+  const spine = roadSpine();
+  const out: { x: number; y: number }[] = [];
+  for (let y = spine.fromY; y >= spine.toY; y -= step) out.push({ x: roadXAt(y), y });
+  out.push({ x: roadXAt(spine.toY), y: spine.toY });
+  return out;
 }
 
 export function placeAt(x: number, y: number): { level: number; name: string } {

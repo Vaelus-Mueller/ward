@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
 import { attributes, derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
-import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
-import { RACES, raceAttrs } from "./races";
+import { addMaterial, equipChoices, equipItem, isSignatureAffix, materialCount, rollGem, rollItem, rollRarity, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
+import { RACES, raceArmorPct, raceAttrs, raceGearArmorMul, raceInnateArmor, raceWeaponSlots } from "./races";
 import { deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
 import { ACTIVES, PASSIVE_PER_RANK, SECTORS, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
 import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
-import { raceGearArmorMul, raceInnateArmor, raceWeaponSlots } from "./races";
 import {
   RESIST_FLOOR,
   WEAK_CEILING,
@@ -19,6 +18,7 @@ import {
   damageTakenMul,
   monsterOf,
 } from "./monsters";
+import { weaponProfile } from "./weapons";
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -389,7 +389,16 @@ describe("the ward", () => {
   it("aggros a pack in sight and drops it when you leave", () => {
     const sim = new Sim(createCharacter(), 1);
     sim.begin();
-    const enemy = sim.enemies[0]!;
+    // Stay clear of road packs — plant a lone scout outside starting sight.
+    sim.player.x = 200;
+    sim.player.y = 200;
+    const enemy = makeEnemy("hound", 1, 900, 900, 40);
+    enemy.pack = "scout-pack";
+    enemy.homeX = 900;
+    enemy.homeY = 900;
+    enemy.anchorX = 900;
+    enemy.anchorY = 900;
+    sim.enemies = [enemy];
     expect(enemy.aggro).toBe(false);
     const homeX = enemy.x;
     const homeY = enemy.y;
@@ -560,11 +569,11 @@ describe("the ward", () => {
       if (skill.kind === "capstone") expect(skill.maxRank).toBe(1);
       else expect(skill.maxRank).toBe(20);
     }
-    const base = ACTIVES["heavy-blow"]!.mult;
-    expect(scaledActive("heavy-blow", 20)?.mult).toBeCloseTo(base * (1 + 0.12 * 19));
-    const cd20 = scaledActive("heavy-blow", 20)!.cooldown;
-    expect(cd20).toBeGreaterThan(ACTIVES["heavy-blow"]!.cooldown * 0.65);
-    expect(cd20).toBeLessThan(ACTIVES["heavy-blow"]!.cooldown);
+    const base = ACTIVES["heavy-blow"]!;
+    expect(scaledActive("heavy-blow", 20)?.mult).toBeCloseTo(base.mult * (1 + 0.12 * 19));
+    // Cooldown is a DPS pacing constant only — ranks cut energy cost, not time.
+    expect(scaledActive("heavy-blow", 20)!.cooldown).toBe(base.cooldown);
+    expect(scaledActive("heavy-blow", 20)!.energyCost).toBeLessThan(base.energyCost);
   });
 
   it("balances damaging actives to the same base DPS before cooldown modifiers", () => {
@@ -744,9 +753,88 @@ describe("the ward", () => {
     expect(sim.player.energy).toBeGreaterThan(0);
   });
 
-  it("lets insectoids wield four weapons with innate armor and thin gear plating", () => {
+  it("does not refill energy from timed regen", () => {
+    const sim = new Sim(createCharacter(), 1);
+    sim.begin();
+    sim.player.energy = 0;
+    expect(sim.derived.energyRegen).toBe(0);
+    sim.update(emptyIntent(), 2);
+    expect(sim.player.energy).toBe(0);
+    sim.rest(2);
+    expect(sim.player.energy).toBe(0);
+  });
+
+  it("fills skillBank from basic hits and applies Luck gold/magic find", () => {
+    const lucky = createCharacter();
+    lucky.unspentStats = 20;
+    for (let i = 0; i < 20; i++) spendStat(lucky, "luck");
+    lucky.unspentSkills = 2;
+    lucky.level = 2;
+    expect(spendSkill(lucky, "blood-oath")).toBe(true);
+    expect(spendSkill(lucky, "heavy-blow")).toBe(true);
+    expect(slotSkill(lucky, "heavy-blow", 0)).toBeNull();
+    const d = derive(lucky);
+    expect(d.goldFind).toBeGreaterThan(0.2);
+    expect(d.magicFind).toBeGreaterThan(0.15);
+
+    const sim = new Sim(lucky, 1);
+    sim.begin();
+    sim.player.skillBank = [0, 0, 0];
+    const hound = makeEnemy("hound", 1, sim.player.x + 30, sim.player.y, 40);
+    sim.enemies = [hound];
+    const intent = emptyIntent();
+    intent.attack = true;
+    for (let i = 0; i < 30; i++) sim.update(intent, 0.1);
+    expect(sim.player.skillBank[0]!).toBeGreaterThan(0);
+
+    // Magic find shifts rarity weights — high MF should not crash and should still roll.
+    let blueOrBetter = 0;
+    for (let i = 0; i < 80; i++) {
+      const rarity = rollRarity(() => (i % 10) / 10, 12, d.magicFind);
+      if (rarity !== "grey" && rarity !== "white") blueOrBetter++;
+    }
+    expect(blueOrBetter).toBeGreaterThan(0);
+    const drop = rollItem(() => 0.5, 8, "mf-test", 8, d.magicFind);
+    expect(drop).toBeTruthy();
+  });
+
+  it("offers choose-slot equip for rings and dual hands", () => {
+    const hero = createCharacter();
+    const ring = starterBlade("ring");
+    ring.slot = "ring";
+    ring.damageMin = 0;
+    ring.damageMax = 0;
+    ring.armor = 0;
+    ring.affixes = [];
+    const choices = equipChoices(hero, ring);
+    expect(choices.map((c) => c.slot).sort()).toEqual(["ring1", "ring2"]);
+
+    const blade = starterBlade("hand");
+    blade.hands = 1;
+    const hands = equipChoices(hero, blade);
+    expect(hands.some((c) => c.slot === "weapon")).toBe(true);
+    expect(hands.some((c) => c.slot === "offhand")).toBe(true);
+  });
+
+  it("gives weapon types distinct speed and reach", () => {
+    const dagger = weaponProfile("dagger", 1);
+    const maul = weaponProfile("mace", 2);
+    expect(dagger.speed).toBeGreaterThan(maul.speed);
+    expect(maul.reach).toBeGreaterThan(dagger.reach);
+    const blade = starterBlade("typed");
+    blade.weaponType = "dagger";
+    blade.speed = dagger.speed;
+    blade.swing = dagger.swing;
+    blade.rangeBonus = 0;
+    const hero = createCharacter();
+    hero.equipment.weapon = blade;
+    expect(derive(hero).weaponSwing).toBeCloseTo(dagger.swing);
+  });
+
+  it("lets insectoids wield four weapons with percent armor and thin gear plating", () => {
     expect(raceWeaponSlots("insectoid")).toBe(4);
-    expect(raceInnateArmor("insectoid")).toBeGreaterThan(20);
+    expect(raceInnateArmor("insectoid")).toBe(0);
+    expect(raceArmorPct("insectoid")).toBeCloseTo(0.9);
     expect(raceGearArmorMul("insectoid")).toBeCloseTo(0.15);
     const bug = createCharacter("Chitin", "insectoid");
     const bare = derive(bug).armor;
@@ -759,7 +847,8 @@ describe("the ward", () => {
     plate.armor = 100;
     plate.affixes = [];
     bug.equipment.chest = plate;
-    expect(derive(bug).armor).toBeCloseTo(bare + 15, 0);
+    // Gear armor is thinned by gearArmorMul, then the whole pool takes racial armorPct.
+    expect(derive(bug).armor).toBeCloseTo(bare + 15 * (1 + raceArmorPct("insectoid")), 0);
     const a = starterBlade("a");
     const b = starterBlade("b");
     const c = starterBlade("c");

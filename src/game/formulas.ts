@@ -1,5 +1,6 @@
 import { liveItem } from "./itemstats";
-import { raceAttrs, raceGearArmorMul, raceInnateArmor } from "./races";
+import { raceAttrs, raceArmorPct, raceGearArmorMul } from "./races";
+import { weaponProfile } from "./weapons";
 import {
   ATTRS,
   GEAR_SLOTS,
@@ -105,10 +106,16 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const energy = Math.round(
     24 + c.level * 0.5 + attr.spirit * 0.4 + mods.energy + mods.energyMax + gearNumber(c, "energy") + gearNumber(c, "energyMax"),
   );
-  const energyOnHit = Math.max(1, 3 + mods.energyOnHit + gearNumber(c, "energyOnHit") + attr.spirit * 0.02);
-  let armor =
-    attr.stamina * 0.25 + raceInnateArmor(c.race) + gearArmorValue(c) + mods.armor + gearNumber(c, "armor");
-  armor *= 1 + mods.armorPct;
+  const energyOnHit = Math.max(
+    1,
+    3 +
+      mods.energyOnHit +
+      gearNumber(c, "energyOnHit") +
+      gearNumber(c, "energyRegen") + // legacy timed-regen affixes count as hit energy
+      attr.spirit * 0.02,
+  );
+  let armor = attr.stamina * 0.25 + gearArmorValue(c) + mods.armor + gearNumber(c, "armor");
+  armor *= 1 + mods.armorPct + raceArmorPct(c.race);
 
   const attackRating = Math.round(
     10 + c.level * 2 + attr.agility * 1.5 + mods.attackRating + gearNumber(c, "attackRating"),
@@ -149,16 +156,22 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const attackPeriod =
     0.58 / speed / (1 + mods.attackSpeed + gearNumber(c, "attackSpeed") + attr.agility * 0.002);
   const moveSpeed = 172 * (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025);
+  // Reach from weapon type profile when known; else style defaults + rangeBonus.
+  const profileReach =
+    weapon?.weaponType != null
+      ? weaponProfile(weapon.weaponType, weapon.hands === 2 ? 2 : 1).reach
+      : null;
   const weaponRange =
-    (style === "bow"
-      ? 300
-      : style === "handbow"
-        ? 240
-        : style === "thrown"
-          ? 180
-          : style === "focus"
-            ? 230
-            : 70) + (weapon?.rangeBonus ?? 0);
+    (profileReach ??
+      (style === "bow"
+        ? 300
+        : style === "handbow"
+          ? 240
+          : style === "thrown"
+            ? 180
+            : style === "focus"
+              ? 230
+              : 70)) + (profileReach != null ? 0 : weapon?.rangeBonus ?? 0);
 
   const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012;
   const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01;
@@ -186,8 +199,10 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     moveSpeed,
     weaponStyle: style,
     weaponRange,
+    weaponSwing: weapon?.swing ?? 0.16,
     lifeRegen: c.level + attr.stamina / 10 + mods.lifeRegen + gearNumber(c, "lifeRegen"),
-    energyRegen: 0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen"),
+    // Timed energy regen removed — skills/pool charge from basic hits only.
+    energyRegen: 0,
     thorns: mods.thorns + gearNumber(c, "thorns"),
     damageReduction: clamp(mods.damageReduction + gearNumber(c, "damageReduction"), 0, 0.35),
     bleedChance: clamp(mods.bleedChance + gearNumber(c, "bleedChance"), 0, 0.75),

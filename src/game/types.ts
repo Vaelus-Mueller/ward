@@ -1,4 +1,4 @@
-export const ARENA = { width: 3600, height: 60000, margin: 160 };
+export const ARENA = { width: 3600, height: 60000, margin: 100 };
 export const BASE_ATTR = 10;
 export const STAT_POINTS_PER_LEVEL = 5;
 export const SKILL_POINTS_PER_LEVEL = 1;
@@ -55,7 +55,7 @@ export const ATTR_HINT: Record<Attr, string> = {
   agility: "Minor dodge, minor crit, and extra damage for swift classes.",
   stamina: "Life total and a little armor.",
   luck: "Crit rate, gold find, magic find, and better vendor deals.",
-  spirit: "Energy regen and a little more energy storage.",
+  spirit: "Energy from hits, skill charges, and a little more energy storage.",
 };
 
 export const DAMAGE_PAIR_LABEL: Record<DamagePair, { primary: string; secondary: string; blurb: string }> = {
@@ -202,11 +202,15 @@ export interface Item {
   ethereal: boolean;
   uniqueId: string | null;
   style: WeaponStyle;
+  /** Distinct weapon family — drives speed, reach, and swing feel. */
+  weaponType?: import("./weapons").WeaponType | null;
   hands: WeaponHands;
   damageMin: number;
   damageMax: number;
   armor: number;
   speed: number;
+  /** Seconds for the committed basic swing / draw. */
+  swing?: number;
   rangeBonus: number;
   reqStr: number;
   reqDex: number;
@@ -291,6 +295,8 @@ export interface Derived {
   moveSpeed: number;
   weaponStyle: WeaponStyle;
   weaponRange: number;
+  /** Committed basic-swing window from weapon type. */
+  weaponSwing: number;
   lifeRegen: number;
   energyRegen: number;
   thorns: number;

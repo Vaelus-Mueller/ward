@@ -1,8 +1,8 @@
 import { classTitle, refundStat, retrain, retrainCost, slotSkill, spendSkill, spendStat, canSpendSkill } from "./game/character";
-import { derive, requirementText, xpGoal } from "./game/formulas";
-import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
+import { attributes, derive, requirementText, xpGoal } from "./game/formulas";
+import { canUpgrade, equipChoices, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
-import { describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { describeSkill, SECTORS, SKILLS, scaledActive, skillById, skillChargeInfo, skillNextChargeProgress, skillReadyCharges } from "./game/skills";
 import { appendSkillIcon } from "./game/skillIcons";
 import { readSlots } from "./game/save";
 import { RACES, raceById, raceName, type RaceId } from "./game/races";
@@ -188,20 +188,64 @@ export class Ui {
     for (let i = 0; i < 3; i++) {
       const button = must(`skill-${i}`);
       const id = c.slotted[i];
-      const spec = id ? scaledActive(id, c.skillRanks[id] ?? 0, c.skillRanks) : null;
+      const rank = id ? c.skillRanks[id] ?? 0 : 0;
+      const spec = id ? scaledActive(id, rank, c.skillRanks) : null;
       const skill = id ? skillById(id) : undefined;
-      const cost = spec && spec.kind !== "aura" ? spec.energyCost : spec?.energyPerSec ?? 0;
-      const charged = !spec || spec.kind === "aura" || sim.player.energy >= (spec.energyCost || 0);
-      button.textContent = skill ? skill.name : "Empty";
-      button.title = skill && cost ? `${skill.name} · ${Math.round(cost)}${spec?.kind === "aura" ? "/s" : ""} energy` : skill?.name ?? "Empty";
-      const max = spec ? Math.max(0.2, spec.cooldown) : 1;
-      const ratio = spec && spec.kind !== "aura" ? Math.min(1, sim.player.skillCd[i]! / max) : 0;
-      button.style.setProperty("--cd", String(ratio));
+      const attrs = attributes(c);
+      const info =
+        id && skill && skill.kind !== "passive" && skill.kind !== "aura"
+          ? skillChargeInfo(id, rank, c.skillRanks, attrs, sim.mods.cdr, sim.mods.chargeMax)
+          : null;
+      const bank = sim.player.skillBank[i] ?? 0;
+      const ready = info ? skillReadyCharges(bank, info) : 0;
+      const nextFill = info ? skillNextChargeProgress(bank, info) : 0;
+      const channeling = sim.player.channel?.slot === i;
+      const channelFill = channeling && sim.player.channel ? 1 - sim.player.channel.t / Math.max(0.001, sim.player.channel.total) : 0;
+      const cost = spec?.kind === "aura" ? spec.energyPerSec : info?.energyPerCharge ?? spec?.energyCost ?? 0;
+      const charged = !spec || (spec.kind === "aura" ? sim.player.energy > 1 : ready >= 1);
+      button.replaceChildren();
+      const label = document.createElement("span");
+      label.className = "skill-label";
+      label.textContent = skill ? skill.name : "Empty";
+      button.append(label);
+      if (info && skill?.kind !== "aura") {
+        const ring = document.createElement("span");
+        ring.className = "skill-ring";
+        const ringFill = channeling ? channelFill : nextFill;
+        ring.style.setProperty("--charge", String(ringFill));
+        if (channeling) ring.classList.add("channel");
+        button.append(ring);
+        if (!channeling && skill?.kind !== "channel") {
+          const pips = document.createElement("span");
+          pips.className = "skill-pips";
+          pips.setAttribute("aria-hidden", "true");
+          for (let p = 0; p < info.maxCharges; p++) {
+            const pip = document.createElement("i");
+            pip.className = p < ready ? "on" : "";
+            const angle = -90 + (360 / info.maxCharges) * p;
+            pip.style.setProperty("--a", `${angle}deg`);
+            pips.append(pip);
+          }
+          button.append(pips);
+        }
+      }
+      button.title = skill
+        ? describeSkill(id!, rank, c.skillRanks, {
+            spirit: attrs.spirit,
+            luck: attrs.luck,
+            cdr: sim.mods.cdr,
+            chargeMax: sim.mods.chargeMax,
+          })
+        : "Empty";
+      if (skill && cost) {
+        button.title += skill.kind === "aura" ? ` · ${Math.round(cost)}/s energy` : ` · ${ready}/${info?.maxCharges ?? 0} charges`;
+      }
+      button.style.setProperty("--cd", "0");
+      button.style.setProperty("--energy", String(Math.min(1, sim.player.energy / Math.max(1, derived.energy))));
       button.classList.toggle("on", !!sim.player.auras[i]);
       button.classList.toggle("empty", !skill);
-      button.classList.toggle("starved", !!skill && !charged && spec?.kind !== "aura");
-      const fill = Math.min(1, sim.player.energy / Math.max(1, derived.energy));
-      button.style.setProperty("--energy", String(fill));
+      button.classList.toggle("starved", !!skill && skill.kind !== "aura" && ready < 1);
+      button.classList.toggle("channeling", channeling);
     }
 
     if (this.open("sheet")) this.paintSheet(sim);
@@ -431,7 +475,7 @@ export class Ui {
     text("s-mana", `${d.energy}`);
     text("s-dodge", pct(d.evasion));
     text("s-ecdr", pct(sim.mods.cdr));
-    text("s-eregen", d.energyRegen.toFixed(1));
+    text("s-eregen", "—");
     text("s-ehit", d.energyOnHit.toFixed(1));
     text("s-gf", pct(d.goldFind));
     text("s-mf", pct(d.magicFind));
@@ -910,20 +954,47 @@ export class Ui {
       tip.append(button);
       this.socketButtons(sim, item.uid, tip);
     } else if (item) {
-      const equip = document.createElement("button");
-      equip.type = "button";
-      equip.textContent = "Equip";
-      equip.addEventListener("click", (event) => {
-        event.stopPropagation();
-        const error = equipItem(c, item.uid);
-        text("pack-note", error ?? `Equipped ${item.name}.`);
-        if (!error) {
-          this.tip = null;
-          sim.recompute();
-          this.packKey = "";
-          this.actions.changed();
+      const choices = equipChoices(c, item);
+      if (choices.length > 1) {
+        const prompt = document.createElement("p");
+        prompt.className = "muted";
+        prompt.textContent = "Choose a slot:";
+        tip.append(prompt);
+        for (const choice of choices) {
+          const equip = document.createElement("button");
+          equip.type = "button";
+          const worn = c.equipment[choice.slot];
+          equip.textContent = worn ? `${choice.label} (swap ${worn.name})` : choice.label;
+          equip.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const error = equipItem(c, item.uid, choice.slot);
+            text("pack-note", error ?? `Equipped ${item.name} to ${choice.label}.`);
+            if (!error) {
+              this.tip = null;
+              sim.recompute();
+              this.packKey = "";
+              this.actions.changed();
+            }
+          });
+          tip.append(equip);
         }
-      });
+      } else {
+        const equip = document.createElement("button");
+        equip.type = "button";
+        equip.textContent = choices[0] ? `Equip · ${choices[0].label}` : "Equip";
+        equip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const error = equipItem(c, item.uid, choices[0]?.slot);
+          text("pack-note", error ?? `Equipped ${item.name}.`);
+          if (!error) {
+            this.tip = null;
+            sim.recompute();
+            this.packKey = "";
+            this.actions.changed();
+          }
+        });
+        tip.append(equip);
+      }
       const salvage = document.createElement("button");
       salvage.type = "button";
       const gained = salvageCount(item);
@@ -939,7 +1010,7 @@ export class Ui {
           this.actions.changed();
         }
       });
-      tip.append(equip, salvage);
+      tip.append(salvage);
       this.socketButtons(sim, item.uid, tip);
     }
     tip.classList.remove("hidden");

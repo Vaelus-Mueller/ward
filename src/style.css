@@ -386,13 +386,62 @@ p { line-height: 1.5; }
     linear-gradient(#5a2418, #12080c);
   box-shadow: 0 0 20px rgba(180, 48, 40, 0.4);
 }
-.skill { position: relative; overflow: hidden; border-radius: 50%; }
+.skill { position: relative; overflow: visible; border-radius: 50%; }
+.skill .skill-label {
+  position: relative;
+  z-index: 2;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .skill::after {
-  content: "";
+  content: none;
+}
+.skill-ring {
   position: absolute;
-  inset: 0;
-  background: conic-gradient(rgba(0, 0, 0, 0.68) calc(var(--cd, 0) * 360deg), transparent 0);
+  inset: -3px;
+  border-radius: 50%;
   pointer-events: none;
+  z-index: 1;
+  background: conic-gradient(
+    rgba(201, 165, 106, 0.85) calc(var(--charge, 0) * 360deg),
+    rgba(20, 14, 12, 0.55) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+}
+.skill-ring.channel {
+  background: conic-gradient(
+    rgba(210, 180, 120, 0.95) calc(var(--charge, 0) * 360deg),
+    rgba(40, 28, 22, 0.65) 0
+  );
+}
+.skill.channeling {
+  border-color: #d4b07a;
+}
+.skill-pips {
+  position: absolute;
+  inset: -6px;
+  pointer-events: none;
+  z-index: 3;
+}
+.skill-pips i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px;
+  border-radius: 50%;
+  background: rgba(40, 28, 22, 0.9);
+  border: 1px solid rgba(180, 150, 100, 0.55);
+  transform: rotate(var(--a, 0deg)) translateY(-34px);
+}
+.skill-pips i.on {
+  background: linear-gradient(180deg, #e6c48a, #a87840);
+  border-color: #f0d8a8;
+  box-shadow: 0 0 4px rgba(180, 120, 60, 0.35);
 }
 .skill::before {
   content: "";
@@ -407,7 +456,7 @@ p { line-height: 1.5; }
   transform: scaleX(var(--energy, 1));
   opacity: 0.85;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 .skill.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 14px rgba(224, 192, 120, 0.3); }
 .skill.empty { color: var(--muted); }

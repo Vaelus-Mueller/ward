@@ -13,6 +13,7 @@ import {
   type WeaponStyle,
 } from "./types";
 import type { Snapshot } from "./sim";
+import { inferWeaponType, weaponProfile } from "./weapons";
 
 export const SAVE_KEY = "vaelus-save-v1";
 export const SLOTS_KEY = "vaelus-slots-v1";
@@ -98,6 +99,15 @@ function migrateItem(item: Item): void {
   if (item.hands !== 1 && item.hands !== 2) {
     item.hands = defaultHands(item.slot as ItemSlot, item.style as WeaponStyle, item.name);
   }
+  if (item.slot === "weapon") {
+    if (!item.weaponType) item.weaponType = inferWeaponType(item.name, item.style, item.hands);
+    const profile = weaponProfile(item.weaponType, item.hands);
+    if (!Number.isFinite(item.speed) || item.speed <= 0) item.speed = profile.speed;
+    if (!Number.isFinite(item.swing as number) || (item.swing as number) <= 0) item.swing = profile.swing;
+  } else {
+    item.weaponType = item.weaponType ?? null;
+    if (!Number.isFinite(item.swing as number)) item.swing = 0.16;
+  }
   if (!Number.isFinite(item.quality)) item.quality = item.slot === "gem" ? 1 : 0;
   if (!Number.isFinite(item.sockets)) item.sockets = 0;
   const raw = (Array.isArray(item.gems) ? item.gems : []) as unknown[];
@@ -158,9 +168,15 @@ function migrateAttributes(character: Character): void {
       } else if (affix.key === "mana") {
         affix.key = "energy";
         affix.label = affix.label.replace(/Mana/gi, "Energy");
-      } else if (affix.key === "manaRegen") {
-        affix.key = "energyRegen";
-        affix.label = affix.label.replace(/Mana/gi, "Energy");
+      } else if (affix.key === "manaRegen" || affix.key === "energyRegen") {
+        // Timed pool regen retired — hit-only charging. Preserve magnitude as energy on hit.
+        affix.key = "energyOnHit";
+        affix.label = affix.label
+          .replace(/Mana Regeneration|Energy Regeneration|Mana Regen|Energy Regen/gi, "Energy on Hit")
+          .replace(/Mana/gi, "Energy");
+        if (!/Energy on Hit/i.test(affix.label)) {
+          affix.label = `+${affix.value.toFixed(2)} Energy on Hit`;
+        }
       } else if (affix.key === "energy" && /Wisdom/i.test(affix.label)) {
         affix.key = "spirit";
         affix.label = affix.label.replace(/Wisdom|Energy/g, "Spirit");

@@ -159,7 +159,7 @@ export function buildHero(race: RaceId): THREE.Group {
     chest.add(plate);
     const abdomen = part("Abdomen", new THREE.SphereGeometry(0.16, 10, 8), skin);
     abdomen.scale.set(1.1, 0.85, 1.35);
-    abdomen.position.set(0, -0.22, -0.16);
+    abdomen.position.set(0, -0.22, 0.16);
     hips.add(abdomen);
   }
 
@@ -219,7 +219,7 @@ function addFace(head: THREE.Group, race: RaceId, look: RaceLook, skin: THREE.Ma
   const eyeColor = race === "insectoid" ? 0xa8d45a : race === "golem" ? 0xe4c37a : 0x1a1410;
   const eyeMat = mat(eyeColor, 0.2, 0.35, race === "insectoid" || race === "golem" ? eyeColor : undefined, race === "insectoid" ? 0.45 : race === "golem" ? 0.35 : 0);
   const eyeY = look.head.r * 0.15;
-  const eyeZ = look.head.r * 0.85;
+  const eyeZ = -look.head.r * 0.85;
   const eyeX = look.head.r * 0.35;
   const eyeGeo = race === "insectoid" ? new THREE.SphereGeometry(0.045, 8, 6) : new THREE.SphereGeometry(0.028, 8, 6);
   for (const side of [-1, 1]) {
@@ -230,12 +230,12 @@ function addFace(head: THREE.Group, race: RaceId, look: RaceLook, skin: THREE.Ma
   if (race === "minotaur") {
     const muzzle = part("Muzzle", new THREE.CapsuleGeometry(0.08, 0.12, 4, 8), skin);
     muzzle.rotation.x = Math.PI / 2;
-    muzzle.position.set(0, -0.04, look.head.r * 0.85);
+    muzzle.position.set(0, -0.04, -look.head.r * 0.85);
     head.add(muzzle);
   }
   if (race === "dwarf") {
     const beard = part("Beard", new THREE.ConeGeometry(0.12, 0.22, 8), accent);
-    beard.position.set(0, -look.head.r * 0.7, look.head.r * 0.35);
+    beard.position.set(0, -look.head.r * 0.7, -look.head.r * 0.35);
     head.add(beard);
   }
 }
@@ -378,4 +378,100 @@ function mat(color: number, metal: number, rough: number, emissive?: number, emi
 
 export function isHeroRace(kind: string): kind is RaceId {
   return kind in HERO_HEIGHT;
+}
+
+/**
+ * Procedural limb posing for heroes (no GLB clips).
+ * Each armed hand swings independently; 2H commits both paired arms together.
+ * Dodge/hit react must not interrupt a committed attack (caller keeps attack mode).
+ */
+export function poseHeroLimbs(
+  root: THREE.Object3D,
+  opts: {
+    time: number;
+    moving: boolean;
+    attackT: number; // 0..1 during attack, or -1
+    race: RaceId;
+    hands: { slot: "weapon" | "offhand" | "weapon3" | "weapon4"; twoHand: boolean; empty: boolean }[];
+  },
+): void {
+  const walk = opts.moving ? Math.sin(opts.time * 7.2) : Math.sin(opts.time * 1.4) * 0.15;
+  const legL = root.getObjectByName("LegLeft");
+  const legR = root.getObjectByName("LegRight");
+  if (legL) legL.rotation.x = walk * 0.55;
+  if (legR) legR.rotation.x = -walk * 0.55;
+
+  const spine = root.getObjectByName("spine");
+  const chest = root.getObjectByName("chest");
+  const attacking = opts.attackT >= 0;
+  // Anticipation → strike → follow-through curve.
+  const swing = (phase: number, weight = 1) => {
+    const t = ((phase % 1) + 1) % 1;
+    const wind = t < 0.22 ? -(t / 0.22) * 0.55 : t < 0.55 ? -0.55 + ((t - 0.22) / 0.33) * 2.1 : 1.55 - ((t - 0.55) / 0.45) * 1.55;
+    return wind * weight;
+  };
+
+  const armBySlot: Record<string, string> = {
+    weapon: "ArmRight",
+    offhand: "ArmLeft",
+    weapon3: "ArmRight2",
+    weapon4: "ArmLeft2",
+  };
+  const pairOf: Record<string, string> = {
+    weapon: "ArmLeft",
+    offhand: "ArmRight",
+    weapon3: "ArmLeft2",
+    weapon4: "ArmRight2",
+  };
+
+  // Idle breathe / walk arm sway baselines.
+  for (const name of ["ArmLeft", "ArmRight", "ArmLeft2", "ArmRight2"]) {
+    const arm = root.getObjectByName(name);
+    if (!arm) continue;
+    const side = name.includes("Left") ? -1 : 1;
+    arm.rotation.x = opts.moving ? -walk * 0.35 * side : Math.sin(opts.time * 1.6) * 0.04;
+    arm.rotation.z = side * 0.12;
+    arm.rotation.y = 0;
+  }
+
+  if (!attacking) {
+    if (spine) spine.rotation.x = Math.sin(opts.time * 1.5) * 0.03;
+    if (chest) chest.rotation.y = 0;
+    return;
+  }
+
+  // Weight shift into the strike.
+  if (spine) spine.rotation.x = -0.08 + Math.sin(opts.attackT * Math.PI) * 0.12;
+  if (chest) chest.rotation.y = Math.sin(opts.attackT * Math.PI) * 0.18;
+
+  const armed = opts.hands.filter((hand) => !hand.empty);
+  const twoHand = armed.find((hand) => hand.twoHand);
+  if (twoHand) {
+    const main = root.getObjectByName(armBySlot[twoHand.slot]!);
+    const other = root.getObjectByName(pairOf[twoHand.slot]!);
+    const arc = swing(opts.attackT, 1.15);
+    if (main) {
+      main.rotation.x = arc;
+      main.rotation.z = 0.05;
+      main.rotation.y = -0.25 + opts.attackT * 0.4;
+    }
+    if (other) {
+      other.rotation.x = arc * 0.92;
+      other.rotation.z = -0.08;
+      other.rotation.y = 0.2 - opts.attackT * 0.25;
+    }
+    return;
+  }
+
+  // Independent staggered swings per armed limb.
+  armed.forEach((hand, index) => {
+    const arm = root.getObjectByName(armBySlot[hand.slot]!);
+    if (!arm) return;
+    const phase = opts.attackT + index * 0.18;
+    const arc = swing(phase, 1 - index * 0.08);
+    const side = hand.slot === "offhand" || hand.slot === "weapon4" ? -1 : 1;
+    arm.rotation.x = arc;
+    arm.rotation.y = side * (-0.2 + opts.attackT * 0.35);
+    arm.rotation.z = side * (0.15 + Math.sin(phase * Math.PI) * 0.2);
+  });
 }

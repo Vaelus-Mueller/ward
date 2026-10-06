@@ -1,6 +1,14 @@
 import { raceWeaponSlots } from "./races";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
 import { meetsRequirements } from "./formulas";
+import {
+  formatAttackSpeed,
+  formatReach,
+  inferWeaponType,
+  weaponProfile,
+  weaponTypeLabel,
+  type WeaponType,
+} from "./weapons";
 import type {
   Affix,
   ArmorType,
@@ -27,41 +35,85 @@ interface BaseItem {
   slot: ItemSlot;
   armorType: ArmorType | null;
   style: WeaponStyle;
+  weaponType: WeaponType | null;
   hands: WeaponHands;
   damageMin: number;
   damageMax: number;
   armor: number;
   speed: number;
+  swing: number;
   rangeBonus: number;
   reqStr: number;
   reqDex: number;
   reqEne: number;
 }
 
+function weaponBase(
+  name: string,
+  type: WeaponType,
+  hands: WeaponHands,
+  damageMin: number,
+  damageMax: number,
+  reqs: { str?: number; dex?: number; ene?: number },
+): BaseItem {
+  const profile = weaponProfile(type, hands);
+  return {
+    name,
+    slot: "weapon",
+    armorType: null,
+    style: profile.style,
+    weaponType: type,
+    hands,
+    damageMin,
+    damageMax,
+    armor: 0,
+    speed: profile.speed,
+    swing: profile.swing,
+    rangeBonus: 0,
+    reqStr: reqs.str ?? 0,
+    reqDex: reqs.dex ?? 0,
+    reqEne: reqs.ene ?? 0,
+  };
+}
+
+function withReach(base: BaseItem): BaseItem {
+  const profile = weaponProfile(base.weaponType ?? "sword", base.hands);
+  const styleBase =
+    profile.style === "bow" ? 300 : profile.style === "handbow" ? 240 : profile.style === "thrown" ? 180 : profile.style === "focus" ? 230 : 70;
+  return { ...base, speed: profile.speed, swing: profile.swing, rangeBonus: profile.reach - styleBase, style: profile.style };
+}
+
 const WEAPONS: BaseItem[] = [
-  { name: "Ash Blade", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
-  { name: "Split Cleaver", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 8, damageMax: 14, armor: 0, speed: 0.84, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
-  { name: "Gate Spear", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 7, damageMax: 12, armor: 0, speed: 0.95, rangeBonus: 30, reqStr: 14, reqDex: 0, reqEne: 0 },
-  { name: "Oak Maul", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 11, damageMax: 18, armor: 0, speed: 0.78, rangeBonus: 0, reqStr: 22, reqDex: 0, reqEne: 0 },
-  { name: "Great Ashblade", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 10, damageMax: 16, armor: 0, speed: 0.88, rangeBonus: 0, reqStr: 20, reqDex: 0, reqEne: 0 },
-  { name: "Reed Bow", slot: "weapon", armorType: null, style: "bow", hands: 2, damageMin: 4, damageMax: 8, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 14, reqEne: 0 },
-  { name: "Palm Crossbow", slot: "weapon", armorType: null, style: "handbow", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 0.92, rangeBonus: 0, reqStr: 0, reqDex: 12, reqEne: 0 },
-  { name: "Throwing Knives", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 3, damageMax: 7, armor: 0, speed: 1.18, rangeBonus: 0, reqStr: 0, reqDex: 10, reqEne: 0 },
-  { name: "Bone Hatchet", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1.02, rangeBonus: 0, reqStr: 8, reqDex: 10, reqEne: 0 },
-  { name: "Moon Focus", slot: "weapon", armorType: null, style: "focus", hands: 1, damageMin: 3, damageMax: 6, armor: 0, speed: 1.08, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 12 },
+  withReach(weaponBase("Ash Blade", "sword", 1, 5, 9, { str: 12 })),
+  withReach(weaponBase("Great Ashblade", "sword", 2, 10, 16, { str: 20 })),
+  withReach(weaponBase("Split Cleaver", "axe", 1, 8, 14, { str: 18 })),
+  withReach(weaponBase("Grave Greataxe", "axe", 2, 12, 20, { str: 24 })),
+  withReach(weaponBase("Ward Mace", "mace", 1, 7, 12, { str: 16 })),
+  withReach(weaponBase("Oak Maul", "mace", 2, 11, 18, { str: 22 })),
+  withReach(weaponBase("Gate Spear", "spear", 2, 7, 12, { str: 14 })),
+  withReach(weaponBase("Reed Staff", "staff", 2, 5, 9, { ene: 14 })),
+  withReach(weaponBase("Moon Wand", "wand", 1, 3, 6, { ene: 12 })),
+  withReach(weaponBase("Reed Bow", "bow", 2, 4, 8, { dex: 14 })),
+  withReach(weaponBase("Palm Crossbow", "crossbow", 1, 5, 9, { dex: 12 })),
+  withReach(weaponBase("Siege Crossbow", "crossbow", 2, 7, 12, { dex: 16, str: 8 })),
+  withReach(weaponBase("Bone Dagger", "dagger", 1, 3, 6, { dex: 10 })),
+  withReach(weaponBase("Throwing Knives", "throwing_dagger", 1, 3, 7, { dex: 10 })),
+  withReach(weaponBase("Ash Stars", "throwing_star", 1, 2, 6, { dex: 12 })),
+  withReach(weaponBase("Bone Hatchet", "throwing_axe", 1, 5, 9, { str: 8, dex: 10 })),
+  withReach(weaponBase("Ash Javelin", "javelin", 1, 4, 8, { str: 10, dex: 10 })),
 ];
 
 const SHIELDS: BaseItem[] = [
-  { name: "Wood Buckler", slot: "shield", armorType: "leather", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 8, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Iron Targe", slot: "shield", armorType: "mail", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 14, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
-  { name: "Tower Plate", slot: "shield", armorType: "plate", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 22, speed: 1, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
+  { name: "Wood Buckler", slot: "shield", armorType: "leather", style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 8, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Targe", slot: "shield", armorType: "mail", style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 14, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
+  { name: "Tower Plate", slot: "shield", armorType: "plate", style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 22, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
 ];
 
 const ARMOR_ROWS: Record<
   ArmorType,
   Record<
     "head" | "chest" | "belt" | "boots" | "gloves",
-    Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "rangeBonus" | "damageMin" | "damageMax" | "hands"> & {
+    Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "swing" | "weaponType" | "rangeBonus" | "damageMin" | "damageMax" | "hands"> & {
       armor: number;
     }
   >
@@ -97,12 +149,12 @@ const ARMOR_ROWS: Record<
 };
 
 const JEWELRY: BaseItem[] = [
-  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", weaponType: null, hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, swing: 0.16, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
 ];
 
 const DYES: Record<ArmorType, number[]> = {
@@ -124,7 +176,7 @@ const AFFIXES: { affix: Affix; prefix: string; weight: number }[] = [
   { prefix: "Keen", affix: { key: "damage", value: 2, label: "+2 Weapon Damage" }, weight: 3 },
   { prefix: "True", affix: { key: "attackRating", value: 12, label: "+12 Attack Rating" }, weight: 2 },
   { prefix: "Cruel", affix: { key: "crit", value: 0.03, label: "+3% Critical Chance" }, weight: 2 },
-  { prefix: "Flowing", affix: { key: "energyRegen", value: 0.35, label: "+0.35 Energy Regeneration" }, weight: 2 },
+  { prefix: "Flowing", affix: { key: "energyOnHit", value: 0.35, label: "+0.35 Energy on Hit" }, weight: 2 },
   { prefix: "Ember", affix: { key: "burn", value: 2.5, label: "+2.5 Fire Burn on Hit" }, weight: 2 },
   { prefix: "Rime", affix: { key: "frost", value: 0.2, label: "Chill: 20% slow on Hit" }, weight: 2 },
   { prefix: "Storm", affix: { key: "lightning", value: 4, label: "+4 Lightning Damage" }, weight: 2 },
@@ -182,17 +234,18 @@ function weightedAffix(rng: () => number): { affix: Affix; prefix: string } {
   return AFFIXES[0]!;
 }
 
-export function rollRarity(rng: () => number, wave: number): Rarity {
+export function rollRarity(rng: () => number, wave: number, magicFind = 0): Rarity {
+  const mf = Math.max(0, magicFind);
   const weights: [Rarity, number][] = [
-    ["grey", Math.max(2, 42 - wave * 1.6)],
-    ["white", Math.max(6, 30 - wave * 0.5)],
-    ["green", 14 + wave * 0.8],
-    ["blue", 4 + wave * 1.1],
-    ["purple", Math.max(0, (wave - 3) * 0.9)],
-    ["orange", Math.max(0, (wave - 7) * 0.55)],
-    ["yellow", Math.max(0, (wave - 10) * 0.35)],
-    ["red", Math.max(0, (wave - 12) * 0.28)],
-    ["rainbow", Math.max(0, (wave - 8) * 0.08)],
+    ["grey", Math.max(2, 42 - wave * 1.6 - mf * 20)],
+    ["white", Math.max(6, 30 - wave * 0.5 - mf * 10)],
+    ["green", 14 + wave * 0.8 + mf * 8],
+    ["blue", 4 + wave * 1.1 + mf * 10],
+    ["purple", Math.max(0, (wave - 3) * 0.9 + mf * 6)],
+    ["orange", Math.max(0, (wave - 7) * 0.55 + mf * 4)],
+    ["yellow", Math.max(0, (wave - 10) * 0.35 + mf * 3)],
+    ["red", Math.max(0, (wave - 12) * 0.28 + mf * 2)],
+    ["rainbow", Math.max(0, (wave - 8) * 0.08 + mf * 1)],
   ];
   const total = weights.reduce((sum, entry) => sum + entry[1], 0);
   let roll = rng() * total;
@@ -213,10 +266,12 @@ function armorBases(): BaseItem[] {
         slot,
         armorType,
         style: "melee",
+        weaponType: null,
         hands: 1,
         damageMin: 0,
         damageMax: 0,
         speed: 1,
+        swing: 0.16,
         rangeBonus: 0,
       });
     }
@@ -232,12 +287,14 @@ interface UniqueDef {
   slot: ItemSlot;
   armorType: ArmorType | null;
   style: WeaponStyle;
+  weaponType?: WeaponType | null;
   hands?: WeaponHands;
   minWave: number;
   damageMin: number;
   damageMax: number;
   armor: number;
   speed: number;
+  swing?: number;
   rangeBonus: number;
   reqStr: number;
   reqDex: number;
@@ -295,7 +352,7 @@ const UNIQUES: UniqueDef[] = [
       { key: "spellMult", value: 0.14, label: "Rite: 14% more spell damage" },
       { key: "spirit", value: 4, label: "+4 Spirit" },
       { key: "energy", value: 12, label: "+12 Energy" },
-      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
+      { key: "energyOnHit", value: 0.4, label: "+0.40 Energy on Hit" },
     ],
   },
   {
@@ -412,7 +469,7 @@ const UNIQUES: UniqueDef[] = [
     sockets: 0,
     dye: 0x3d4a78,
     affixes: [
-      { key: "cdr", value: 0.08, label: "Measured Cast: 8% cooldown reduction" },
+      { key: "cdr", value: 0.08, label: "Measured Cast: 8% energy cost reduction" },
       { key: "spirit", value: 3, label: "+3 Spirit" },
       { key: "energy", value: 10, label: "+10 Energy" },
       { key: "crit", value: 0.03, label: "+3% Critical Chance" },
@@ -462,7 +519,7 @@ const UNIQUES: UniqueDef[] = [
     affixes: [
       { key: "lifeRegen", value: 1.2, label: "Ward Pulse: +1.20 life regeneration" },
       { key: "energy", value: 14, label: "+14 Energy" },
-      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
+      { key: "energyOnHit", value: 0.4, label: "+0.40 Energy on Hit" },
       { key: "spirit", value: 3, label: "+3 Spirit" },
     ],
   },
@@ -491,6 +548,8 @@ function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "
     sockets: 0,
     gems: [],
     hands: 1,
+    weaponType: null,
+    swing: 0.16,
     ...partial,
   };
 }
@@ -539,8 +598,8 @@ export function gemKind(item: Item): GemKind | null {
   return item.gems[0]?.kind ?? null;
 }
 
-export function rollItem(rng: () => number, wave: number, uid: string, level = wave): Item {
-  if (rng() < uniqueChance(wave)) {
+export function rollItem(rng: () => number, wave: number, uid: string, level = wave, magicFind = 0): Item {
+  if (rng() < uniqueChance(wave) * (1 + magicFind)) {
     const pool = UNIQUES.filter((entry) => entry.minWave <= wave);
     if (pool.length > 0) return makeUnique(pick(rng, pool), rng, uid, wave, level);
   }
@@ -556,7 +615,7 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
   }
   const pool = BASES.filter((base) => base.slot === slot);
   const base = pick(rng, pool);
-  const rarity = rollRarity(rng, wave);
+  const rarity = rollRarity(rng, wave, magicFind);
   const jewelry = isJewelry(slot);
   let affixCount = TIER_AFFIXES[rarity];
   if (jewelry) affixCount = Math.max(1, affixCount);
@@ -605,6 +664,11 @@ export function rollItem(rng: () => number, wave: number, uid: string, level = w
 
 function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: number, level: number): Item {
   const ethereal = !isJewelry(unique.slot) && rng() < ETHEREAL_CHANCE;
+  const hands = unique.hands ?? defaultHands(unique.slot, unique.style, unique.name);
+  const weaponType =
+    unique.weaponType ??
+    (unique.slot === "weapon" ? inferWeaponType(unique.name, unique.style, hands) : null);
+  const profile = weaponType ? weaponProfile(weaponType, hands) : null;
   return blankItem({
     uid,
     name: `${ethereal ? "Ethereal " : ""}${unique.name}`,
@@ -614,11 +678,13 @@ function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: num
     ethereal,
     uniqueId: unique.id,
     style: unique.style,
-    hands: unique.hands ?? defaultHands(unique.slot, unique.style, unique.name),
+    weaponType,
+    hands,
     damageMin: unique.damageMin,
     damageMax: unique.damageMax,
     armor: unique.armor,
-    speed: unique.speed,
+    speed: profile?.speed ?? unique.speed,
+    swing: profile?.swing ?? unique.swing ?? 0.16,
     rangeBonus: unique.rangeBonus,
     reqStr: unique.reqStr,
     reqDex: unique.reqDex,
@@ -640,13 +706,14 @@ export function rolledAffixAmount(key: string, base: number, power: number): num
 }
 
 function roundStored(key: string, value: number): number {
-  if (key === "crit" || key === "energyRegen") return Math.round(value * 100) / 100;
+  if (key === "crit" || key === "energyOnHit") return Math.round(value * 100) / 100;
   return Math.max(1, Math.round(value));
 }
 
 function storedLabel(key: string, value: number): string {
   if (key === "crit") return `+${Math.round(value * 100)}% Critical Chance`;
-  if (key === "energyRegen") return `+${value.toFixed(2)} Energy Regeneration`;
+  if (key === "energyOnHit") return `+${value.toFixed(2)} Energy on Hit`;
+  if (key === "energyRegen") return `+${value.toFixed(2)} Energy on Hit`;
   const names: Record<string, string> = {
     strength: "Strength",
     agility: "Agility",
@@ -782,11 +849,66 @@ export function defaultHands(slot: ItemSlot, style: WeaponStyle, name = ""): Wea
   return 1;
 }
 
-export function equipItem(c: Character, uid: string): string | null {
+export function equipChoices(c: Character, item: Item): { slot: SlotName; label: string }[] {
+  if (item.slot === "gem") return [];
+  if (item.slot === "ring") {
+    return [
+      { slot: "ring1", label: "Left ring" },
+      { slot: "ring2", label: "Right ring" },
+    ];
+  }
+  if (item.slot === "earring") {
+    return [
+      { slot: "ear1", label: "Left earring" },
+      { slot: "ear2", label: "Right earring" },
+    ];
+  }
+  if (item.slot === "shield") return [{ slot: "offhand", label: "Off-hand" }];
+  if (item.slot === "weapon") {
+    if (itemHands(item) === 2) return [{ slot: "weapon", label: "Main hand (2H)" }];
+    const labels: Record<string, string> = {
+      weapon: "Main hand",
+      offhand: "Off-hand",
+      weapon3: "Third arm",
+      weapon4: "Fourth arm",
+    };
+    const out: { slot: SlotName; label: string }[] = [];
+    for (const slot of weaponHandSlots(c)) {
+      if (slot === "weapon") {
+        out.push({ slot, label: labels[slot]! });
+        continue;
+      }
+      if (canFillWeaponHand(c, item, slot) || slot === "offhand") {
+        // Always offer off-hand / extra arms for 1H so the player chooses; equipItem enforces rules.
+        out.push({ slot, label: labels[slot]! });
+      }
+    }
+    return out.length ? out : [{ slot: "weapon", label: "Main hand" }];
+  }
+  const slot = item.slot as SlotName;
+  const labels: Partial<Record<SlotName, string>> = {
+    head: "Head",
+    chest: "Chest",
+    belt: "Belt",
+    boots: "Boots",
+    gloves: "Gloves",
+    neck: "Necklace",
+  };
+  return [{ slot, label: labels[slot] ?? slot }];
+}
+
+export function equipItem(c: Character, uid: string, preferSlot?: SlotName): string | null {
   const index = c.inventory.findIndex((item) => item.uid === uid);
   if (index < 0) return "That item is not in the pack.";
   const item = c.inventory[index]!;
-  const slot = destination(c, item);
+  const choices = equipChoices(c, item);
+  let slot: SlotName | null = preferSlot ?? destination(c, item);
+  if (preferSlot) {
+    if (!choices.some((choice) => choice.slot === preferSlot)) {
+      return "That item cannot go in that slot.";
+    }
+    slot = preferSlot;
+  }
   if (!slot) return "Set a gem into an empty socket.";
   if ((slot === "weapon3" || slot === "weapon4") && c.race !== "insectoid") {
     return "Only insectoids can bind a third or fourth weapon.";
@@ -861,22 +983,19 @@ export function itemSummary(item: Item, level = 1): string {
   if (item.armorType) bits.push(ARMOR_LABEL[item.armorType]);
   if (item.ethereal) bits.push(item.slot === "weapon" ? "+10% damage" : "+10% defence");
   if (item.slot === "weapon" || item.slot === "shield") {
-    const style =
-      item.slot === "shield"
-        ? "Shield"
-        : item.style === "bow"
-          ? "Bow"
-          : item.style === "handbow"
-            ? "Hand Crossbow"
-            : item.style === "thrown"
-              ? "Thrown"
-              : item.style === "focus"
-                ? "Focus"
-                : itemHands(item) === 2
-                  ? "Two-Hand"
-                  : "One-Hand";
-    if (item.slot === "shield") bits.push(`${style} ${live.armor} armor`);
-    else bits.push(`${style} ${live.damageMin}–${live.damageMax}`);
+    if (item.slot === "shield") {
+      bits.push(`Shield ${live.armor} armor`);
+    } else {
+      const hands = itemHands(item) === 2 ? "2H" : "1H";
+      const type = item.weaponType ?? inferWeaponType(item.name, item.style, itemHands(item));
+      const profile = weaponProfile(type, itemHands(item));
+      const typeName = weaponTypeLabel(type, itemHands(item));
+      bits.push(`${hands} ${typeName}`);
+      bits.push(`${live.damageMin}–${live.damageMax}`);
+      bits.push(formatAttackSpeed(live.speed || profile.speed));
+      const reach = (item.style === "bow" ? 300 : item.style === "handbow" ? 240 : item.style === "thrown" ? 180 : item.style === "focus" ? 230 : 70) + (live.rangeBonus || 0);
+      bits.push(formatReach(reach));
+    }
   } else if (live.armor > 0) bits.push(`${live.armor} armor`);
   if (item.sockets > 0) {
     const filled = item.gems.filter((gem) => gem).length;
@@ -901,6 +1020,7 @@ const RARITY_YIELD: Record<Rarity, number> = {
 
 const FRACTION_AFFIX = new Set([
   "crit",
+  "energyOnHit",
   "energyRegen",
   "lifeRegen",
   "goldFind",

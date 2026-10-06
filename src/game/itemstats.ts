@@ -86,6 +86,7 @@ export function rollSocketCount(rng: () => number, rarity: Rarity, cap: number):
 function roundAffix(key: string, value: number): number {
   if (
     key === "crit" ||
+    key === "energyOnHit" ||
     key === "energyRegen" ||
     key === "lifeRegen" ||
     key === "goldFind" ||
@@ -103,20 +104,33 @@ function roundAffix(key: string, value: number): number {
   return Math.max(1, Math.round(value));
 }
 
+/** Retired affix keys (mana era / old attrs). Dropped from live labels; saves migrate them. */
+const RETIRED_AFFIX_KEYS = new Set([
+  "mana",
+  "manaRegen",
+  "manaMax",
+  "dexterity",
+  "vitality",
+  "endurance",
+  "wisdom",
+]);
+
 function affixLabel(key: string, value: number): string {
   switch (key) {
     case "strength":
       return `+${value} Strength`;
     case "agility":
       return `+${value} Agility`;
-    case "endurance":
-      return `+${value} Endurance`;
-    case "wisdom":
-      return `+${value} Wisdom`;
+    case "stamina":
+      return `+${value} Stamina`;
+    case "luck":
+      return `+${value} Luck`;
+    case "spirit":
+      return `+${value} Spirit`;
     case "life":
       return `+${value} Life`;
     case "energy":
-      return `+${value} Mana`;
+      return `+${value} Energy`;
     case "armor":
       return `+${value} Armor`;
     case "damage":
@@ -125,8 +139,11 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Attack Rating`;
     case "crit":
       return `+${Math.round(value * 100)}% Critical Chance`;
+    case "energyOnHit":
+      return `+${value.toFixed(2)} Energy on Hit`;
     case "energyRegen":
-      return `+${value.toFixed(2)} Mana Regeneration`;
+      // Legacy key — display as hit energy; saves migrate to energyOnHit.
+      return `+${value.toFixed(2)} Energy on Hit`;
     case "lifeRegen":
       return `+${value.toFixed(2)} Life Regeneration`;
     case "goldFind":
@@ -146,7 +163,7 @@ function affixLabel(key: string, value: number): string {
     case "bleedChance":
       return `${Math.round(value * 100)}% bleed chance`;
     case "cdr":
-      return `${Math.round(value * 100)}% cooldown reduction`;
+      return `${Math.round(value * 100)}% Energy Cost Reduction`;
     case "attackSpeed":
       return `${Math.round(value * 100)}% attack speed`;
     case "burn":
@@ -172,9 +189,11 @@ export function liveItem(item: Item, level: number): Item {
   } else if (item.ethereal) {
     armor = Math.round(armor * 1.1);
   }
-  const affixes = item.affixes.map((affix) => {
-    const value = roundAffix(affix.key, affix.value * mul);
-    return { key: affix.key, value, label: affixLabel(affix.key, value) };
-  });
+  const affixes = item.affixes
+    .filter((affix) => !RETIRED_AFFIX_KEYS.has(affix.key))
+    .map((affix) => {
+      const value = roundAffix(affix.key, affix.value * mul);
+      return { key: affix.key, value, label: affixLabel(affix.key, value) };
+    });
   return { ...item, damageMin, damageMax, armor, affixes: [...affixes, ...gemAffixes(item)] };
 }

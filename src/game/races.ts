@@ -11,8 +11,8 @@ export interface RaceDef {
   penalties: string[];
   /** Extra racial passive shown on the create screen. */
   passive?: string;
-  /** Flat innate armor that does not come from gear. */
-  innateArmor?: number;
+  /** Percent armor bonus from the race itself (no flat innate armor). */
+  armorPct?: number;
   /** Multiplier on armor values printed on gear pieces (affixes still apply in full). */
   gearArmorMul?: number;
   /** How many one-hand weapons this race can wield at once. */
@@ -68,8 +68,8 @@ export const RACES: RaceDef[] = [
     bonuses: ["+4 Agility", "+2 Strength"],
     penalties: ["−3 Spirit", "−2 Luck", "−1 Stamina"],
     passive:
-      "Four Arms — wield four one-hand weapons. Innate chitin armor; gear armor barely thickens the shell, but enchantments still bind.",
-    innateArmor: 28,
+      "Four Arms — wield four one-hand weapons. Chitin grants percent armor; gear armor barely thickens the shell, but enchantments still bind.",
+    armorPct: 0.9,
     gearArmorMul: 0.15,
     weaponSlots: 4,
   },
@@ -114,8 +114,14 @@ export function raceWeaponSlots(id: string | null | undefined): number {
   return raceById(id).weaponSlots ?? 2;
 }
 
+export function raceArmorPct(id: string | null | undefined): number {
+  return raceById(id).armorPct ?? 0;
+}
+
+/** @deprecated Flat innate armor removed — use raceArmorPct. */
 export function raceInnateArmor(id: string | null | undefined): number {
-  return raceById(id).innateArmor ?? 0;
+  void id;
+  return 0;
 }
 
 export function raceGearArmorMul(id: string | null | undefined): number {

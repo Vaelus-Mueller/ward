@@ -10,23 +10,20 @@ import {
   type EnemyKind,
   type Mods,
 } from "./types";
-import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
+import { attributes, derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
-import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
-import { MONSTER_ARCH, damageTakenMul, monsterOf } from "./monsters";
 import {
-  DESPAWN,
-  LEASH,
-  SIGHT,
-  SPAWN_IN,
-  levelToughness,
-  packKinds,
-  placeAt,
-  roadStart,
-  worldPacks,
-  type PackSpot,
-} from "./world";
+  ACTIVES,
+  passiveContribution,
+  scaledActive,
+  skillById,
+  skillChargeInfo,
+  skillReadyCharges,
+  type ActiveSpec,
+} from "./skills";
+import { MONSTER_ARCH, damageTakenMul, monsterOf } from "./monsters";
+import { DESPAWN, LEASH, SIGHT, SPAWN_IN, borderInset, levelToughness, packKinds, placeAt, roadPathSamples, roadStart, roadXAt, worldPacks, type PackSpot } from "./world";
 
 export interface Enemy {
   id: number;
@@ -70,6 +67,8 @@ export interface Shot {
   life: number;
   damage: number;
   fromPlayer: boolean;
+  /** Basic weapon shot — grants skill-charge energy on hit. */
+  basic: boolean;
   color: string;
   hit: number[];
   pierce: boolean;
@@ -148,7 +147,10 @@ interface PlayerBody {
   hp: number;
   energy: number;
   attackCd: number;
+  /** @deprecated Unused — skills use skillBank charges, not time CDs. */
   skillCd: [number, number, number];
+  /** Energy banked toward charges for each skill slot (filled by basic hits). */
+  skillBank: [number, number, number];
   channel: { slot: number; t: number; total: number; healFrac: number; restoreMana: boolean } | null;
   portal: { t: number; total: number } | null;
   auras: [boolean, boolean, boolean];
@@ -253,6 +255,8 @@ export class Sim {
   private nextUid = 1;
   private starterGiven = false;
   private hurtThisTick = false;
+  /** Packs pulled by damage outside sight — cleared when leashed. */
+  private pulledPacks = new Set<string>();
 
   constructor(character: Character, seed = 1) {
     this.character = character;
@@ -266,6 +270,7 @@ export class Sim {
       energy: 1,
       attackCd: 0,
       skillCd: [0, 0, 0],
+      skillBank: [0, 0, 0],
       channel: null,
       portal: null,
       auras: [false, false, false],
@@ -377,7 +382,7 @@ export class Sim {
   rest(dt: number): void {
     this.recompute();
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.lifeRegen * dt);
-    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyRegen * dt);
+    // Hit-only energy: no timed pool regen (auras still drain energy).
   }
 
   update(intent: Intent, dt: number): TickResult {
@@ -490,13 +495,13 @@ export class Sim {
     p.swing = Math.max(0, p.swing - dt);
     p.iFrame = Math.max(0, p.iFrame - dt);
     p.stun = Math.max(0, p.stun - dt);
-    for (let i = 0; i < 3; i++) p.skillCd[i] = Math.max(0, p.skillCd[i]! - dt);
+    // Skills have no time cooldowns — readiness is energy only (filled mainly by basic hits).
     p.buffs = p.buffs.filter((buff) => {
       buff.t -= dt;
       return buff.t > 0;
     });
     p.hp = Math.min(this.derived.life, p.hp + this.derived.lifeRegen * dt);
-    p.energy = Math.min(this.derived.energy, p.energy + this.derived.energyRegen * dt);
+    // Hit-only energy: no timed pool regen.
     for (const enemy of this.enemies) enemy.flash = Math.max(0, enemy.flash - dt);
   }
 
@@ -568,7 +573,7 @@ export class Sim {
     if (!target && style !== "melee" && p.aimId === null) return;
     if (target) p.facing = Math.atan2(target.y - p.y, target.x - p.x);
     p.attackCd = this.derived.attackPeriod;
-    p.swing = 0.16;
+    p.swing = this.derived.weaponSwing;
     const burn = gearNumber(this.character, "burn");
     const frost = gearNumber(this.character, "frost");
     const lightning = gearNumber(this.character, "lightning");
@@ -586,16 +591,17 @@ export class Sim {
           frost > 0 ? 1.4 : 0,
           0,
           "bleed",
+          true,
         );
       }
     } else if (style === "focus") {
       const damage = this.rollSpell(1) + lightning;
-      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark");
+      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark", "bleed", true);
       this.burst("arcane", "#c9b6ff", 0.7);
     } else if (ranged) {
       const damage = this.rollWeapon() + lightning;
       const color = style === "thrown" ? "#d8c4a0" : "#f0e2c4";
-      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow");
+      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow", "bleed", true);
       this.burst("slash", color, 0.7);
     }
   }
@@ -617,19 +623,30 @@ export class Sim {
       this.burst("ward", spec.color, 1.1);
       return;
     }
-    if (this.player.skillCd[index] > 0) return;
-    if (this.player.energy < spec.energyCost) {
-      this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
+    const attrs = attributes(this.character);
+    const info = skillChargeInfo(
+      id,
+      rank,
+      this.character.skillRanks,
+      attrs,
+      this.mods.cdr + gearNumber(this.character, "cdr"),
+      this.mods.chargeMax + gearNumber(this.character, "chargeMax"),
+    );
+    if (!info || info.energyPerCharge <= 0) {
+      this.float(this.player.x, this.player.y - 28, "No charge", "#9ebed0");
       return;
     }
-    this.player.energy -= spec.energyCost;
-    const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr"), 0, 0.4);
-    this.player.skillCd[index] = spec.cooldown * (1 - cdr);
+    const ready = skillReadyCharges(this.player.skillBank[index]!, info);
+    if (ready < 1) {
+      this.float(this.player.x, this.player.y - 28, "No charge", "#9ebed0");
+      return;
+    }
+    this.player.skillBank[index] = Math.max(0, this.player.skillBank[index]! - info.energyPerCharge);
+    this.player.energy = Math.max(0, this.player.energy - info.energyPerCharge);
     this.breakChannel();
-    this.player.swing = 0.18;
+    this.player.swing = this.derived.weaponSwing;
     this.castFx(spec);
     if (spec.kind === "channel") {
-      this.breakChannel();
       this.player.channel = {
         slot: index,
         t: spec.channelTime,
@@ -745,6 +762,7 @@ export class Sim {
     speed: number,
     style: Shot["style"],
     pair: DamagePair = "bleed",
+    basic = false,
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -759,6 +777,7 @@ export class Sim {
         life: 1.15,
         damage,
         fromPlayer: true,
+        basic,
         color,
         hit: [],
         pierce: count === 1 && speed >= 400,
@@ -906,6 +925,7 @@ export class Sim {
           life: 1.4,
           damage: enemy.damage,
           fromPlayer: false,
+          basic: false,
           color: "#e7c39a",
           hit: [],
           pierce: false,
@@ -929,6 +949,7 @@ export class Sim {
           life: 1.3,
           damage: enemy.damage,
           fromPlayer: false,
+          basic: false,
           color: enemy.kind === "wisp" ? "#ffb060" : "#a894e6",
           hit: [],
           pierce: false,
@@ -960,7 +981,7 @@ export class Sim {
       for (const enemy of this.enemies) {
         if (shot.hit.includes(enemy.id)) continue;
         if (Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <= enemy.radius + shot.radius) {
-          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair);
+          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair, shot.basic);
           shot.hit.push(enemy.id);
           if (!shot.pierce) shot.life = 0;
           break;
@@ -1040,6 +1061,7 @@ export class Sim {
     slowDur = 0,
     critAdd = 0,
     pair: DamagePair = "bleed",
+    fromBasic = false,
   ): void {
     if (this.rng() > hitChance(this.derived.attackRating, enemy.defense)) {
       this.float(enemy.x, enemy.y - 18, "miss", "#b7b1a8");
@@ -1076,15 +1098,29 @@ export class Sim {
       enemy.telegraph = 0;
     }
     if (slow > 0) enemy.slow = Math.max(enemy.slow, slowDur);
-    this.hasteFromHit();
+    // Damaging a foe always pulls pack aggro, even outside sight.
+    this.pulledPacks.add(enemy.pack);
+    if (fromBasic) this.chargeEnergyFromHit();
   }
 
-  private hasteFromHit(): void {
+  /** Basic weapon hits fill the shared energy pool and each skill's charge bank. */
+  private chargeEnergyFromHit(): void {
+    const gain = this.derived.energyOnHit;
+    this.player.energy = Math.min(this.derived.energy, this.player.energy + gain);
+    const attrs = attributes(this.character);
+    const cdr = this.mods.cdr + gearNumber(this.character, "cdr");
+    const chargeBonus = this.mods.chargeMax + gearNumber(this.character, "chargeMax");
     for (let i = 0; i < 3; i++) {
-      if (this.player.skillCd[i]! > 0) this.player.skillCd[i] = Math.max(0, this.player.skillCd[i]! - 0.16);
+      const id = this.character.slotted[i];
+      if (!id) continue;
+      const rank = this.character.skillRanks[id] ?? 0;
+      const skill = skillById(id);
+      if (!skill || skill.kind === "passive" || skill.kind === "aura") continue;
+      const info = skillChargeInfo(id, rank, this.character.skillRanks, attrs, cdr, chargeBonus);
+      if (!info || info.energyPerCharge <= 0) continue;
+      const cap = info.energyPerCharge * info.maxCharges;
+      this.player.skillBank[i] = Math.min(cap, this.player.skillBank[i]! + gain);
     }
-    // Basic and skill hits charge skill energy.
-    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyOnHit);
   }
 
   private resolveDeaths(result: TickResult): void {
@@ -1098,13 +1134,13 @@ export class Sim {
       this.killedTotal += 1;
       const levelBefore = this.character.level;
       const gain = grantXp(this.character, enemy.xp);
-      const gold = Math.max(1, Math.round(enemy.gold * (1 + this.mods.goldFind)));
+      const gold = Math.max(1, Math.round(enemy.gold * (1 + this.derived.goldFind)));
       this.drops.push({ id: this.nextDrop++, x: enemy.x, y: enemy.y, gold, itemUid: null });
       if (!this.starterGiven) {
         this.starterGiven = true;
         this.placeItem(enemy.x + 18, enemy.y, starterBlade(`item-${this.nextUid++}`), result);
       } else if (this.rng() < 0.22) {
-        this.placeItem(enemy.x + 16, enemy.y + 10, rollItem(this.rng, this.wave, `item-${this.nextUid++}`, this.character.level), result);
+        this.placeItem(enemy.x + 16, enemy.y + 10, rollItem(this.rng, this.wave, `item-${this.nextUid++}`, this.character.level, this.derived.magicFind), result);
       }
       if (this.rng() < 0.06) {
         this.placeItem(enemy.x - 14, enemy.y + 8, rollGem(this.rng, `gem-${this.nextUid++}`), result);
@@ -1185,7 +1221,11 @@ export class Sim {
     for (const enemy of this.enemies) {
       if (Math.hypot(this.player.x - enemy.anchorX, this.player.y - enemy.anchorY) > LEASH) leashed.add(enemy.pack);
     }
-    for (const enemy of this.enemies) enemy.aggro = seen.has(enemy.pack) && !leashed.has(enemy.pack);
+    for (const pack of leashed) this.pulledPacks.delete(pack);
+    for (const enemy of this.enemies) {
+      const pulled = this.pulledPacks.has(enemy.pack);
+      enemy.aggro = (seen.has(enemy.pack) || pulled) && !leashed.has(enemy.pack);
+    }
     if (result) {
       for (const enemy of this.enemies) {
         if (enemy.elite && enemy.aggro && !wasAggro.has(enemy.pack)) {

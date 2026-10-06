@@ -158,8 +158,8 @@ function node(
 export const SKILLS: SkillNode[] = [
   // —— Holy ——
   node({ id: "iron-oath", name: "Iron Oath", kind: "passive", sector: "holy", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "Swear to the gate. Armor and melee blows thicken." }),
-  node({ id: "braced-guard", name: "Braced Guard", kind: "passive", sector: "holy", offset: -18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Set your stance. Flat armor each rank." }),
-  node({ id: "stone-skin", name: "Stone Skin", kind: "passive", sector: "holy", offset: 18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Hide hardens. More armor and life." }),
+  node({ id: "braced-guard", name: "Braced Guard", kind: "passive", sector: "holy", offset: -18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Set your stance. Percent armor each rank." }),
+  node({ id: "stone-skin", name: "Stone Skin", kind: "passive", sector: "holy", offset: 18, radius: 0.42, ring: 2, requires: ["iron-oath"], blurb: "Hide hardens. More percent armor and life." }),
   node({ id: "bulwark-aura", name: "Bulwark", kind: "aura", sector: "holy", offset: 0, radius: 0.58, ring: 3, requires: ["stone-skin"], blurb: "Hold a warding stance. Drains energy." }),
   node({ id: "bastion", name: "Bastion", kind: "key", sector: "holy", spec: "bastion", offset: -16, radius: 0.72, ring: 4, levelGate: 6, requires: ["braced-guard"], blurb: "The key of walls. Armor and slow mending." }),
   node({ id: "iron-blood", name: "Iron Blood", kind: "passive", sector: "holy", spec: "bastion", offset: -22, radius: 0.86, ring: 5, requires: ["bastion"], blurb: "Life pooled behind the wall." }),
@@ -199,7 +199,7 @@ export const SKILLS: SkillNode[] = [
   node({ id: "hemorrhage", name: "Hemorrhage", kind: "capstone", sector: "poison", spec: "cutpurse", offset: 0, radius: 1.14, ring: 7, levelGate: 16, maxRank: 1, requires: ["veiled-strike"], blurb: "Opened wounds bleed harder and more often." }),
 
   // —— Fire ——
-  node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "fire", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "A coal under the ash. Energy returns faster." }),
+  node({ id: "ember-flow", name: "Ember Flow", kind: "passive", sector: "fire", offset: 0, radius: 0.26, ring: 1, hub: true, levelGate: 1, blurb: "A coal under the ash. Basic hits return more energy." }),
   node({ id: "kindling", name: "Kindling", kind: "passive", sector: "fire", offset: -12, radius: 0.42, ring: 2, requires: ["ember-flow"], blurb: "Spells burn hotter." }),
   node({ id: "pyre", name: "Pyre", kind: "key", sector: "fire", spec: "pyre", offset: 0, radius: 0.72, ring: 4, levelGate: 6, requires: ["kindling"], blurb: "The key of fire." }),
   node({ id: "cinder-lance", name: "Cinder Lance", kind: "active", sector: "fire", spec: "pyre", offset: -10, radius: 0.86, ring: 5, requires: ["pyre"], blurb: "A burning lance." }),
@@ -234,12 +234,12 @@ export function skillById(id: string): SkillNode | undefined {
 }
 
 export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
-  "iron-oath": { armor: 1.2, meleeMult: 0.005 },
-  "braced-guard": { armor: 6 },
+  "iron-oath": { armorPct: 0.012, meleeMult: 0.005 },
+  "braced-guard": { armorPct: 0.05 },
   "stone-skin": { armorPct: 0.04, life: 5 },
-  bastion: { armor: 1.6, lifeRegen: 0.055 },
+  bastion: { armorPct: 0.015, lifeRegen: 0.055 },
   "iron-blood": { life: 12 },
-  citadel: { armor: 40, damageReduction: 0.08 },
+  citadel: { armorPct: 0.25, damageReduction: 0.08 },
   "blood-oath": { meleeMult: 0.01, crit: 0.002 },
   ravager: { meleeMult: 0.01 },
   "wrath-speed": { attackSpeed: 0.045 },
@@ -253,17 +253,18 @@ export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
   cutpurse: { crit: 0.003, goldFind: 0.012 },
   "deep-cut": { bleedChance: 0.06 },
   hemorrhage: { bleedChance: 0.12 },
-  "ember-flow": { energyRegen: 0.4 },
+  "ember-flow": { energyOnHit: 0.35 },
   kindling: { spellMult: 0.035 },
   pyre: { spellMult: 0.01 },
-  "ash-plume": { spellMult: 0.02, energyRegen: 0.15 },
+  "ash-plume": { spellMult: 0.02, energyOnHit: 0.12 },
   reservoir: { energy: 8 },
   tide: { energy: 2, cdr: 0.004 },
-  undertow: { energy: 4, energyRegen: 0.2 },
+  undertow: { energy: 4, energyOnHit: 0.15 },
   "first-rite": { spellMult: 0.01, energy: 1 },
+  // cdr here is energy-cost reduction (no time cooldowns).
   cantor: { energy: 1.2, cdr: 0.004 },
-  breath: { energyRegen: 0.45 },
-  benediction: { lifeRegen: 1.2, energyRegen: 0.8 },
+  breath: { energyOnHit: 0.4 },
+  benediction: { lifeRegen: 1.2, energyOnHit: 0.55 },
 };
 
 /** Target (mult × shots / cooldown) for damaging actives at rank 1, before CDR. */
@@ -309,7 +310,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     kind: "aura",
     color: "#e08a4f",
     energyPerSec: 2,
-    aura: { armor: 18, damageReduction: 0.08 },
+    aura: { armorPct: 0.12, damageReduction: 0.08 },
   }),
   "shield-bash": act({ kind: "arc", color: "#e7c39a", energyCost: 8, cooldown: 5, mult: dpsMult(5), range: 88, stun: 0.75 }),
   aegis: act({ kind: "buff", color: "#f0e2cf", energyCost: 16, cooldown: 14, shieldFrac: 0.3, buffTime: 6 }),
@@ -406,7 +407,7 @@ export const ACTIVES: Record<string, ActiveSpec> = {
     kind: "aura",
     color: "#c3b6ff",
     energyPerSec: 2.2,
-    aura: { damageReduction: 0.12, armor: 10 },
+    aura: { damageReduction: 0.12, armorPct: 0.08 },
   }),
   litany: act({ kind: "channel", color: "#f3e9ff", energyCost: 0, cooldown: 12, channelTime: 2.4, healFrac: 0.16 }),
   sundering: act({ kind: "nova", color: "#c4532a", energyCost: 22, cooldown: 14, mult: dpsMult(14), range: 180, stun: 0.45 }),
@@ -457,7 +458,9 @@ export interface SynergyLink {
   from: string;
   /** Extra damage / aura / heal power per feeder rank. */
   powerPerRank?: number;
-  /** Cooldown cut per feeder rank (actives). */
+  /** Energy-cost cut per feeder rank (actives). No time cooldowns. */
+  energyCostPerRank?: number;
+  /** @deprecated Use energyCostPerRank — kept for older data reads. */
   cdrPerRank?: number;
 }
 
@@ -705,17 +708,22 @@ export function synergyPower(id: string, ranks: Record<string, number>): number 
   return total;
 }
 
-/** Synergy cooldown multiplier (≤ 1). */
-export function synergyCdMul(id: string, ranks: Record<string, number>): number {
+/** Synergy energy-cost multiplier (≤ 1). Skills have no time cooldowns. */
+export function synergyEnergyCostMul(id: string, ranks: Record<string, number>): number {
   const links = SKILL_SYNERGIES[id];
   if (!links?.length) return 1;
   let cut = 0;
   for (const link of links) {
     const feeder = ranks[link.from] ?? 0;
     if (feeder <= 0) continue;
-    cut += feeder * (link.cdrPerRank ?? 0.004);
+    cut += feeder * (link.energyCostPerRank ?? link.cdrPerRank ?? 0.004);
   }
-  return Math.max(0.82, 1 - cut);
+  return Math.max(0.7, 1 - cut);
+}
+
+/** @deprecated Alias — cooldowns are no longer time-based. */
+export function synergyCdMul(id: string, ranks: Record<string, number>): number {
+  return synergyEnergyCostMul(id, ranks);
 }
 
 export function synergiesFor(id: string): SynergyLink[] {
@@ -745,15 +753,16 @@ export function scaledActive(id: string, rank: number, ranks: Record<string, num
   const spec = ACTIVES[id];
   if (!spec || rank <= 0) return null;
   const steps = rank - 1;
-  // Damage climbs with ranks; cooldown trim stays mild so base DPS balance still holds.
-  const cdScale = Math.max(0.7, 1 - 0.015 * steps);
+  // Damage climbs with ranks; energy cost trims mildly (no time cooldowns).
+  const costScale = Math.max(0.7, 1 - 0.015 * steps);
   const syn = 1 + synergyPower(id, ranks);
-  const cdSyn = synergyCdMul(id, ranks);
+  const costSyn = synergyEnergyCostMul(id, ranks);
   return {
     ...spec,
     mult: spec.mult * (1 + 0.12 * steps) * syn,
-    cooldown: spec.cooldown * cdScale * cdSyn,
-    energyCost: spec.energyCost,
+    // cooldown kept only as a design pacing constant for activeBaseDps — never ticked in sim.
+    cooldown: spec.cooldown,
+    energyCost: Math.max(0, Math.round(spec.energyCost * costScale * costSyn * 100) / 100),
     healFrac: spec.healFrac * (1 + 0.1 * steps) * syn,
     burn: spec.burn * (1 + 0.12 * steps) * syn,
     shieldFrac: spec.shieldFrac * (1 + 0.08 * steps) * syn,
@@ -785,8 +794,8 @@ const MOD_LABEL: Partial<Record<keyof Mods, (value: number) => string>> = {
   crit: (value) => `${signedPct(value)} critical chance`,
   attackRating: (value) => `${signed(Math.round(value))} attack rating`,
   lifeRegen: (value) => `${value.toFixed(1)} life each second`,
-  energyRegen: (value) => `${value.toFixed(1)} energy each second`,
-  cdr: (value) => `${signedPct(value)} cooldown recovery`,
+  energyRegen: () => `timed energy regen (retired — hit only)`,
+  cdr: (value) => `${signedPct(value)} energy cost reduction`,
   damageReduction: (value) => `${Math.round(value * 100)}% less damage taken`,
   bleedChance: (value) => `${Math.round(value * 100)}% bleed chance`,
   goldFind: (value) => `${signedPct(value)} gold found`,
@@ -817,7 +826,63 @@ export function formatMods(mods: Partial<Mods>): string {
   return parts.join(", ");
 }
 
-export function describeSkill(id: string, rank: number, ranks: Record<string, number> = {}): string {
+export interface SkillChargeInfo {
+  /** Energy from basic hits needed to gain one ready use. */
+  energyPerCharge: number;
+  /** How many uses this skill can store. */
+  maxCharges: number;
+}
+
+/**
+ * Energy-per-charge and max charges from rank + attributes.
+ * No time cooldowns — readiness is discrete charges filled by basic-hit energy.
+ */
+export function skillChargeInfo(
+  id: string,
+  rank: number,
+  ranks: Record<string, number>,
+  attrs: { spirit: number; luck: number },
+  energyCostReduction = 0,
+  chargeMaxBonus = 0,
+): SkillChargeInfo | null {
+  const skill = skillById(id);
+  if (!skill || skill.kind === "passive") return null;
+  if (skill.kind === "aura") {
+    return { energyPerCharge: 0, maxCharges: 1 };
+  }
+  const shown = Math.max(1, rank);
+  const spec = scaledActive(id, shown, ranks);
+  if (!spec) return null;
+  const costCut = Math.min(0.4, Math.max(0, energyCostReduction));
+  const spiritCut = Math.min(0.15, Math.max(0, attrs.spirit * 0.002));
+  const energyPerCharge = Math.max(1, Math.round(spec.energyCost * (1 - costCut) * (1 - spiritCut) * 10) / 10);
+  const base = skill.kind === "channel" ? 1 : 2;
+  const fromRank = Math.floor((shown - 1) / 5);
+  const fromAttr = Math.floor((attrs.spirit + attrs.luck) / 40);
+  const cap = skill.kind === "channel" ? 2 : 5;
+  const maxCharges = Math.max(1, Math.min(cap, base + fromRank + fromAttr + Math.round(chargeMaxBonus)));
+  return { energyPerCharge, maxCharges };
+}
+
+export function skillReadyCharges(bank: number, info: SkillChargeInfo): number {
+  if (info.energyPerCharge <= 0) return info.maxCharges;
+  return Math.min(info.maxCharges, Math.floor(bank / info.energyPerCharge + 1e-9));
+}
+
+export function skillNextChargeProgress(bank: number, info: SkillChargeInfo): number {
+  if (info.energyPerCharge <= 0) return 1;
+  const ready = skillReadyCharges(bank, info);
+  if (ready >= info.maxCharges) return 1;
+  const into = bank - ready * info.energyPerCharge;
+  return Math.max(0, Math.min(1, into / info.energyPerCharge));
+}
+
+export function describeSkill(
+  id: string,
+  rank: number,
+  ranks: Record<string, number> = {},
+  chargeCtx?: { spirit: number; luck: number; cdr: number; chargeMax: number },
+): string {
   const skill = skillById(id);
   if (!skill) return "";
   const shown = Math.max(1, rank);
@@ -830,27 +895,53 @@ export function describeSkill(id: string, rank: number, ranks: Record<string, nu
   const spec = scaledActive(id, shown, ranks);
   if (!spec) return skill.blurb;
   const bits = [skill.blurb];
+  const charge = skillChargeInfo(
+    id,
+    shown,
+    ranks,
+    { spirit: chargeCtx?.spirit ?? 10, luck: chargeCtx?.luck ?? 10 },
+    chargeCtx?.cdr ?? 0,
+    chargeCtx?.chargeMax ?? 0,
+  );
   if (spec.kind === "aura") {
     bits.push(`While toggled: ${formatMods(spec.aura)}. Drains ${spec.energyPerSec.toFixed(1)} energy each second.`);
   } else if (spec.kind === "channel") {
     bits.push(
       `Channel ${spec.channelTime.toFixed(1)}s. Restores ${Math.round(spec.healFrac * 100)}% life${
         id === "litany" ? " and a share of energy" : ""
-      }. Cooldown ${spec.cooldown.toFixed(1)}s.`,
+      }.`,
     );
+    if (charge) {
+      bits.push(
+        `Needs ${charge.energyPerCharge} energy per charge from basic hits. Stores up to ${charge.maxCharges} charge${
+          charge.maxCharges === 1 ? "" : "s"
+        } (rank and Spirit/Luck).`,
+      );
+    }
   } else if (spec.kind === "buff") {
     if (spec.shieldFrac > 0) bits.push(`Grants a shield of ${Math.round(spec.shieldFrac * 100)}% life for ${spec.buffTime.toFixed(0)}s.`);
     if (spec.invuln > 0) bits.push(`Cannot be hit for ${spec.invuln.toFixed(2)}s.`);
-    bits.push(`Cooldown ${spec.cooldown.toFixed(1)}s. Energy ${spec.energyCost}.`);
+    if (charge) {
+      bits.push(
+        `${charge.energyPerCharge} energy per charge · max ${charge.maxCharges} charge${charge.maxCharges === 1 ? "" : "s"} (from rank and attributes).`,
+      );
+    }
   } else {
     const school = spec.scaling === "spell" ? "spell" : "weapon";
-    bits.push(`${Math.round(spec.mult * 100)}% ${school} damage. Cooldown ${spec.cooldown.toFixed(1)}s. Energy ${spec.energyCost}.`);
+    bits.push(`${Math.round(spec.mult * 100)}% ${school} damage.`);
+    if (charge) {
+      bits.push(
+        `${charge.energyPerCharge} energy per charge · max ${charge.maxCharges} charge${charge.maxCharges === 1 ? "" : "s"} (rank + Spirit/Luck).`,
+      );
+    }
     if (spec.stun) bits.push(`Stuns for ${spec.stun.toFixed(1)}s.`);
     if (spec.slow) bits.push("Slows.");
     if (spec.burn) bits.push("Burns.");
     if (spec.dash) bits.push("Dashes along your facing.");
   }
-  if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise power; damage skills keep pace with their cooldown.");
+  if (rank === 0 && skill.maxRank > 1) {
+    bits.push("Ranks raise power and can add stored charges; basic hits fill charges.");
+  }
   bits.push(describeSynergies(id, ranks).trim());
   return bits.filter(Boolean).join(" ");
 }
