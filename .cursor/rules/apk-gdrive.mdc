@@ -7,12 +7,18 @@ alwaysApply: true
 
 Whenever you build an Android APK for Ward (`gradlew assembleDebug` / `assembleRelease`, or after `npm run android:sync`):
 
-1. Copy the APK to **`G:\My Drive\Ward\releases\`** (create the folder if needed).
+1. Copy the APK to **`G:\My Drive\Ward\releases\apk\`** (create the folder if needed).
 2. Write both:
    - `ward-debug.apk` (or `ward-release.apk`) — latest overwrite
    - `ward-debug-YYYY-MM-DD.apk` (or release equivalent) — dated copy
 3. Confirm the copy with file size/path in your reply to the user.
 4. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
+5. Keep Drive assets organized by type (see `G:\My Drive\Ward\ASSETS.md`):
+   - `releases/apk/`, `releases/archive/`
+   - `store/icons/`, `store/listing/`
+   - `art/concept/`, `art/screenshots/`, `art/reference/`
+   - `audio/exports/`, `docs/`
+   Do not rearrange git source trees (`src/`, `public/`, `android/`).
 
 Source path after a successful debug build:
 
