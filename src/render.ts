@@ -9,7 +9,7 @@ import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
 import { buildHero, heroAnimationClips, heroHeightFor, HERO_ATTACK_DUR, HERO_HEIGHT, isHeroRace } from "./render/heroes";
 import type { Gender } from "./game/types";
 import { syncHeroGear } from "./render/gear";
-import { AdaptiveQuality, isConstrainedGpu, textureTier } from "./render/quality";
+import { AdaptiveQuality, isConstrainedGpu, maxTextureEdge, textureTier } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
 import { buildMonster, isProceduralMonster } from "./render/monsters";
 
@@ -231,9 +231,18 @@ export class Renderer {
       metalness: 0.04,
       envMapIntensity: 0.55,
     });
-    this.installEnvironment();
+    // PMREM RoomEnvironment is a large GPU alloc — skip on phones and lean on lights.
+    if (isConstrainedGpu()) {
+      this.scene.environment = null;
+      this.hemi.intensity = 1.85;
+      this.moon.intensity = 2.55;
+      this.fill.intensity = 0.7;
+      this.rim.intensity = 0.55;
+    } else {
+      this.installEnvironment();
+    }
     // Displacement only needs moderate tessellation; 192² was ~70k quads for little gain.
-    const segs = isConstrainedGpu() ? 32 : 72;
+    const segs = isConstrainedGpu() ? 24 : 72;
     const groundGeo = new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE, segs, segs);
     if (groundGeo.getAttribute("uv") && !groundGeo.getAttribute("uv2")) {
       groundGeo.setAttribute("uv2", groundGeo.getAttribute("uv").clone());
@@ -253,7 +262,17 @@ export class Renderer {
   }
 
   private beginAssetLoads(): void {
-    Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]).finally(() => {
+    const boot = async () => {
+      // Phones: textures first (downscaled), then models — parallel decode spikes kill WebGL.
+      if (isConstrainedGpu()) {
+        await this.loadFloors();
+        await this.loadModels();
+        await this.loadHdrEnvironment();
+        return;
+      }
+      await Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]);
+    };
+    void boot().finally(() => {
       this.emitProgress(1, "Ready");
       this.resolveReady();
     });
@@ -425,8 +444,17 @@ export class Renderer {
     }
   }
 
+  private contextAlive(): boolean {
+    const gl = this.webgl.getContext();
+    return !!gl && !gl.isContextLost();
+  }
+
   private async loadFloors(): Promise<void> {
     this.bumpPhase("floors", 0.02, "Textures…");
+    if (!this.contextAlive()) {
+      this.bumpPhase("floors", 1, "Textures ready");
+      return;
+    }
     const manager = new THREE.LoadingManager();
     manager.onProgress = (_url, loaded, total) => {
       this.bumpPhase("floors", total > 0 ? loaded / total : 0.2, `Textures ${loaded}/${total}`);
@@ -435,83 +463,101 @@ export class Renderer {
     const url = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
     const pbr = (file: string) => `${import.meta.env.BASE_URL}textures/pbr/${file}`;
     const tier = textureTier();
-    // Never pull 8k on phones — a single 8k RGBA upload can exceed mobile VRAM.
-    const pick = async (hi8: string, lo4: string) =>
-      tier === "full"
-        ? loader.loadAsync(pbr(hi8)).catch(() => loader.loadAsync(pbr(lo4)))
-        : loader.loadAsync(pbr(lo4));
-    const optional = async (file: string) => loader.loadAsync(pbr(file)).catch(() => null);
+    const maxEdge = maxTextureEdge();
+    // Resolution ladder: desktop 8k→4k→1k; Oniro-class phones load authored 1k only.
+    const pick = async (base: string) => {
+      const load = (suffix: string) => loader.loadAsync(pbr(`${base}_${suffix}.jpg`));
+      if (tier === "full") return load("8k").catch(() => load("4k")).catch(() => load("1k"));
+      return load("1k").catch(() => load("4k"));
+    };
+    const optional = async (base: string, suffixes: string[]) => {
+      for (const suffix of suffixes) {
+        try {
+          return await loader.loadAsync(pbr(`${base}_${suffix}.jpg`));
+        } catch {
+          // try next
+        }
+      }
+      return null;
+    };
+    const finish = (tex: THREE.Texture, color: boolean, anisotropy: number, repeat: number) =>
+      prepFloor(downscaleTexture(tex, maxEdge), color, anisotropy, repeat);
     try {
       const anisotropy = Math.min(
-        tier === "full" ? 16 : tier === "medium" ? 8 : 4,
+        tier === "full" ? 16 : tier === "medium" ? 4 : 2,
         this.webgl.capabilities.getMaxAnisotropy(),
       );
+      // medium = Oniro-class: full PBR at 1k, no displacement megamaps
       const wantExtras = tier !== "low";
       const wantDisp = tier === "full";
-      const wantWalls = tier === "full";
+      const wantWalls = tier !== "low";
 
-      const stone = await pick("dungeon_diff_8k.jpg", "dungeon_diff_4k.jpg");
-      const stoneRough = await pick("dungeon_rough_8k.jpg", "dungeon_rough_4k.jpg");
-      const stoneNormal = wantExtras ? await pick("dungeon_nor_gl_8k.jpg", "dungeon_nor_gl_4k.jpg") : null;
-      const stoneAo = wantExtras ? await pick("dungeon_ao_8k.jpg", "dungeon_ao_4k.jpg") : null;
-      const stoneDisp = wantDisp ? await optional("dungeon_disp_8k.jpg") : null;
+      const stone = await pick("dungeon_diff");
+      const stoneRough = await pick("dungeon_rough");
+      if (!this.contextAlive()) throw new Error("webgl lost");
+      const stoneNormal = wantExtras ? await pick("dungeon_nor_gl") : null;
+      const stoneAo = wantExtras ? await pick("dungeon_ao") : null;
+      const stoneDisp = wantDisp ? await optional("dungeon_disp", ["8k", "4k", "1k"]) : null;
       this.bumpPhase("floors", 0.25, "Textures…");
 
-      const lava = await pick("hell_diff_8k.jpg", "hell_diff_4k.jpg");
-      const lavaRough = await pick("hell_rough_8k.jpg", "hell_rough_4k.jpg");
-      const lavaNormal = wantExtras ? await pick("hell_nor_gl_8k.jpg", "hell_nor_gl_4k.jpg") : null;
-      const lavaAo = wantExtras ? await pick("hell_ao_8k.jpg", "hell_ao_4k.jpg") : null;
-      const lavaDisp = wantDisp ? await optional("hell_disp_8k.jpg") : null;
+      const lava = await pick("hell_diff");
+      const lavaRough = await pick("hell_rough");
+      if (!this.contextAlive()) throw new Error("webgl lost");
+      const lavaNormal = wantExtras ? await pick("hell_nor_gl") : null;
+      const lavaAo = wantExtras ? await pick("hell_ao") : null;
+      const lavaDisp = wantDisp ? await optional("hell_disp", ["8k", "4k", "1k"]) : null;
       this.bumpPhase("floors", 0.5, "Textures…");
 
-      const roadDiff = await pick("road_diff_8k.jpg", "road_diff_4k.jpg");
-      const roadRough = await pick("road_rough_8k.jpg", "road_rough_4k.jpg");
-      const roadNormal = wantExtras ? await pick("road_nor_gl_8k.jpg", "road_nor_gl_4k.jpg") : null;
-      const roadAo = wantExtras ? await pick("road_ao_8k.jpg", "road_ao_4k.jpg") : null;
-      const roadDisp = wantDisp ? await optional("road_disp_8k.jpg") : null;
+      const roadDiff = await pick("road_diff");
+      const roadRough = await pick("road_rough");
+      if (!this.contextAlive()) throw new Error("webgl lost");
+      const roadNormal = wantExtras ? await pick("road_nor_gl") : null;
+      const roadAo = wantExtras ? await pick("road_ao") : null;
+      const roadDisp = wantDisp ? await optional("road_disp", ["8k", "4k", "1k"]) : null;
       this.bumpPhase("floors", 0.75, "Textures…");
 
-      const wallDiff = wantWalls ? await optional("wall_diff_8k.jpg") : null;
-      const wallRough = wantWalls ? await optional("wall_rough_8k.jpg") : null;
-      const wallNormal = wantWalls ? await optional("wall_nor_gl_8k.jpg") : null;
-      const wallAo = wantWalls ? await optional("wall_ao_8k.jpg") : null;
+      const wallDiff = wantWalls ? await optional("wall_diff", tier === "full" ? ["8k", "4k", "1k"] : ["1k", "4k"]) : null;
+      const wallRough = wantWalls ? await optional("wall_rough", tier === "full" ? ["8k", "4k", "1k"] : ["1k", "4k"]) : null;
+      const wallNormal = wantWalls ? await optional("wall_nor_gl", tier === "full" ? ["8k", "4k", "1k"] : ["1k", "4k"]) : null;
+      const wallAo = wantWalls ? await optional("wall_ao", tier === "full" ? ["8k", "4k", "1k"] : ["1k", "4k"]) : null;
 
-      this.stone = prepFloor(stone, true, anisotropy, 10);
-      this.stoneRough = prepFloor(stoneRough, false, anisotropy, 10);
-      this.stoneNormal = stoneNormal ? prepFloor(stoneNormal, false, anisotropy, 10) : undefined;
-      this.stoneAo = stoneAo ? prepFloor(stoneAo, false, anisotropy, 10) : undefined;
-      this.stoneDisp = stoneDisp ? prepFloor(stoneDisp, false, anisotropy, 10) : undefined;
-      this.lava = prepFloor(lava, true, anisotropy, 10);
-      this.lavaRough = prepFloor(lavaRough, false, anisotropy, 10);
-      this.lavaNormal = lavaNormal ? prepFloor(lavaNormal, false, anisotropy, 10) : undefined;
-      this.lavaAo = lavaAo ? prepFloor(lavaAo, false, anisotropy, 10) : undefined;
-      this.lavaDisp = lavaDisp ? prepFloor(lavaDisp, false, anisotropy, 10) : undefined;
-      this.roadDiff = prepFloor(roadDiff, true, anisotropy, 6);
-      this.roadRough = prepFloor(roadRough, false, anisotropy, 6);
-      this.roadNormal = roadNormal ? prepFloor(roadNormal, false, anisotropy, 6) : undefined;
-      this.roadAo = roadAo ? prepFloor(roadAo, false, anisotropy, 6) : undefined;
-      this.roadDisp = roadDisp ? prepFloor(roadDisp, false, anisotropy, 6) : undefined;
-      this.wallDiff = wallDiff ? prepFloor(wallDiff, true, anisotropy, 4) : undefined;
-      this.wallRough = wallRough ? prepFloor(wallRough, false, anisotropy, 4) : undefined;
-      this.wallNormal = wallNormal ? prepFloor(wallNormal, false, anisotropy, 4) : undefined;
-      this.wallAo = wallAo ? prepFloor(wallAo, false, anisotropy, 4) : undefined;
+      this.stone = finish(stone, true, anisotropy, 10);
+      this.stoneRough = finish(stoneRough, false, anisotropy, 10);
+      this.stoneNormal = stoneNormal ? finish(stoneNormal, false, anisotropy, 10) : undefined;
+      this.stoneAo = stoneAo ? finish(stoneAo, false, anisotropy, 10) : undefined;
+      this.stoneDisp = stoneDisp ? finish(stoneDisp, false, anisotropy, 10) : undefined;
+      this.lava = finish(lava, true, anisotropy, 10);
+      this.lavaRough = finish(lavaRough, false, anisotropy, 10);
+      this.lavaNormal = lavaNormal ? finish(lavaNormal, false, anisotropy, 10) : undefined;
+      this.lavaAo = lavaAo ? finish(lavaAo, false, anisotropy, 10) : undefined;
+      this.lavaDisp = lavaDisp ? finish(lavaDisp, false, anisotropy, 10) : undefined;
+      this.roadDiff = finish(roadDiff, true, anisotropy, 6);
+      this.roadRough = finish(roadRough, false, anisotropy, 6);
+      this.roadNormal = roadNormal ? finish(roadNormal, false, anisotropy, 6) : undefined;
+      this.roadAo = roadAo ? finish(roadAo, false, anisotropy, 6) : undefined;
+      this.roadDisp = roadDisp ? finish(roadDisp, false, anisotropy, 6) : undefined;
+      this.wallDiff = wallDiff ? finish(wallDiff, true, anisotropy, 4) : undefined;
+      this.wallRough = wallRough ? finish(wallRough, false, anisotropy, 4) : undefined;
+      this.wallNormal = wallNormal ? finish(wallNormal, false, anisotropy, 4) : undefined;
+      this.wallAo = wallAo ? finish(wallAo, false, anisotropy, 4) : undefined;
       this.realm = "";
     } catch {
       try {
+        if (!this.contextAlive()) throw new Error("webgl lost");
         const [stone, stoneRough, lava, lavaRough] = await Promise.all([
           loader.loadAsync(url("dungeon_diff.jpg")),
           loader.loadAsync(url("dungeon_rough.jpg")),
           loader.loadAsync(url("hell_diff.jpg")),
           loader.loadAsync(url("hell_rough.jpg")),
         ]);
-        const anisotropy = Math.min(8, this.webgl.capabilities.getMaxAnisotropy());
-        this.stone = prepFloor(stone, true, anisotropy);
-        this.stoneRough = prepFloor(stoneRough, false, anisotropy);
-        this.lava = prepFloor(lava, true, anisotropy);
-        this.lavaRough = prepFloor(lavaRough, false, anisotropy);
+        const anisotropy = Math.min(4, this.webgl.capabilities.getMaxAnisotropy());
+        this.stone = finish(stone, true, anisotropy, 12);
+        this.stoneRough = finish(stoneRough, false, anisotropy, 12);
+        this.lava = finish(lava, true, anisotropy, 12);
+        this.lavaRough = finish(lavaRough, false, anisotropy, 12);
         this.realm = "";
       } catch {
-        // Colored floor remains.
+        // Colored floor remains — better a flat stage than a dead WebGL context.
       }
     }
     this.bumpPhase("floors", 1, "Textures ready");
@@ -670,8 +716,16 @@ export class Renderer {
     let done = 0;
     const manager = new THREE.LoadingManager();
     const loader = new GLTFLoader(manager);
-    await Promise.all(
-      entries.map(async ([key, file]) => {
+    // Phones: small concurrency so decode spikes don't kill WebGL beside texture loads.
+    const workers = isConstrainedGpu() ? 2 : 6;
+    let cursor = 0;
+    const run = async () => {
+      while (cursor < entries.length) {
+        if (!this.contextAlive()) return;
+        const index = cursor++;
+        const entry = entries[index];
+        if (!entry) return;
+        const [key, file] = entry;
         try {
           const gltf = await loader.loadAsync(MODEL_URL(file));
           this.templates.set(key, { scene: gltf.scene, clips: gltf.animations });
@@ -681,8 +735,9 @@ export class Renderer {
           done += 1;
           this.bumpPhase("models", done / total, `Models ${done}/${total}`);
         }
-      }),
-    );
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(workers, total) }, () => run()));
     this.bumpPhase("models", 1, "Models ready");
     this.realm = "";
   }
@@ -1227,6 +1282,26 @@ export class Renderer {
 
 function facingOf(enemy: Enemy, sim: Sim): number {
   return Math.atan2(sim.player.y - enemy.y, sim.player.x - enemy.x);
+}
+
+/** Shrink decoded bitmaps before GPU upload so phones keep a live WebGL context. */
+function downscaleTexture(texture: THREE.Texture, maxEdge: number): THREE.Texture {
+  const img = texture.image as { width?: number; height?: number } | undefined;
+  const w = img?.width ?? 0;
+  const h = img?.height ?? 0;
+  if (!w || !h || Math.max(w, h) <= maxEdge) return texture;
+  const scale = maxEdge / Math.max(w, h);
+  const cw = Math.max(1, Math.round(w * scale));
+  const ch = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return texture;
+  ctx.drawImage(texture.image as CanvasImageSource, 0, 0, cw, ch);
+  texture.image = canvas;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function prepFloor(texture: THREE.Texture, color: boolean, anisotropy: number, repeat = 12): THREE.Texture {

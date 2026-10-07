@@ -124,7 +124,7 @@ export class RacePreview {
     this.draw();
   }
 
-  /** Free the WebGL context — call when leaving title/create so in-game has the GPU. */
+  /** Free GPU resources — call when leaving title/create. Avoid forceContextLoss (can nuke sibling contexts on Android). */
   dispose(): void {
     this.stop();
     this.teardownHero();
@@ -134,7 +134,6 @@ export class RacePreview {
     this.equipment = emptyEquipment();
     try {
       this.renderer.dispose();
-      this.renderer.forceContextLoss();
     } catch {
       // Already lost.
     }

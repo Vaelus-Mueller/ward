@@ -923,6 +923,19 @@ p { line-height: 1.4; }
   height: min(28vh, 200px);
   display: block;
 }
+#race-doll {
+  width: min(100%, 220px);
+  height: min(28vh, 200px);
+  display: grid;
+  place-items: center;
+}
+#race-doll svg {
+  width: auto;
+  height: 92%;
+  max-width: 70%;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.55));
+}
+#race-doll.hidden { display: none; }
 .race-caption {
   display: flex;
   width: 100%;

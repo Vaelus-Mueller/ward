@@ -50,9 +50,14 @@ export function isConstrainedGpu(): boolean {
 }
 
 export function textureTier(): TextureTier {
-  // 8k is stripped from the APK; phones stay on 4k PBR (normals/AO included).
+  // Oniro-class mobile ARPG detail: authored 1k PBR (diff/rough/normal/AO), not 4k/8k.
   if (!isConstrainedGpu()) return "full";
   return "medium";
+}
+
+/** Safety cap if a larger source slips through; phones ship 1k packages. */
+export function maxTextureEdge(): number {
+  return isConstrainedGpu() ? 1024 : 8192;
 }
 
 function startLevel(): QualityLevel {

@@ -149,7 +149,8 @@ export class Ui {
     input.removeAttribute("readonly");
     // Focus before WebGL preview work so Android keeps the user-gesture chain.
     this.focusNameField(input);
-    this.ensureRacePreview();
+    // Second WebGL context next to the main game renderer OOMs Android — use SVG there.
+    if (!isConstrainedGpu()) this.ensureRacePreview();
     this.paintCreate();
     this.focusNameField(input);
   }
@@ -272,7 +273,31 @@ export class Ui {
     must("gender-female").setAttribute("aria-pressed", gendered && this.createGender === "female" ? "true" : "false");
     must("gender-male").toggleAttribute("disabled", !gendered);
     must("gender-female").toggleAttribute("disabled", !gendered);
-    this.racePreview?.show(race.id, gendered ? this.createGender : "male");
+    this.paintRacePreview(race.id, gendered ? this.createGender : "male");
+  }
+
+  /** WebGL spin on desktop; SVG silhouette on phones so create never steals the game context. */
+  private paintRacePreview(race: RaceId, gender: Gender): void {
+    const canvas = must("race-view") as HTMLCanvasElement;
+    let doll = document.getElementById("race-doll");
+    if (isConstrainedGpu()) {
+      canvas.classList.add("hidden");
+      if (!doll) {
+        doll = document.createElement("div");
+        doll.id = "race-doll";
+        doll.setAttribute("aria-hidden", "true");
+        canvas.parentElement?.insertBefore(doll, canvas);
+      }
+      doll.classList.remove("hidden");
+      if (doll.dataset.race !== race) {
+        doll.dataset.race = race;
+        doll.innerHTML = raceDollSvg(race);
+      }
+      return;
+    }
+    doll?.classList.add("hidden");
+    canvas.classList.remove("hidden");
+    this.racePreview?.show(race, gender);
   }
 
   hideDead(): void {
