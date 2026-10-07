@@ -7,14 +7,15 @@ alwaysApply: true
 
 Whenever you build an Android APK for Ward (`gradlew assembleDebug` / `assembleRelease`, or after `npm run android:sync`):
 
-1. Copy the APK to **`G:\My Drive\Ward\releases\apk\`** (create the folder if needed).
-2. Write both:
-   - `ward-debug.apk` (or `ward-release.apk`) — latest overwrite
-   - `ward-debug-YYYY-MM-DD.apk` (or release equivalent) — dated copy
-3. Confirm the copy with file size/path in your reply to the user.
-4. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
-5. Keep Drive assets organized by type (see `G:\My Drive\Ward\ASSETS.md`):
-   - `releases/apk/`, `releases/archive/`
+1. Ensure **`G:\My Drive\Ward\releases\apk\`** and **`releases\archive\`** exist.
+2. **Current build** lives only as:
+   - `releases/apk/ward-debug.apk` (or `ward-release.apk`) — overwrite this file
+3. Before overwriting, if an older current APK exists and differs, move it to **`releases/archive/`** as `ward-debug-YYYY-MM-DD.apk` (or with `-HHmm` if that name exists).
+4. Move any other stray APKs in `releases/apk/` (except the current pointer) into `releases/archive/`.
+5. Confirm the current path/size in your reply; say which files were archived.
+6. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
+7. Keep Drive assets organized by type (see `G:\My Drive\Ward\ASSETS.md`):
+   - `releases/apk/` (current only), `releases/archive/` (older)
    - `store/icons/`, `store/listing/`
    - `art/concept/`, `art/screenshots/`, `art/reference/`
    - `audio/exports/`, `docs/`
