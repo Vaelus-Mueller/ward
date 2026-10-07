@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { ArmorType, Item, SlotName, WeaponStyle } from "../game/types";
+import { cone, cylinder, sphere, torus } from "./meshBudget";
 
 export type GearElement = "fire" | "frost" | "lightning" | "arcane" | "bleed";
 
@@ -135,11 +136,11 @@ function buildTwoHandSupport(item: Item): THREE.Group {
   const group = new THREE.Group();
   const dye = item.dye || 0xcfc6b8;
   // Longer wrap so the off-hand clearly shares the haft with the main grip.
-  const wrap = part("SupportGrip", new THREE.CylinderGeometry(0.03, 0.034, 0.28, 8), mat(0x3a2a1c, 0.05, 0.85));
-  const band = part("SupportBand", new THREE.TorusGeometry(0.036, 0.012, 6, 12), mat(dye, 0.85, 0.28));
+  const wrap = part("SupportGrip", cylinder(0.03, 0.034, 0.28, 8), mat(0x3a2a1c, 0.05, 0.85));
+  const band = part("SupportBand", torus(0.036, 0.012, 6, 12), mat(dye, 0.85, 0.28));
   band.rotation.x = Math.PI / 2;
   band.position.y = 0.04;
-  const collar = part("SupportCollar", new THREE.TorusGeometry(0.032, 0.008, 5, 10), mat(dye, 0.7, 0.35));
+  const collar = part("SupportCollar", torus(0.032, 0.008, 5, 10), mat(dye, 0.7, 0.35));
   collar.rotation.x = Math.PI / 2;
   collar.position.y = -0.08;
   group.add(wrap, band, collar);
@@ -226,10 +227,10 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
   const twoHand = item.hands === 2;
 
   if (style === "bow" || family === "bow") {
-    const limb = part("BowLimb", new THREE.TorusGeometry(0.42, 0.028, 6, 18, Math.PI * 1.15), metal);
+    const limb = part("BowLimb", torus(0.42, 0.028, 6, 18, Math.PI * 1.15), metal);
     limb.rotation.z = Math.PI / 2;
     limb.rotation.y = Math.PI / 2;
-    const string = part("BowString", new THREE.CylinderGeometry(0.006, 0.006, 0.78, 4), mat(0xd8d0c4, 0.05, 0.6));
+    const string = part("BowString", cylinder(0.006, 0.006, 0.78, 4), mat(0xd8d0c4, 0.05, 0.6));
     string.position.z = 0.2;
     group.add(limb, string);
   } else if (style === "handbow" || family === "handbow") {
@@ -244,84 +245,84 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     if (family === "axe") {
       const head = part("ThrownAxe", new THREE.BoxGeometry(0.14, 0.1, 0.03), metal);
       head.position.set(0.04, 0.28, 0);
-      const haft = part("Haft", new THREE.CylinderGeometry(0.014, 0.018, 0.28, 6), grip);
+      const haft = part("Haft", cylinder(0.014, 0.018, 0.28, 6), grip);
       haft.position.y = 0.1;
       group.add(head, haft);
     } else if (family === "polearm") {
-      const shaft = part("Javelin", new THREE.CylinderGeometry(0.012, 0.016, 0.85, 6), grip);
+      const shaft = part("Javelin", cylinder(0.012, 0.016, 0.85, 6), grip);
       shaft.position.y = 0.28;
-      const tip = part("Tip", new THREE.ConeGeometry(0.035, 0.16, 6), metal);
+      const tip = part("Tip", cone(0.035, 0.16, 6), metal);
       tip.position.y = 0.78;
       group.add(shaft, tip);
     } else if (item.name.toLowerCase().includes("chakram")) {
-      const ring = part("Chakram", new THREE.TorusGeometry(0.14, 0.018, 6, 16), metal);
+      const ring = part("Chakram", torus(0.14, 0.018, 6, 16), metal);
       ring.rotation.x = Math.PI / 2;
       ring.position.y = 0.18;
       group.add(ring);
     } else {
       const blade = part("Thrown", new THREE.BoxGeometry(0.04, 0.28, 0.02), metal);
       blade.position.y = 0.22;
-      const haft = part("Haft", new THREE.CylinderGeometry(0.015, 0.018, 0.16, 6), grip);
+      const haft = part("Haft", cylinder(0.015, 0.018, 0.16, 6), grip);
       haft.position.y = 0.04;
       group.add(blade, haft);
     }
   } else if (family === "wand" || (style === "focus" && !twoHand)) {
-    const shaft = part("Wand", new THREE.CylinderGeometry(0.018, 0.024, 0.72, 8), grip);
+    const shaft = part("Wand", cylinder(0.018, 0.024, 0.72, 8), grip);
     shaft.position.y = 0.2;
     const orb = part("FocusOrb", new THREE.IcosahedronGeometry(0.09, 1), accent);
     orb.position.y = 0.62;
-    const collar = part("Collar", new THREE.TorusGeometry(0.05, 0.012, 6, 12), metal);
+    const collar = part("Collar", torus(0.05, 0.012, 6, 12), metal);
     collar.position.y = 0.5;
     collar.rotation.x = Math.PI / 2;
     group.add(shaft, orb, collar);
   } else if (family === "staff" || (style === "focus" && twoHand)) {
-    const shaft = part("Staff", new THREE.CylinderGeometry(0.022, 0.03, 1.35, 8), grip);
+    const shaft = part("Staff", cylinder(0.022, 0.03, 1.35, 8), grip);
     shaft.position.y = 0.45;
     const tip = part("StaffTip", new THREE.OctahedronGeometry(0.1, 0), accent);
     tip.position.y = 1.18;
-    const band = part("Band", new THREE.TorusGeometry(0.04, 0.012, 6, 12), metal);
+    const band = part("Band", torus(0.04, 0.012, 6, 12), metal);
     band.position.y = 1.02;
     band.rotation.x = Math.PI / 2;
     group.add(shaft, tip, band);
   } else if (family === "polearm") {
-    const shaft = part("Spear", new THREE.CylinderGeometry(0.018, 0.022, twoHand ? 1.35 : 1.15, 8), grip);
+    const shaft = part("Spear", cylinder(0.018, 0.022, twoHand ? 1.35 : 1.15, 8), grip);
     shaft.position.y = 0.4;
-    const tip = part("SpearTip", new THREE.ConeGeometry(0.055, 0.24, 7), metal);
+    const tip = part("SpearTip", cone(0.055, 0.24, 7), metal);
     tip.position.y = 1.15;
     const guard = part("SpearGuard", new THREE.BoxGeometry(0.16, 0.03, 0.04), accent);
     guard.position.y = 0.98;
     group.add(shaft, tip, guard);
   } else if (family === "axe") {
-    const haft = part("AxeHaft", new THREE.CylinderGeometry(0.02, 0.025, twoHand ? 0.85 : 0.55, 8), grip);
+    const haft = part("AxeHaft", cylinder(0.02, 0.025, twoHand ? 0.85 : 0.55, 8), grip);
     haft.position.y = twoHand ? 0.28 : 0.16;
     const blade = part("AxeHead", new THREE.BoxGeometry(twoHand ? 0.28 : 0.18, twoHand ? 0.22 : 0.16, 0.04), metal);
     blade.position.set(twoHand ? 0.1 : 0.07, twoHand ? 0.72 : 0.48, 0);
     group.add(haft, blade);
   } else if (family === "mace") {
-    const haft = part("MaceHaft", new THREE.CylinderGeometry(0.022, 0.028, twoHand ? 0.9 : 0.5, 8), grip);
+    const haft = part("MaceHaft", cylinder(0.022, 0.028, twoHand ? 0.9 : 0.5, 8), grip);
     haft.position.y = twoHand ? 0.3 : 0.14;
-    const head = part("MaceHead", new THREE.SphereGeometry(twoHand ? 0.12 : 0.08, 10, 8), metal);
+    const head = part("MaceHead", sphere(twoHand ? 0.12 : 0.08, 10, 8), metal);
     head.position.y = twoHand ? 0.82 : 0.46;
     const flange = part("Flange", new THREE.BoxGeometry(twoHand ? 0.2 : 0.14, 0.04, 0.04), accent);
     flange.position.y = twoHand ? 0.82 : 0.46;
     group.add(haft, head, flange);
   } else if (family === "flail") {
-    const haft = part("FlailHaft", new THREE.CylinderGeometry(0.02, 0.024, 0.42, 8), grip);
+    const haft = part("FlailHaft", cylinder(0.02, 0.024, 0.42, 8), grip);
     haft.position.y = 0.12;
-    const chain = part("Chain", new THREE.CylinderGeometry(0.01, 0.01, 0.28, 5), metal);
+    const chain = part("Chain", cylinder(0.01, 0.01, 0.28, 5), metal);
     chain.position.set(0.04, 0.4, 0);
     chain.rotation.z = -0.45;
-    const ball = part("FlailBall", new THREE.SphereGeometry(0.07, 8, 6), metal);
+    const ball = part("FlailBall", sphere(0.07, 8, 6), metal);
     ball.position.set(0.12, 0.58, 0);
     group.add(haft, chain, ball);
   } else if (twoHand) {
     const blade = part("Greatblade", new THREE.BoxGeometry(0.07, 0.95, 0.028), metal);
     blade.position.y = 0.62;
-    const gripMesh = part("Grip", new THREE.CylinderGeometry(0.028, 0.032, 0.32, 8), grip);
+    const gripMesh = part("Grip", cylinder(0.028, 0.032, 0.32, 8), grip);
     gripMesh.position.y = 0.08;
     const guard = part("Guard", new THREE.BoxGeometry(0.28, 0.045, 0.06), accent);
     guard.position.y = 0.26;
-    const pommel = part("Pommel", new THREE.SphereGeometry(0.04, 8, 6), accent);
+    const pommel = part("Pommel", sphere(0.04, 8, 6), accent);
     pommel.position.y = -0.1;
     group.add(blade, gripMesh, guard, pommel);
   } else {
@@ -329,13 +330,13 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     blade.position.y = 0.45;
     const fuller = part("Fuller", new THREE.BoxGeometry(0.012, 0.48, 0.02), mat(0x9aa4b0, 0.9, 0.25));
     fuller.position.y = 0.46;
-    const tip = part("Tip", new THREE.ConeGeometry(0.028, 0.1, 6), metal);
+    const tip = part("Tip", cone(0.028, 0.1, 6), metal);
     tip.position.y = 0.8;
     const guard = part("Guard", new THREE.BoxGeometry(0.2, 0.035, 0.05), accent);
     guard.position.y = 0.16;
-    const gripMesh = part("Grip", new THREE.CylinderGeometry(0.022, 0.025, 0.2, 8), grip);
+    const gripMesh = part("Grip", cylinder(0.022, 0.025, 0.2, 8), grip);
     gripMesh.position.y = 0.04;
-    const pommel = part("Pommel", new THREE.SphereGeometry(0.035, 8, 6), accent);
+    const pommel = part("Pommel", sphere(0.035, 8, 6), accent);
     pommel.position.y = -0.08;
     group.add(blade, fuller, tip, guard, gripMesh, pommel);
   }
@@ -388,11 +389,11 @@ function buildShield(item: Item): THREE.Group {
   const trim = mat(0xe4c37a, 0.8, 0.3);
   const board = part(
     "Shield",
-    type === "plate" ? new THREE.BoxGeometry(0.42, 0.55, 0.06) : new THREE.CylinderGeometry(0.22, 0.24, 0.06, 12),
+    type === "plate" ? new THREE.BoxGeometry(0.42, 0.55, 0.06) : cylinder(0.22, 0.24, 0.06, 12),
     shell,
   );
   if (type !== "plate") board.rotation.x = Math.PI / 2;
-  const boss = part("Boss", new THREE.SphereGeometry(0.05, 8, 6), trim);
+  const boss = part("Boss", sphere(0.05, 8, 6), trim);
   boss.position.z = 0.05;
   group.add(board, boss);
   group.position.set(-0.04, 0.1, 0.06);
@@ -412,18 +413,18 @@ function buildArmor(item: Item, kind: "head" | "chest" | "gloves" | "boots"): TH
 
   if (kind === "head") {
     if (type === "cloth") {
-      const hood = part("Hood", new THREE.SphereGeometry(0.2, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.72), shell);
+      const hood = part("Hood", sphere(0.2, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.72), shell);
       hood.position.y = 0.04;
       hood.scale.set(1.05, 1.1, 1.15);
       group.add(hood);
     } else if (type === "leather") {
-      const cap = part("Helmet", new THREE.SphereGeometry(0.185, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), shell);
+      const cap = part("Helmet", sphere(0.185, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), shell);
       cap.position.y = 0.05;
       group.add(cap);
     } else {
-      const dome = part("Helmet", new THREE.SphereGeometry(0.19, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), shell);
+      const dome = part("Helmet", sphere(0.19, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), shell);
       dome.position.y = 0.06;
-      const brim = part("Brim", new THREE.TorusGeometry(0.17, 0.025, 6, 16), trim);
+      const brim = part("Brim", torus(0.17, 0.025, 6, 16), trim);
       brim.rotation.x = Math.PI / 2;
       brim.position.y = 0.02;
       const crest = part("Crest", new THREE.BoxGeometry(0.04, 0.12, 0.16), trim);
@@ -435,7 +436,7 @@ function buildArmor(item: Item, kind: "head" | "chest" | "gloves" | "boots"): TH
     torso.position.y = 0.02;
     group.add(torso);
     if (type === "plate" || type === "mail") {
-      const pauldronL = part("Pauldron", new THREE.SphereGeometry(0.1, 10, 8, 0, Math.PI, 0, Math.PI), shell);
+      const pauldronL = part("Pauldron", sphere(0.1, 10, 8, 0, Math.PI, 0, Math.PI), shell);
       pauldronL.position.set(-0.24, 0.18, 0);
       pauldronL.rotation.z = 0.4;
       const pauldronR = pauldronL.clone();
@@ -454,7 +455,7 @@ function buildArmor(item: Item, kind: "head" | "chest" | "gloves" | "boots"): TH
       group.add(drape);
     }
   } else if (kind === "gloves") {
-    const cuff = part("Glove", new THREE.CylinderGeometry(0.07, 0.08, 0.16, 8), shell);
+    const cuff = part("Glove", cylinder(0.07, 0.08, 0.16, 8), shell);
     cuff.position.y = -0.12;
     group.add(cuff);
     if (type === "plate" || type === "mail") {
@@ -482,24 +483,24 @@ function buildJewelry(shape: "belt" | "ring" | "neck" | "earring", nodeName: str
   const group = new THREE.Group();
   const metal = mat(0xe4c37a, 0.82, 0.28);
   if (shape === "belt") {
-    const belt = part("Belt", new THREE.TorusGeometry(0.22, 0.04, 8, 20), metal);
+    const belt = part("Belt", torus(0.22, 0.04, 8, 20), metal);
     belt.rotation.x = Math.PI / 2;
     belt.position.y = 0.05;
     const buckle = part("Buckle", new THREE.BoxGeometry(0.08, 0.06, 0.05), mat(0xf0d090, 0.9, 0.25));
     buckle.position.set(0, 0.05, 0.22);
     group.add(belt, buckle);
   } else if (shape === "ring") {
-    const ring = part("Ring", new THREE.TorusGeometry(0.045, 0.012, 6, 14), metal);
+    const ring = part("Ring", torus(0.045, 0.012, 6, 14), metal);
     ring.rotation.z = Math.PI / 2;
     group.add(ring);
   } else if (shape === "earring") {
-    const drop = part("Earring", new THREE.SphereGeometry(0.032, 8, 8), metal);
+    const drop = part("Earring", sphere(0.032, 8, 8), metal);
     drop.position.set(nodeName.endsWith("-r") ? 0.12 : -0.12, 0.02, 0.06);
     group.add(drop);
   } else {
     const pendant = part("Pendant", new THREE.OctahedronGeometry(0.06, 0), metal);
     pendant.position.set(0, 0.08, 0.1);
-    const chain = part("Chain", new THREE.TorusGeometry(0.1, 0.01, 6, 16, Math.PI), metal);
+    const chain = part("Chain", torus(0.1, 0.01, 6, 16, Math.PI), metal);
     chain.position.set(0, 0.16, 0.04);
     chain.rotation.x = 0.5;
     group.add(pendant, chain);
@@ -510,7 +511,7 @@ function buildJewelry(shape: "belt" | "ring" | "neck" | "earring", nodeName: str
 function addElementAura(parent: THREE.Group, element: GearElement): void {
   const color = ELEMENT_COLOR[element];
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(element === "fire" ? 0.14 : 0.11, 10, 8),
+    sphere(element === "fire" ? 0.14 : 0.11, 10, 8),
     new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -527,7 +528,7 @@ function addElementAura(parent: THREE.Group, element: GearElement): void {
   if (element === "fire") {
     for (let i = 0; i < 3; i++) {
       const lick = new THREE.Mesh(
-        new THREE.ConeGeometry(0.035, 0.12, 5),
+        cone(0.035, 0.12, 5),
         new THREE.MeshBasicMaterial({
           color: i % 2 ? 0xff9a3a : 0xff5020,
           transparent: true,

@@ -9,7 +9,7 @@ import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
 import { buildHero, heroAnimationClips, heroHeightFor, HERO_ATTACK_DUR, HERO_HEIGHT, isHeroRace } from "./render/heroes";
 import type { Gender } from "./game/types";
 import { syncHeroGear } from "./render/gear";
-import { AdaptiveQuality } from "./render/quality";
+import { AdaptiveQuality, isConstrainedGpu, textureTier } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
 import { buildMonster, isProceduralMonster } from "./render/monsters";
 
@@ -232,8 +232,9 @@ export class Renderer {
       envMapIntensity: 0.55,
     });
     this.installEnvironment();
-    // Dense tessellation so displacement maps actually sculpt the floor.
-    const groundGeo = new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE, 192, 192);
+    // Displacement only needs moderate tessellation; 192² was ~70k quads for little gain.
+    const segs = isConstrainedGpu() ? 32 : 72;
+    const groundGeo = new THREE.PlaneGeometry(ARENA.width * SCALE, ARENA.height * SCALE, segs, segs);
     if (groundGeo.getAttribute("uv") && !groundGeo.getAttribute("uv2")) {
       groundGeo.setAttribute("uv2", groundGeo.getAttribute("uv").clone());
     }
@@ -396,6 +397,11 @@ export class Renderer {
 
   private async loadHdrEnvironment(): Promise<void> {
     this.bumpPhase("hdr", 0.05, "Lighting…");
+    // HDR + PMREM is a large GPU alloc; RoomEnvironment already covers phones.
+    if (isConstrainedGpu()) {
+      this.bumpPhase("hdr", 1, "Lighting ready");
+      return;
+    }
     try {
       const url = `${import.meta.env.BASE_URL}textures/hdri/ward_env.hdr`;
       const manager = new THREE.LoadingManager();
@@ -428,65 +434,62 @@ export class Renderer {
     const loader = new THREE.TextureLoader(manager);
     const url = (file: string) => `${import.meta.env.BASE_URL}textures/${file}`;
     const pbr = (file: string) => `${import.meta.env.BASE_URL}textures/pbr/${file}`;
-    const prefer = async (hi: string, lo: string) =>
-      loader.loadAsync(pbr(hi)).catch(() => loader.loadAsync(pbr(lo)));
+    const tier = textureTier();
+    // Never pull 8k on phones — a single 8k RGBA upload can exceed mobile VRAM.
+    const pick = async (hi8: string, lo4: string) =>
+      tier === "full"
+        ? loader.loadAsync(pbr(hi8)).catch(() => loader.loadAsync(pbr(lo4)))
+        : loader.loadAsync(pbr(lo4));
+    const optional = async (file: string) => loader.loadAsync(pbr(file)).catch(() => null);
     try {
-      const anisotropy = Math.min(16, this.webgl.capabilities.getMaxAnisotropy());
-      const [
-        stone,
-        stoneRough,
-        stoneNormal,
-        stoneAo,
-        stoneDisp,
-        lava,
-        lavaRough,
-        lavaNormal,
-        lavaAo,
-        lavaDisp,
-        roadDiff,
-        roadRough,
-        roadNormal,
-        roadAo,
-        roadDisp,
-        wallDiff,
-        wallRough,
-        wallNormal,
-        wallAo,
-      ] = await Promise.all([
-        prefer("dungeon_diff_8k.jpg", "dungeon_diff_4k.jpg"),
-        prefer("dungeon_rough_8k.jpg", "dungeon_rough_4k.jpg"),
-        prefer("dungeon_nor_gl_8k.jpg", "dungeon_nor_gl_4k.jpg"),
-        prefer("dungeon_ao_8k.jpg", "dungeon_ao_4k.jpg"),
-        loader.loadAsync(pbr("dungeon_disp_8k.jpg")).catch(() => null),
-        prefer("hell_diff_8k.jpg", "hell_diff_4k.jpg"),
-        prefer("hell_rough_8k.jpg", "hell_rough_4k.jpg"),
-        prefer("hell_nor_gl_8k.jpg", "hell_nor_gl_4k.jpg"),
-        prefer("hell_ao_8k.jpg", "hell_ao_4k.jpg"),
-        loader.loadAsync(pbr("hell_disp_8k.jpg")).catch(() => null),
-        prefer("road_diff_8k.jpg", "road_diff_4k.jpg"),
-        prefer("road_rough_8k.jpg", "road_rough_4k.jpg"),
-        prefer("road_nor_gl_8k.jpg", "road_nor_gl_4k.jpg"),
-        prefer("road_ao_8k.jpg", "road_ao_4k.jpg"),
-        loader.loadAsync(pbr("road_disp_8k.jpg")).catch(() => null),
-        loader.loadAsync(pbr("wall_diff_8k.jpg")).catch(() => null),
-        loader.loadAsync(pbr("wall_rough_8k.jpg")).catch(() => null),
-        loader.loadAsync(pbr("wall_nor_gl_8k.jpg")).catch(() => null),
-        loader.loadAsync(pbr("wall_ao_8k.jpg")).catch(() => null),
-      ]);
+      const anisotropy = Math.min(
+        tier === "full" ? 16 : tier === "medium" ? 8 : 4,
+        this.webgl.capabilities.getMaxAnisotropy(),
+      );
+      const wantExtras = tier !== "low";
+      const wantDisp = tier === "full";
+      const wantWalls = tier === "full";
+
+      const stone = await pick("dungeon_diff_8k.jpg", "dungeon_diff_4k.jpg");
+      const stoneRough = await pick("dungeon_rough_8k.jpg", "dungeon_rough_4k.jpg");
+      const stoneNormal = wantExtras ? await pick("dungeon_nor_gl_8k.jpg", "dungeon_nor_gl_4k.jpg") : null;
+      const stoneAo = wantExtras ? await pick("dungeon_ao_8k.jpg", "dungeon_ao_4k.jpg") : null;
+      const stoneDisp = wantDisp ? await optional("dungeon_disp_8k.jpg") : null;
+      this.bumpPhase("floors", 0.25, "Textures…");
+
+      const lava = await pick("hell_diff_8k.jpg", "hell_diff_4k.jpg");
+      const lavaRough = await pick("hell_rough_8k.jpg", "hell_rough_4k.jpg");
+      const lavaNormal = wantExtras ? await pick("hell_nor_gl_8k.jpg", "hell_nor_gl_4k.jpg") : null;
+      const lavaAo = wantExtras ? await pick("hell_ao_8k.jpg", "hell_ao_4k.jpg") : null;
+      const lavaDisp = wantDisp ? await optional("hell_disp_8k.jpg") : null;
+      this.bumpPhase("floors", 0.5, "Textures…");
+
+      const roadDiff = await pick("road_diff_8k.jpg", "road_diff_4k.jpg");
+      const roadRough = await pick("road_rough_8k.jpg", "road_rough_4k.jpg");
+      const roadNormal = wantExtras ? await pick("road_nor_gl_8k.jpg", "road_nor_gl_4k.jpg") : null;
+      const roadAo = wantExtras ? await pick("road_ao_8k.jpg", "road_ao_4k.jpg") : null;
+      const roadDisp = wantDisp ? await optional("road_disp_8k.jpg") : null;
+      this.bumpPhase("floors", 0.75, "Textures…");
+
+      const wallDiff = wantWalls ? await optional("wall_diff_8k.jpg") : null;
+      const wallRough = wantWalls ? await optional("wall_rough_8k.jpg") : null;
+      const wallNormal = wantWalls ? await optional("wall_nor_gl_8k.jpg") : null;
+      const wallAo = wantWalls ? await optional("wall_ao_8k.jpg") : null;
+
       this.stone = prepFloor(stone, true, anisotropy, 10);
       this.stoneRough = prepFloor(stoneRough, false, anisotropy, 10);
-      this.stoneNormal = prepFloor(stoneNormal, false, anisotropy, 10);
-      this.stoneAo = prepFloor(stoneAo, false, anisotropy, 10);
+      this.stoneNormal = stoneNormal ? prepFloor(stoneNormal, false, anisotropy, 10) : undefined;
+      this.stoneAo = stoneAo ? prepFloor(stoneAo, false, anisotropy, 10) : undefined;
       this.stoneDisp = stoneDisp ? prepFloor(stoneDisp, false, anisotropy, 10) : undefined;
       this.lava = prepFloor(lava, true, anisotropy, 10);
       this.lavaRough = prepFloor(lavaRough, false, anisotropy, 10);
-      this.lavaNormal = prepFloor(lavaNormal, false, anisotropy, 10);
-      this.lavaAo = prepFloor(lavaAo, false, anisotropy, 10);
+      this.lavaNormal = lavaNormal ? prepFloor(lavaNormal, false, anisotropy, 10) : undefined;
+      this.lavaAo = lavaAo ? prepFloor(lavaAo, false, anisotropy, 10) : undefined;
       this.lavaDisp = lavaDisp ? prepFloor(lavaDisp, false, anisotropy, 10) : undefined;
       this.roadDiff = prepFloor(roadDiff, true, anisotropy, 6);
       this.roadRough = prepFloor(roadRough, false, anisotropy, 6);
-      this.roadNormal = prepFloor(roadNormal, false, anisotropy, 6);
-      this.roadAo = prepFloor(roadAo, false, anisotropy, 6);
+      this.roadNormal = roadNormal ? prepFloor(roadNormal, false, anisotropy, 6) : undefined;
+      this.roadAo = roadAo ? prepFloor(roadAo, false, anisotropy, 6) : undefined;
       this.roadDisp = roadDisp ? prepFloor(roadDisp, false, anisotropy, 6) : undefined;
       this.wallDiff = wallDiff ? prepFloor(wallDiff, true, anisotropy, 4) : undefined;
       this.wallRough = wallRough ? prepFloor(wallRough, false, anisotropy, 4) : undefined;

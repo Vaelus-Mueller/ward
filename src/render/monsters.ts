@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { EnemyKind } from "../game/types";
 import { MONSTERS } from "../game/monsters";
+import { capsule, cone, cylinder, roundSegs, sphere, torus } from "./meshBudget";
 
 type Surf = THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
 
@@ -45,7 +46,7 @@ function roundBox(w: number, h: number, d: number, seg = 3): THREE.BufferGeometr
   const r = Math.min(w, h, d) * 0.16;
   const safe = Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
   if (safe <= 0.001) return new THREE.BoxGeometry(w, h, d, 2, 2, 2);
-  return new RoundedBoxGeometry(w, h, d, seg, safe);
+  return new RoundedBoxGeometry(w, h, d, roundSegs(seg), safe);
 }
 
 function plantFeet(root: THREE.Group, height: number): void {
@@ -190,7 +191,7 @@ export function buildMonster(kind: EnemyKind): THREE.Group {
       buildFlicker(root);
       break;
     default:
-      root.add(part("Body", new THREE.CapsuleGeometry(0.25, 0.7, 10, 16), mat(0x8a7a6a), 0.6));
+      root.add(part("Body", capsule(0.25, 0.7, 10, 16), mat(0x8a7a6a), 0.6));
   }
   plantFeet(root, height);
   return root;
@@ -207,7 +208,7 @@ function buildSkeleton(root: THREE.Group): void {
   const voidEye = mat(0x0c0a08, 0.02, 0.85);
 
   // Skull — reduced cranial density
-  const skull = part("Skull", new THREE.SphereGeometry(0.15, 16, 12), bone, 1.62);
+  const skull = part("Skull", sphere(0.15, 16, 12), bone, 1.62);
   skull.scale.set(0.95, 1.05, 1.1);
   root.add(skull);
   const brow = part("Brow", roundBox(0.16, 0.04, 0.06, 1), dark, 1.68);
@@ -218,7 +219,7 @@ function buildSkeleton(root: THREE.Group): void {
   jaw.rotation.z = 0.1;
   root.add(jaw);
   for (const side of [-1, 1]) {
-    const socket = part(side < 0 ? "SocketL" : "SocketR", new THREE.SphereGeometry(0.038, 8, 6), voidEye, 1.64);
+    const socket = part(side < 0 ? "SocketL" : "SocketR", sphere(0.038, 8, 6), voidEye, 1.64);
     socket.position.set(side * 0.065, 0.015, 0.125);
     root.add(socket);
   }
@@ -226,14 +227,14 @@ function buildSkeleton(root: THREE.Group): void {
   // Cervical C1–C7 (slight forward neck from side elevation)
   for (let i = 0; i < 7; i++) {
     const t = i / 6;
-    const v = part(`C${i + 1}`, new THREE.CylinderGeometry(0.032, 0.038, 0.038, 7), bone, 1.52 - i * 0.032);
+    const v = part(`C${i + 1}`, cylinder(0.032, 0.038, 0.038, 7), bone, 1.52 - i * 0.032);
     v.position.z = -0.02 + t * 0.03;
     root.add(v);
   }
 
   // Clavicles + scapulae (dense shoulder mesh zone)
   for (const side of [-1, 1]) {
-    const clav = part("Clavicle", new THREE.CapsuleGeometry(0.022, 0.2, 4, 6), bone, 1.26);
+    const clav = part("Clavicle", capsule(0.022, 0.2, 4, 6), bone, 1.26);
     clav.position.set(side * 0.13, 0, 0.04);
     clav.rotation.z = side * 0.18;
     clav.rotation.y = side * -0.1;
@@ -242,7 +243,7 @@ function buildSkeleton(root: THREE.Group): void {
     scap.position.set(side * 0.16, 0, -0.08);
     scap.rotation.y = side * 0.35;
     root.add(scap);
-    const joint = part("ShoulderJoint", new THREE.SphereGeometry(0.045, 10, 8), bone, 1.2);
+    const joint = part("ShoulderJoint", sphere(0.045, 10, 8), bone, 1.2);
     joint.position.set(side * 0.24, 0, 0.02);
     root.add(joint);
   }
@@ -253,7 +254,7 @@ function buildSkeleton(root: THREE.Group): void {
     const w = 0.2 - i * 0.012;
     const depth = 0.04 + Math.sin((i / 6) * Math.PI) * 0.03;
     for (const side of [-1, 1]) {
-      const rib = part("Rib", new THREE.TorusGeometry(w, 0.011, 4, 12, Math.PI * 0.9), bone, y);
+      const rib = part("Rib", torus(w, 0.011, 4, 12, Math.PI * 0.9), bone, y);
       rib.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
       rib.rotation.z = side * 0.12;
       rib.position.z = depth;
@@ -261,12 +262,12 @@ function buildSkeleton(root: THREE.Group): void {
     }
   }
   // Sternum
-  root.add(part("Sternum", new THREE.CapsuleGeometry(0.02, 0.28, 4, 6), dark, 1.05));
+  root.add(part("Sternum", capsule(0.02, 0.28, 4, 6), dark, 1.05));
 
   // Thoracic + lumbar spine with slight lordosis (side curve)
   for (let i = 0; i < 10; i++) {
     const t = i / 9;
-    const v = part(`Spine${i + 1}`, new THREE.CylinderGeometry(0.028, 0.034, 0.048, 6), i % 2 ? bone : dark, 1.12 - i * 0.048);
+    const v = part(`Spine${i + 1}`, cylinder(0.028, 0.034, 0.048, 6), i % 2 ? bone : dark, 1.12 - i * 0.048);
     v.position.z = Math.sin(t * Math.PI) * -0.04;
     root.add(v);
   }
@@ -282,18 +283,18 @@ function buildSkeleton(root: THREE.Group): void {
   // Arms in slight A-pose (abducted)
   for (const side of [-1, 1]) {
     const ax = side * 0.28;
-    const humerus = part("Humerus", new THREE.CapsuleGeometry(0.032, 0.3, 5, 8), bone, 1.0);
+    const humerus = part("Humerus", capsule(0.032, 0.3, 5, 8), bone, 1.0);
     humerus.position.set(ax, 0, 0.02);
     humerus.rotation.z = side * 0.22;
     root.add(humerus);
-    const elbow = part("Elbow", new THREE.SphereGeometry(0.035, 8, 6), dark, 0.78);
+    const elbow = part("Elbow", sphere(0.035, 8, 6), dark, 0.78);
     elbow.position.set(side * 0.34, 0, 0.03);
     root.add(elbow);
-    const radius = part("Radius", new THREE.CapsuleGeometry(0.022, 0.24, 4, 6), bone, 0.58);
+    const radius = part("Radius", capsule(0.022, 0.24, 4, 6), bone, 0.58);
     radius.position.set(side * 0.38, 0, 0.04);
     radius.rotation.z = side * 0.18;
     root.add(radius);
-    const ulna = part("Ulna", new THREE.CapsuleGeometry(0.018, 0.24, 4, 6), dark, 0.58);
+    const ulna = part("Ulna", capsule(0.018, 0.24, 4, 6), dark, 0.58);
     ulna.position.set(side * 0.36, 0, 0.01);
     ulna.rotation.z = side * 0.18;
     root.add(ulna);
@@ -301,7 +302,7 @@ function buildSkeleton(root: THREE.Group): void {
     palm.position.set(side * 0.42, 0, 0.05);
     root.add(palm);
     for (let f = 0; f < 4; f++) {
-      const ph = part("Phalanx", new THREE.CapsuleGeometry(0.009, 0.055, 3, 4), bone, 0.36);
+      const ph = part("Phalanx", capsule(0.009, 0.055, 3, 4), bone, 0.36);
       ph.position.set(side * 0.42 + (f - 1.5) * 0.016, 0, 0.08);
       root.add(ph);
     }
@@ -309,26 +310,26 @@ function buildSkeleton(root: THREE.Group): void {
 
   // Legs — femur / tibia / fibula / foot phalanges
   for (const side of [-1, 1]) {
-    const hip = part("HipJoint", new THREE.SphereGeometry(0.05, 10, 8), dark, 0.55);
+    const hip = part("HipJoint", sphere(0.05, 10, 8), dark, 0.55);
     hip.position.set(side * 0.11, 0, 0);
     root.add(hip);
-    const femur = part("Femur", new THREE.CapsuleGeometry(0.042, 0.34, 5, 8), bone, 0.38);
+    const femur = part("Femur", capsule(0.042, 0.34, 5, 8), bone, 0.38);
     femur.position.set(side * 0.11, 0, 0.01);
     root.add(femur);
-    const knee = part("Knee", new THREE.SphereGeometry(0.04, 8, 6), dark, 0.2);
+    const knee = part("Knee", sphere(0.04, 8, 6), dark, 0.2);
     knee.position.set(side * 0.11, 0, 0.02);
     root.add(knee);
-    const tibia = part("Tibia", new THREE.CapsuleGeometry(0.032, 0.3, 5, 8), bone, 0.05);
+    const tibia = part("Tibia", capsule(0.032, 0.3, 5, 8), bone, 0.05);
     tibia.position.set(side * 0.11, 0, 0.025);
     root.add(tibia);
-    const fibula = part("Fibula", new THREE.CapsuleGeometry(0.018, 0.28, 4, 6), dark, 0.05);
+    const fibula = part("Fibula", capsule(0.018, 0.28, 4, 6), dark, 0.05);
     fibula.position.set(side * 0.13, 0, -0.015);
     root.add(fibula);
     const foot = part("Foot", roundBox(0.075, 0.035, 0.17, 1), bone, 0.02);
     foot.position.set(side * 0.11, 0, 0.07);
     root.add(foot);
     for (let t = 0; t < 3; t++) {
-      const toe = part("ToePhalanx", new THREE.CapsuleGeometry(0.009, 0.04, 3, 4), dark, 0.02);
+      const toe = part("ToePhalanx", capsule(0.009, 0.04, 3, 4), dark, 0.02);
       toe.position.set(side * 0.11 + (t - 1) * 0.02, 0, 0.15);
       root.add(toe);
     }
@@ -354,31 +355,31 @@ function buildZombie(root: THREE.Group, sex: "male" | "female"): void {
   root.add(part("Rags", roundBox(torsoW * 1.05, torsoH * 0.55, 0.28, 2), cloth, female ? 1.05 : 1.1));
   // Visible skeletal structure inside
   for (let i = 0; i < 4; i++) {
-    const rib = part("RibBone", new THREE.TorusGeometry(0.1 - i * 0.01, 0.012, 4, 8, Math.PI), bone, (female ? 1.25 : 1.3) - i * 0.08);
+    const rib = part("RibBone", torus(0.1 - i * 0.01, 0.012, 4, 8, Math.PI), bone, (female ? 1.25 : 1.3) - i * 0.08);
     rib.rotation.y = Math.PI / 2;
     rib.position.set(lean * 0.5, 0, 0.08);
     root.add(rib);
   }
   if (female) {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.07, 8, 6), flesh, 1.28);
+      const breast = part("Breast", sphere(0.07, 8, 6), flesh, 1.28);
       breast.scale.set(1, 0.75, 0.8);
       breast.position.set(side * 0.08 + lean, 0, 0.12);
       root.add(breast);
     }
     // Bite mark on shoulder
-    const bite = part("BiteMark", new THREE.SphereGeometry(0.04, 8, 6), rot, 1.35);
+    const bite = part("BiteMark", sphere(0.04, 8, 6), rot, 1.35);
     bite.position.set(-0.18, 0, 0.1);
     root.add(bite);
   } else {
-    const gut = part("GutTear", new THREE.SphereGeometry(0.08, 8, 6), rot, 1.0);
+    const gut = part("GutTear", sphere(0.08, 8, 6), rot, 1.0);
     gut.position.set(0.06, 0, 0.12);
     root.add(gut);
   }
 
   // Head — neural decay, tilted
   const headY = female ? 1.52 : 1.58;
-  const skull = part("Head", new THREE.SphereGeometry(female ? 0.14 : 0.155, 14, 12), flesh, headY);
+  const skull = part("Head", sphere(female ? 0.14 : 0.155, 14, 12), flesh, headY);
   skull.position.set(lean * (female ? 1.5 : 1), 0, 0.02);
   root.add(skull);
   const jaw = part("Mandible", roundBox(0.1, 0.05, 0.08, 1), bone, headY - 0.12);
@@ -386,13 +387,13 @@ function buildZombie(root: THREE.Group, sex: "male" | "female"): void {
   jaw.rotation.z = female ? -0.15 : 0.12;
   root.add(jaw);
   for (const side of [-1, 1]) {
-    const e = part(side < 0 ? "EyeL" : "EyeR", new THREE.SphereGeometry(0.025, 8, 6), eye, headY + 0.02);
+    const e = part(side < 0 ? "EyeL" : "EyeR", sphere(0.025, 8, 6), eye, headY + 0.02);
     e.position.set(side * 0.06 + lean, 0.01, 0.12);
     root.add(e);
   }
   // Sparse necrotic hair / scalp
   if (female) {
-    const hair = part("Hair", new THREE.SphereGeometry(0.15, 10, 8), rot, headY + 0.06);
+    const hair = part("Hair", sphere(0.15, 10, 8), rot, headY + 0.06);
     hair.scale.set(1, 0.5, 1.1);
     hair.position.set(lean * 1.5, 0, -0.02);
     root.add(hair);
@@ -401,13 +402,13 @@ function buildZombie(root: THREE.Group, sex: "male" | "female"): void {
   // Arms — decayed clavicle side droops lower
   for (const side of [-1, 1]) {
     const droop = side < 0 ? (female ? 0.18 : 0.12) : female ? 0.05 : 0.08;
-    const upper = part("ArmU", new THREE.CapsuleGeometry(female ? 0.045 : 0.055, female ? 0.32 : 0.36, 6, 8), flesh, 1.15 - droop);
+    const upper = part("ArmU", capsule(female ? 0.045 : 0.055, female ? 0.32 : 0.36, 6, 8), flesh, 1.15 - droop);
     upper.position.set(side * (torsoW * 0.55) + lean, 0, 0.02);
     root.add(upper);
-    const lower = part("ArmL", new THREE.CapsuleGeometry(female ? 0.04 : 0.048, female ? 0.28 : 0.3, 5, 8), flesh, 0.85 - droop);
+    const lower = part("ArmL", capsule(female ? 0.04 : 0.048, female ? 0.28 : 0.3, 5, 8), flesh, 0.85 - droop);
     lower.position.set(side * (torsoW * 0.6) + lean, 0, 0.04);
     root.add(lower);
-    const hand = part("Hand", new THREE.SphereGeometry(female ? 0.04 : 0.05, 8, 6), rot, 0.65 - droop);
+    const hand = part("Hand", sphere(female ? 0.04 : 0.05, 8, 6), rot, 0.65 - droop);
     hand.position.set(side * (torsoW * 0.62) + lean, 0, 0.05);
     root.add(hand);
   }
@@ -420,10 +421,10 @@ function buildZombie(root: THREE.Group, sex: "male" | "female"): void {
   // Legs — impaired / asymmetrical gait (one shorter pose)
   for (const side of [-1, 1]) {
     const limp = female ? (side < 0 ? 0.08 : 0) : side > 0 ? 0.06 : 0;
-    const thigh = part("Femur", new THREE.CapsuleGeometry(female ? 0.06 : 0.07, 0.32, 6, 8), flesh, 0.55 - limp * 0.3);
+    const thigh = part("Femur", capsule(female ? 0.06 : 0.07, 0.32, 6, 8), flesh, 0.55 - limp * 0.3);
     thigh.position.set(side * 0.1 + lean * 0.3, 0, limp * 0.5);
     root.add(thigh);
-    const shin = part("Tibia", new THREE.CapsuleGeometry(female ? 0.05 : 0.058, 0.3, 5, 8), flesh, 0.25 - limp * 0.2);
+    const shin = part("Tibia", capsule(female ? 0.05 : 0.058, 0.3, 5, 8), flesh, 0.25 - limp * 0.2);
     shin.position.set(side * 0.1 + lean * 0.3, 0, limp);
     root.add(shin);
     const foot = part("Foot", roundBox(0.09, 0.05, 0.16, 1), rot, 0.04);
@@ -446,48 +447,48 @@ function buildDireWolf(root: THREE.Group, sex: "male" | "female"): void {
 
   const s = male ? 1.08 : 0.92;
   const chestY = 0.58 * s;
-  root.add(part("Chest", new THREE.CapsuleGeometry(0.28 * s, 0.5 * s, 12, 16), fur, chestY));
-  const haunch = part("Haunch", new THREE.SphereGeometry(0.3 * s, 16, 12), fur, 0.52 * s);
+  root.add(part("Chest", capsule(0.28 * s, 0.5 * s, 12, 16), fur, chestY));
+  const haunch = part("Haunch", sphere(0.3 * s, 16, 12), fur, 0.52 * s);
   haunch.position.z = -0.32 * s;
   root.add(haunch);
-  const belly = part("Belly", new THREE.SphereGeometry(0.18 * s, 12, 10), dark, 0.42 * s);
+  const belly = part("Belly", sphere(0.18 * s, 12, 10), dark, 0.42 * s);
   belly.position.z = -0.05;
   root.add(belly);
 
   // Cranium — male occipital crest high
   const headY = 0.95 * s;
-  const skull = part("Cranium", new THREE.SphereGeometry(0.2 * s, 16, 12), fur, headY);
+  const skull = part("Cranium", sphere(0.2 * s, 16, 12), fur, headY);
   skull.scale.set(1, male ? 1.1 : 1.0, 1.15);
   skull.position.z = 0.28 * s;
   root.add(skull);
   if (male) {
-    const crest = part("OccipitalCrest", new THREE.ConeGeometry(0.06 * s, 0.14 * s, 6), dark, headY + 0.14 * s);
+    const crest = part("OccipitalCrest", cone(0.06 * s, 0.14 * s, 6), dark, headY + 0.14 * s);
     crest.position.set(0, 0, 0.2 * s);
     crest.rotation.x = -0.6;
     root.add(crest);
   }
-  const snout = part("Mandible", new THREE.CapsuleGeometry(0.08 * s, 0.22 * s, 6, 10), dark, headY - 0.06 * s);
+  const snout = part("Mandible", capsule(0.08 * s, 0.22 * s, 6, 10), dark, headY - 0.06 * s);
   snout.rotation.x = Math.PI / 2;
   snout.position.set(0, 0, 0.52 * s);
   root.add(snout);
   // Canine arrays / predator dentition
   for (const side of [-1, 1]) {
-    const fangL = part("Canine", new THREE.ConeGeometry(0.025 * s, 0.1 * s, 6), fang, headY - 0.1 * s);
+    const fangL = part("Canine", cone(0.025 * s, 0.1 * s, 6), fang, headY - 0.1 * s);
     fangL.position.set(side * 0.05 * s, 0, 0.62 * s);
     fangL.rotation.x = Math.PI * 0.85;
     root.add(fangL);
-    const ear = part("Ear", new THREE.ConeGeometry(0.05 * s, 0.16 * s, 7), dark, headY + 0.16 * s);
+    const ear = part("Ear", cone(0.05 * s, 0.16 * s, 7), dark, headY + 0.16 * s);
     ear.position.set(side * 0.12 * s, 0, 0.22 * s);
     ear.rotation.z = side * -0.4;
     root.add(ear);
-    const e = part(side < 0 ? "EyeL" : "EyeR", new THREE.SphereGeometry(0.032 * s, 10, 8), eye, headY + 0.02 * s);
+    const e = part(side < 0 ? "EyeL" : "EyeR", sphere(0.032 * s, 10, 8), eye, headY + 0.02 * s);
     e.position.set(side * 0.1 * s, 0.02, 0.42 * s);
     root.add(e);
   }
 
   // Cervical flex hint
   for (let i = 0; i < 3; i++) {
-    const v = part(`C${i + 1}`, new THREE.CylinderGeometry(0.04 * s, 0.045 * s, 0.05 * s, 6), dark, 0.82 * s - i * 0.04);
+    const v = part(`C${i + 1}`, cylinder(0.04 * s, 0.045 * s, 0.05 * s, 6), dark, 0.82 * s - i * 0.04);
     v.position.z = 0.18 * s - i * 0.02;
     root.add(v);
   }
@@ -503,13 +504,13 @@ function buildDireWolf(root: THREE.Group, sex: "male" | "female"): void {
       [-0.28 * s, false],
     ] as const) {
       const thick = fore ? 0.07 * s : 0.075 * s;
-      const thigh = part(fore ? "Forelimb" : "Femur", new THREE.CapsuleGeometry(thick, 0.22 * s, 6, 10), fur, 0.4 * s);
+      const thigh = part(fore ? "Forelimb" : "Femur", capsule(thick, 0.22 * s, 6, 10), fur, 0.4 * s);
       thigh.position.set(side * 0.18 * s, 0, z);
       root.add(thigh);
-      const hock = part("Hock", new THREE.SphereGeometry(thick * 0.9, 8, 6), dark, 0.22 * s);
+      const hock = part("Hock", sphere(thick * 0.9, 8, 6), dark, 0.22 * s);
       hock.position.set(side * 0.18 * s, 0, z + (fore ? 0.04 : -0.04));
       root.add(hock);
-      const meta = part("Digitigrade", new THREE.CapsuleGeometry(thick * 0.65, 0.14 * s, 5, 8), fur, 0.12 * s);
+      const meta = part("Digitigrade", capsule(thick * 0.65, 0.14 * s, 5, 8), fur, 0.12 * s);
       meta.position.set(side * 0.18 * s, 0, z + (fore ? 0.08 : -0.08));
       root.add(meta);
       // Paw + claw mesh detail
@@ -517,7 +518,7 @@ function buildDireWolf(root: THREE.Group, sex: "male" | "female"): void {
       paw.position.set(side * 0.18 * s, 0, z + (fore ? 0.12 : -0.12));
       root.add(paw);
       for (let c = 0; c < 4; c++) {
-        const claw = part("Claw", new THREE.ConeGeometry(0.015 * s, 0.07 * s, 5), fang, 0.04);
+        const claw = part("Claw", cone(0.015 * s, 0.07 * s, 5), fang, 0.04);
         claw.rotation.x = Math.PI / 2;
         claw.position.set(side * 0.18 * s + (c - 1.5) * 0.025 * s, 0, z + (fore ? 0.2 : -0.2));
         root.add(claw);
@@ -525,7 +526,7 @@ function buildDireWolf(root: THREE.Group, sex: "male" | "female"): void {
     }
   }
 
-  const mane = part("Mane", new THREE.SphereGeometry(0.22 * s, 12, 10), dark, 0.75 * s);
+  const mane = part("Mane", sphere(0.22 * s, 12, 10), dark, 0.75 * s);
   mane.position.set(0, 0.04, 0.08 * s);
   mane.scale.set(1.15, 0.65, 1.0);
   root.add(mane);
@@ -534,7 +535,7 @@ function buildDireWolf(root: THREE.Group, sex: "male" | "female"): void {
   let tz = -0.48 * s;
   for (let i = 0; i < 4; i++) {
     const t = i / 3;
-    const seg = part(`Tail${i}`, new THREE.CapsuleGeometry(0.05 * s * (1 - t * 0.4), 0.12 * s, 4, 8), i % 2 ? fur : dark, 0.55 * s + t * 0.04);
+    const seg = part(`Tail${i}`, capsule(0.05 * s * (1 - t * 0.4), 0.12 * s, 4, 8), i % 2 ? fur : dark, 0.55 * s + t * 0.04);
     seg.position.set(0, 0, tz);
     seg.rotation.x = 0.45 + t * 0.2;
     root.add(seg);
@@ -565,18 +566,18 @@ function addRatHead(
   size: number,
   earSpread = 1,
 ): void {
-  root.add(part("Head", new THREE.SphereGeometry(size, 16, 12), fur, y));
-  const snout = part("Snout", new THREE.CapsuleGeometry(size * 0.4, size * 0.7, 5, 8), pink, y - size * 0.1);
+  root.add(part("Head", sphere(size, 16, 12), fur, y));
+  const snout = part("Snout", capsule(size * 0.4, size * 0.7, 5, 8), pink, y - size * 0.1);
   snout.rotation.x = Math.PI / 2;
   snout.position.z = size * 0.85;
   root.add(snout);
   for (const side of [-1, 1]) {
-    const ear = part("Ear", new THREE.SphereGeometry(size * 0.45, 10, 8), pink, y + size * 0.55);
+    const ear = part("Ear", sphere(size * 0.45, 10, 8), pink, y + size * 0.55);
     ear.scale.set(0.55, 1, 0.2);
     ear.position.set(side * size * 0.75 * earSpread, 0, -size * 0.1);
     ear.rotation.z = side * -0.35;
     root.add(ear);
-    const e = part(side < 0 ? "EyeL" : "EyeR", new THREE.SphereGeometry(size * 0.16, 8, 6), eye, y + size * 0.1);
+    const e = part(side < 0 ? "EyeL" : "EyeR", sphere(size * 0.16, 8, 6), eye, y + size * 0.1);
     e.position.set(side * size * 0.4, 0.02, size * 0.65);
     root.add(e);
     const tooth = part("Incisor", new THREE.BoxGeometry(size * 0.12, size * 0.35, size * 0.1), fang, y - size * 0.35);
@@ -586,7 +587,7 @@ function addRatHead(
   // Whiskers
   for (const side of [-1, 1]) {
     for (let i = 0; i < 2; i++) {
-      const w = part("Whisker", new THREE.CapsuleGeometry(0.008, size * 0.55, 2, 4), dark, y - size * 0.05);
+      const w = part("Whisker", capsule(0.008, size * 0.55, 2, 4), dark, y - size * 0.05);
       w.position.set(side * size * 0.5, i * size * 0.12, size * 0.9);
       w.rotation.z = side * (0.9 + i * 0.2);
       root.add(w);
@@ -606,7 +607,7 @@ function addPrehensileTail(
   let z = -0.16;
   for (let i = 0; i < segs; i++) {
     const t = i / Math.max(1, segs - 1);
-    const seg = part(`Tail${i}`, new THREE.CapsuleGeometry(thick * (1 - t * 0.55), 0.12 - t * 0.015, 4, 6), i % 2 ? pink : dark, hipY + t * 0.04);
+    const seg = part(`Tail${i}`, capsule(thick * (1 - t * 0.55), 0.12 - t * 0.015, 4, 6), i % 2 ? pink : dark, hipY + t * 0.04);
     seg.position.set(Math.sin(t * 1.2) * thick * 0.8, 0, z);
     seg.rotation.x = curl + t * 0.25;
     root.add(seg);
@@ -617,9 +618,9 @@ function addPrehensileTail(
 /** Urban Brown Rat — agile bipedal stance. */
 function buildBrownRat(root: THREE.Group): void {
   const { fur, dark, pink, fang, eye, core } = ratMats(0x6a4a38);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.18, 0.38, 10, 12), fur, 0.65));
-  root.add(part("Belly", new THREE.SphereGeometry(0.12, 10, 8), pink, 0.58));
-  root.add(part("Heart", new THREE.SphereGeometry(0.05, 8, 6), core, 0.68));
+  root.add(part("Torso", capsule(0.18, 0.38, 10, 12), fur, 0.65));
+  root.add(part("Belly", sphere(0.12, 10, 8), pink, 0.58));
+  root.add(part("Heart", sphere(0.05, 8, 6), core, 0.68));
   addRatHead(root, fur, dark, pink, fang, eye, 0.98, 0.16);
   addDemonArms(root, fur, dark, pink, 0.75, 0.32, 0.04, 0.2);
   addDigitigradeLegs(root, fur, dark, pink, 0.42, 0.42, 0.05, 0.1);
@@ -629,8 +630,8 @@ function buildBrownRat(root: THREE.Group): void {
 /** Agile Roof Rat — low quadruped skitter. */
 function buildRoofRat(root: THREE.Group): void {
   const { fur, dark, pink, fang, eye } = ratMats(0x5a4030);
-  root.add(part("Body", new THREE.CapsuleGeometry(0.14, 0.38, 10, 12), fur, 0.28));
-  const haunch = part("Haunch", new THREE.SphereGeometry(0.14, 12, 10), fur, 0.26);
+  root.add(part("Body", capsule(0.14, 0.38, 10, 12), fur, 0.28));
+  const haunch = part("Haunch", sphere(0.14, 12, 10), fur, 0.26);
   haunch.position.z = -0.18;
   root.add(haunch);
   addRatHead(root, fur, dark, pink, fang, eye, 0.42, 0.12, 1.1);
@@ -639,10 +640,10 @@ function buildRoofRat(root: THREE.Group): void {
       [0.14, 0.2],
       [-0.16, 0.18],
     ] as const) {
-      const leg = part("Leg", new THREE.CapsuleGeometry(0.035, 0.14, 5, 8), fur, y);
+      const leg = part("Leg", capsule(0.035, 0.14, 5, 8), fur, y);
       leg.position.set(side * 0.12, 0, z);
       root.add(leg);
-      const paw = part("Paw", new THREE.SphereGeometry(0.04, 8, 6), pink, 0.06);
+      const paw = part("Paw", sphere(0.04, 8, 6), pink, 0.06);
       paw.position.set(side * 0.12, 0, z + (z > 0 ? 0.04 : -0.04));
       root.add(paw);
     }
@@ -654,9 +655,9 @@ function buildRoofRat(root: THREE.Group): void {
 function buildPackRat(root: THREE.Group): void {
   const { fur, dark, pink, fang, eye, core } = ratMats(0x7a5a40);
   const scrap = mat(0x6a6a58, 0.45, 0.45);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.2, 0.42, 10, 12), fur, 0.72));
-  root.add(part("Belly", new THREE.SphereGeometry(0.13, 10, 8), pink, 0.64));
-  root.add(part("Heart", new THREE.SphereGeometry(0.05, 8, 6), core, 0.74));
+  root.add(part("Torso", capsule(0.2, 0.42, 10, 12), fur, 0.72));
+  root.add(part("Belly", sphere(0.13, 10, 8), pink, 0.64));
+  root.add(part("Heart", sphere(0.05, 8, 6), core, 0.74));
   // Integrated armor mounts (gnome-sim scavenged plates)
   for (let i = 0; i < 3; i++) {
     const plate = part(`Scrap${i}`, roundBox(0.22 - i * 0.02, 0.06, 0.14, 2), scrap, 0.85 - i * 0.12);
@@ -678,26 +679,26 @@ function buildPackRat(root: THREE.Group): void {
 /** Titan Giant Rat — bulky quadruped. */
 function buildGiantRat(root: THREE.Group): void {
   const { fur, dark, pink, fang, eye, core } = ratMats(0x5a3828);
-  root.add(part("Chest", new THREE.CapsuleGeometry(0.35, 0.55, 12, 14), fur, 0.7));
-  const haunch = part("Haunch", new THREE.SphereGeometry(0.38, 16, 12), fur, 0.62);
+  root.add(part("Chest", capsule(0.35, 0.55, 12, 14), fur, 0.7));
+  const haunch = part("Haunch", sphere(0.38, 16, 12), fur, 0.62);
   haunch.position.z = -0.35;
   root.add(haunch);
-  root.add(part("Belly", new THREE.SphereGeometry(0.24, 12, 10), pink, 0.5));
-  root.add(part("Heart", new THREE.SphereGeometry(0.09, 10, 8), core, 0.68));
+  root.add(part("Belly", sphere(0.24, 12, 10), pink, 0.5));
+  root.add(part("Heart", sphere(0.09, 10, 8), core, 0.68));
   addRatHead(root, fur, dark, pink, fang, eye, 1.05, 0.26, 0.95);
   for (const side of [-1, 1]) {
     for (const [z, y] of [
       [0.22, 0.45],
       [-0.32, 0.4],
     ] as const) {
-      const thigh = part("Leg", new THREE.CapsuleGeometry(0.09, 0.28, 6, 10), fur, y);
+      const thigh = part("Leg", capsule(0.09, 0.28, 6, 10), fur, y);
       thigh.position.set(side * 0.24, 0, z);
       root.add(thigh);
       const paw = part("Paw", roundBox(0.16, 0.08, 0.2, 2), pink, 0.1);
       paw.position.set(side * 0.24, 0, z + (z > 0 ? 0.06 : -0.06));
       root.add(paw);
       for (let t = 0; t < 3; t++) {
-        const claw = part("Claw", new THREE.ConeGeometry(0.02, 0.07, 5), fang, 0.08);
+        const claw = part("Claw", cone(0.02, 0.07, 5), fang, 0.08);
         claw.rotation.x = Math.PI / 2;
         claw.position.set(side * 0.24 + (t - 1) * 0.04, 0, z + (z > 0 ? 0.16 : -0.16));
         root.add(claw);
@@ -713,12 +714,12 @@ function buildDireRat(root: THREE.Group): void {
   const eye = mat(0xff4466, 0.15, 0.35, 0xff2244, 0.7);
   const core = mat(0x882040, 0.15, 0.35, 0x601028, 0.85);
   root.add(part("Torso", roundBox(0.42, 0.55, 0.32, 3), fur, 0.95));
-  root.add(part("Belly", new THREE.SphereGeometry(0.16, 12, 10), pink, 0.85));
+  root.add(part("Belly", sphere(0.16, 12, 10), pink, 0.85));
   root.add(part("CorruptCore", new THREE.OctahedronGeometry(0.09, 0), core, 0.95));
   addRatHead(root, fur, dark, pink, fang, eye, 1.4, 0.22, 1.05);
   // Longer dire fangs
   for (const side of [-1, 1]) {
-    const fangL = part("DireFang", new THREE.ConeGeometry(0.03, 0.14, 6), fang, 1.22);
+    const fangL = part("DireFang", cone(0.03, 0.14, 6), fang, 1.22);
     fangL.position.set(side * 0.06, 0, 0.32);
     fangL.rotation.x = Math.PI * 0.85;
     root.add(fangL);
@@ -728,7 +729,7 @@ function buildDireRat(root: THREE.Group): void {
   addPrehensileTail(root, pink, dark, 0.7, 6, 0.05, 0.6);
   // Spine ridges
   for (let i = 0; i < 4; i++) {
-    const spike = part("Spine", new THREE.ConeGeometry(0.03, 0.12, 5), dark, 1.15 - i * 0.1);
+    const spike = part("Spine", cone(0.03, 0.12, 5), dark, 1.15 - i * 0.1);
     spike.position.z = -0.16;
     spike.rotation.x = -0.5;
     root.add(spike);
@@ -741,13 +742,13 @@ function buildSlime(root: THREE.Group): void {
   goo.thickness = 0.6;
   goo.transparent = true;
   goo.opacity = 0.92;
-  root.add(part("Blob", new THREE.SphereGeometry(0.48, 28, 22), goo, 0.42));
-  root.add(part("Cap", new THREE.SphereGeometry(0.32, 20, 16), goo, 0.72));
+  root.add(part("Blob", sphere(0.48, 28, 22), goo, 0.42));
+  root.add(part("Cap", sphere(0.32, 20, 16), goo, 0.72));
   const core = mat(0xa8ffc0, 0.05, 0.3, 0x60ff90, 0.55);
-  root.add(part("Core", new THREE.SphereGeometry(0.14, 14, 12), core, 0.5));
+  root.add(part("Core", sphere(0.14, 14, 12), core, 0.5));
   const eye = mat(0x101808, 0.25, 0.35);
   for (const side of [-1, 1]) {
-    const e = part("Eye", new THREE.SphereGeometry(0.07, 12, 10), eye, 0.58);
+    const e = part("Eye", sphere(0.07, 12, 10), eye, 0.58);
     e.position.set(side * 0.16, 0.02, 0.38);
     root.add(e);
   }
@@ -763,7 +764,7 @@ function buildGargoyle(root: THREE.Group): void {
   jaw.position.z = 0.06;
   root.add(jaw);
   for (const side of [-1, 1]) {
-    const horn = part("Horn", new THREE.ConeGeometry(0.06, 0.28, 10), dark, 1.78);
+    const horn = part("Horn", cone(0.06, 0.28, 10), dark, 1.78);
     horn.position.set(side * 0.14, 0, -0.02);
     horn.rotation.z = side * -0.45;
     root.add(horn);
@@ -772,14 +773,14 @@ function buildGargoyle(root: THREE.Group): void {
     wing.rotation.z = side * 0.5;
     wing.rotation.y = side * -0.25;
     root.add(wing);
-    const arm = part("Arm", new THREE.CapsuleGeometry(0.08, 0.4, 8, 12), stone, 1.05);
+    const arm = part("Arm", capsule(0.08, 0.4, 8, 12), stone, 1.05);
     arm.position.set(side * 0.38, 0, 0.05);
     root.add(arm);
-    const claw = part("Claw", new THREE.ConeGeometry(0.05, 0.16, 8), dark, 0.78);
+    const claw = part("Claw", cone(0.05, 0.16, 8), dark, 0.78);
     claw.position.set(side * 0.4, 0, 0.12);
     claw.rotation.x = Math.PI;
     root.add(claw);
-    const leg = part("Leg", new THREE.CapsuleGeometry(0.1, 0.4, 8, 12), stone, 0.38);
+    const leg = part("Leg", capsule(0.1, 0.4, 8, 12), stone, 0.38);
     leg.position.x = side * 0.18;
     root.add(leg);
   }
@@ -787,14 +788,14 @@ function buildGargoyle(root: THREE.Group): void {
 
 function buildWisp(root: THREE.Group): void {
   const core = mat(0xffa45a, 0.08, 0.28, 0xff6a28, 1.2);
-  root.add(part("Core", new THREE.SphereGeometry(0.2, 22, 18), core, 0.75));
+  root.add(part("Core", sphere(0.2, 22, 18), core, 0.75));
   const haze = mat(0xffc090, 0.02, 0.55, 0xff8a40, 0.45);
   haze.transparent = true;
   haze.opacity = 0.55;
   haze.depthWrite = false;
-  root.add(part("Haze", new THREE.SphereGeometry(0.42, 18, 14), haze, 0.75));
+  root.add(part("Haze", sphere(0.42, 18, 14), haze, 0.75));
   for (let i = 0; i < 5; i++) {
-    const spark = part("Spark", new THREE.SphereGeometry(0.04, 10, 8), core, 0.75);
+    const spark = part("Spark", sphere(0.04, 10, 8), core, 0.75);
     const a = (i / 5) * Math.PI * 2;
     spark.position.set(Math.cos(a) * 0.32, Math.sin(a * 1.3) * 0.12, Math.sin(a) * 0.32);
     root.add(spark);
@@ -814,7 +815,7 @@ function demonMats(tint = 0x8a2a22): { hide: Surf; dark: Surf; horn: Surf; glow:
 
 function addDemonEyes(root: THREE.Group, glow: Surf, y: number, z: number, spread: number, r = 0.035): void {
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeL" : "EyeR", new THREE.SphereGeometry(r, 10, 8), glow, y);
+    const eye = part(side < 0 ? "EyeL" : "EyeR", sphere(r, 10, 8), glow, y);
     eye.position.set(side * spread, 0.02, z);
     root.add(eye);
   }
@@ -832,7 +833,7 @@ function addDemonHorns(
   for (let i = 0; i < count; i++) {
     const lift = i * size * 0.55;
     for (const side of [-1, 1]) {
-      const h = part("Horn", new THREE.ConeGeometry(size * 0.22, size, 8), horn, y + lift);
+      const h = part("Horn", cone(size * 0.22, size, 8), horn, y + lift);
       h.position.set(side * (spread + i * 0.04), 0, -0.02 - i * 0.03);
       h.rotation.z = side * -curl;
       h.rotation.x = -0.3 - i * 0.1;
@@ -851,7 +852,7 @@ function addBatWings(
   thick = 0.04,
 ): void {
   for (const side of [-1, 1]) {
-    const rootBone = part("WingRoot", new THREE.CapsuleGeometry(thick * 1.2, height * 0.35, 6, 8), dark, y);
+    const rootBone = part("WingRoot", capsule(thick * 1.2, height * 0.35, 6, 8), dark, y);
     rootBone.position.set(side * span * 0.35, 0, -0.06);
     rootBone.rotation.z = side * 0.85;
     root.add(rootBone);
@@ -862,7 +863,7 @@ function addBatWings(
     root.add(membrane);
     // Segmented wing actuators
     for (let i = 0; i < 3; i++) {
-      const spar = part("WingSpar", new THREE.CapsuleGeometry(thick * 0.5, height * 0.55, 4, 6), dark, y);
+      const spar = part("WingSpar", capsule(thick * 0.5, height * 0.55, 4, 6), dark, y);
       spar.position.set(side * (span * 0.35 + i * span * 0.12), height * 0.08, -0.08 - i * 0.02);
       spar.rotation.z = side * (0.7 + i * 0.15);
       root.add(spar);
@@ -881,23 +882,23 @@ function addDigitigradeLegs(
   stance: number,
 ): void {
   for (const side of [-1, 1]) {
-    const thigh = part("Thigh", new THREE.CapsuleGeometry(thick * 1.15, length * 0.35, 6, 10), hide, hipY - length * 0.18);
+    const thigh = part("Thigh", capsule(thick * 1.15, length * 0.35, 6, 10), hide, hipY - length * 0.18);
     thigh.position.set(side * stance, 0, 0.02);
     root.add(thigh);
-    const shin = part("Shin", new THREE.CapsuleGeometry(thick * 0.9, length * 0.28, 6, 10), hide, hipY - length * 0.52);
+    const shin = part("Shin", capsule(thick * 0.9, length * 0.28, 6, 10), hide, hipY - length * 0.52);
     shin.position.set(side * stance, 0, 0.1);
     root.add(shin);
-    const hock = part("Hock", new THREE.SphereGeometry(thick * 0.95, 8, 6), dark, hipY - length * 0.72);
+    const hock = part("Hock", sphere(thick * 0.95, 8, 6), dark, hipY - length * 0.72);
     hock.position.set(side * stance, 0, 0.14);
     root.add(hock);
-    const meta = part("Meta", new THREE.CapsuleGeometry(thick * 0.65, length * 0.14, 5, 8), hide, hipY - length * 0.88);
+    const meta = part("Meta", capsule(thick * 0.65, length * 0.14, 5, 8), hide, hipY - length * 0.88);
     meta.position.set(side * stance, 0, 0.2);
     root.add(meta);
     const foot = part("Foot", roundBox(thick * 2.2, thick * 0.7, thick * 2.8, 2), dark, hipY - length - thick * 0.2);
     foot.position.set(side * stance, 0, 0.28);
     root.add(foot);
     for (let t = 0; t < 3; t++) {
-      const talon = part("Talon", new THREE.ConeGeometry(thick * 0.22, thick * 0.9, 5), claw, hipY - length - thick * 0.1);
+      const talon = part("Talon", cone(thick * 0.22, thick * 0.9, 5), claw, hipY - length - thick * 0.1);
       talon.rotation.x = Math.PI / 2;
       talon.position.set(side * stance + (t - 1) * thick * 0.7, 0, 0.42);
       root.add(talon);
@@ -918,17 +919,17 @@ function addDemonArms(
   namePrefix = "",
 ): void {
   for (const side of [-1, 1]) {
-    const upper = part(`${namePrefix}ArmU`, new THREE.CapsuleGeometry(thick, length * 0.42, 6, 10), hide, shoulderY - length * 0.2);
+    const upper = part(`${namePrefix}ArmU`, capsule(thick, length * 0.42, 6, 10), hide, shoulderY - length * 0.2);
     upper.position.set(side * spread, 0, zOff);
     root.add(upper);
-    const lower = part(`${namePrefix}ArmL`, new THREE.CapsuleGeometry(thick * 0.85, length * 0.36, 6, 10), hide, shoulderY - length * 0.58);
+    const lower = part(`${namePrefix}ArmL`, capsule(thick * 0.85, length * 0.36, 6, 10), hide, shoulderY - length * 0.58);
     lower.position.set(side * (spread + 0.02), 0, zOff + 0.04);
     root.add(lower);
-    const hand = part(`${namePrefix}Hand`, new THREE.SphereGeometry(thick * 1.15, 8, 6), dark, shoulderY - length * 0.88);
+    const hand = part(`${namePrefix}Hand`, sphere(thick * 1.15, 8, 6), dark, shoulderY - length * 0.88);
     hand.position.set(side * (spread + 0.04), 0, zOff + 0.06);
     root.add(hand);
     for (let i = 0; i < 3; i++) {
-      const finger = part("Claw", new THREE.ConeGeometry(thick * 0.2, thick * 0.7, 5), claw, shoulderY - length * 1.05);
+      const finger = part("Claw", cone(thick * 0.2, thick * 0.7, 5), claw, shoulderY - length * 1.05);
       finger.rotation.x = Math.PI;
       finger.position.set(side * (spread + 0.04) + (i - 1) * thick * 0.45, 0, zOff + 0.08);
       root.add(finger);
@@ -948,14 +949,14 @@ function addCaudalTail(
   let z = -0.18;
   for (let i = 0; i < segs; i++) {
     const t = i / Math.max(1, segs - 1);
-    const seg = part(`Tail${i}`, new THREE.CapsuleGeometry(thick * (1 - t * 0.55), 0.14 - t * 0.02, 4, 8), hide, hipY - t * 0.08);
+    const seg = part(`Tail${i}`, capsule(thick * (1 - t * 0.55), 0.14 - t * 0.02, 4, 8), hide, hipY - t * 0.08);
     seg.position.set(0, 0, z);
     seg.rotation.x = 0.55 + t * 0.35;
     root.add(seg);
     z -= 0.12 - t * 0.01;
   }
   if (tip === "stinger") {
-    const sting = part("Stinger", new THREE.ConeGeometry(thick * 0.7, thick * 2.2, 6), tipMat, hipY - 0.12);
+    const sting = part("Stinger", cone(thick * 0.7, thick * 2.2, 6), tipMat, hipY - 0.12);
     sting.rotation.x = 1.2;
     sting.position.set(0, 0, z - 0.04);
     root.add(sting);
@@ -965,7 +966,7 @@ function addCaudalTail(
     blade.rotation.x = 0.9;
     root.add(blade);
   } else {
-    const club = part("TailClub", new THREE.SphereGeometry(thick * 1.4, 10, 8), tipMat, hipY - 0.06);
+    const club = part("TailClub", sphere(thick * 1.4, 10, 8), tipMat, hipY - 0.06);
     club.position.set(0, 0, z - 0.02);
     root.add(club);
   }
@@ -974,10 +975,10 @@ function addCaudalTail(
 /** Swarm-class Imp — small, winged, stinger tail, digitigrade. */
 function buildImp(root: THREE.Group): void {
   const { hide, dark, horn, glow, claw } = demonMats(0x9a3028);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.16, 0.32, 10, 14), hide, 0.62));
-  root.add(part("Belly", new THREE.SphereGeometry(0.09, 12, 10), glow, 0.58));
-  root.add(part("Head", new THREE.SphereGeometry(0.16, 16, 12), hide, 0.98));
-  const snout = part("Snout", new THREE.CapsuleGeometry(0.05, 0.08, 4, 8), dark, 0.92);
+  root.add(part("Torso", capsule(0.16, 0.32, 10, 14), hide, 0.62));
+  root.add(part("Belly", sphere(0.09, 12, 10), glow, 0.58));
+  root.add(part("Head", sphere(0.16, 16, 12), hide, 0.98));
+  const snout = part("Snout", capsule(0.05, 0.08, 4, 8), dark, 0.92);
   snout.rotation.x = Math.PI / 2;
   snout.position.z = 0.14;
   root.add(snout);
@@ -994,8 +995,8 @@ function buildSlayer(root: THREE.Group): void {
   const { hide, dark, horn, glow, claw } = demonMats(0x6a221c);
   root.add(part("Torso", roundBox(0.62, 0.72, 0.42, 4), hide, 1.25));
   root.add(part("Pec", roundBox(0.58, 0.28, 0.2, 3), hide, 1.45));
-  root.add(part("Core", new THREE.SphereGeometry(0.1, 12, 10), glow, 1.2));
-  root.add(part("Head", new THREE.SphereGeometry(0.22, 16, 12), hide, 1.82));
+  root.add(part("Core", sphere(0.1, 12, 10), glow, 1.2));
+  root.add(part("Head", sphere(0.22, 16, 12), hide, 1.82));
   const jaw = part("Jaw", roundBox(0.2, 0.08, 0.16, 2), dark, 1.68);
   jaw.position.z = 0.1;
   root.add(jaw);
@@ -1009,8 +1010,8 @@ function buildSlayer(root: THREE.Group): void {
 /** Shadow-class Assassin — tall, lean, long wings. */
 function buildAssassin(root: THREE.Group): void {
   const { hide, dark, horn, glow, claw } = demonMats(0x4a1828);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.2, 0.62, 10, 14), hide, 1.15));
-  root.add(part("Head", new THREE.SphereGeometry(0.17, 16, 12), hide, 1.7));
+  root.add(part("Torso", capsule(0.2, 0.62, 10, 14), hide, 1.15));
+  root.add(part("Head", sphere(0.17, 16, 12), hide, 1.7));
   addDemonEyes(root, glow, 1.72, 0.14, 0.08, 0.028);
   addDemonHorns(root, horn, 1.88, 0.1, 0.22, 0.75);
   addBatWings(root, hide, dark, 1.25, 0.7, 0.55, 0.035);
@@ -1028,12 +1029,12 @@ function buildLegionnaire(root: THREE.Group): void {
     const band = part(`Plate${i}`, roundBox(0.5 - i * 0.04, 0.08, 0.36, 2), plate, 1.5 - i * 0.14);
     root.add(band);
   }
-  root.add(part("Core", new THREE.SphereGeometry(0.08, 10, 8), glow, 1.25));
-  root.add(part("Head", new THREE.SphereGeometry(0.2, 16, 12), hide, 1.85));
+  root.add(part("Core", sphere(0.08, 10, 8), glow, 1.25));
+  root.add(part("Head", sphere(0.2, 16, 12), hide, 1.85));
   addDemonEyes(root, glow, 1.87, 0.16, 0.09, 0.032);
   addDemonHorns(root, horn, 2.08, 0.12, 0.28, 0.4);
   // Crest helm spike
-  const crest = part("Crest", new THREE.ConeGeometry(0.04, 0.22, 6), horn, 2.12);
+  const crest = part("Crest", cone(0.04, 0.22, 6), horn, 2.12);
   crest.position.z = -0.04;
   root.add(crest);
   addDemonArms(root, hide, dark, claw, 1.45, 0.65, 0.08, 0.38);
@@ -1051,14 +1052,14 @@ function buildArchdemon(root: THREE.Group): void {
     root.add(rib);
   }
   root.add(part("DaemonHeart", new THREE.OctahedronGeometry(0.12, 0), glow, 1.45));
-  root.add(part("Head", new THREE.SphereGeometry(0.26, 18, 14), hide, 2.2));
+  root.add(part("Head", sphere(0.26, 18, 14), hide, 2.2));
   const brow = part("Brow", roundBox(0.28, 0.08, 0.14, 2), dark, 2.32);
   brow.position.z = 0.12;
   root.add(brow);
   addDemonEyes(root, glow, 2.22, 0.22, 0.12, 0.045);
   // Cranial spire complex
   addDemonHorns(root, horn, 2.48, 0.16, 0.42, 0.5, 2);
-  const spire = part("Spire", new THREE.ConeGeometry(0.06, 0.38, 7), horn, 2.65);
+  const spire = part("Spire", cone(0.06, 0.38, 7), horn, 2.65);
   spire.position.z = -0.06;
   root.add(spire);
   addBatWings(root, hide, dark, 1.7, 1.05, 0.85, 0.05);
@@ -1074,32 +1075,32 @@ function buildSpider(root: THREE.Group): void {
   shell.clearcoat = 0.7;
   const legMat = mat(0x1a120e, 0.2, 0.55);
   const fang = mat(0xc8b090, 0.2, 0.4);
-  root.add(part("Abdomen", new THREE.SphereGeometry(0.32, 20, 16), shell, 0.38));
-  const ceph = part("Ceph", new THREE.SphereGeometry(0.2, 18, 14), shell, 0.42);
+  root.add(part("Abdomen", sphere(0.32, 20, 16), shell, 0.38));
+  const ceph = part("Ceph", sphere(0.2, 18, 14), shell, 0.42);
   ceph.position.z = 0.28;
   root.add(ceph);
   for (let i = 0; i < 8; i++) {
     const side = i < 4 ? -1 : 1;
     const idx = i % 4;
     const a = (idx - 1.5) * 0.22;
-    const upper = part("LegUpper", new THREE.CapsuleGeometry(0.035, 0.28, 6, 10), legMat, 0.4);
+    const upper = part("LegUpper", capsule(0.035, 0.28, 6, 10), legMat, 0.4);
     upper.position.set(side * 0.18, 0, a);
     upper.rotation.z = side * 1.05;
     upper.rotation.x = a * 0.4;
     root.add(upper);
-    const lower = part("LegLower", new THREE.CapsuleGeometry(0.028, 0.32, 6, 10), legMat, 0.18);
+    const lower = part("LegLower", capsule(0.028, 0.32, 6, 10), legMat, 0.18);
     lower.position.set(side * 0.42, 0, a * 1.1);
     lower.rotation.z = side * 0.35;
     root.add(lower);
   }
   for (const side of [-1, 1]) {
-    const f = part("Fang", new THREE.ConeGeometry(0.035, 0.12, 8), fang, 0.35);
+    const f = part("Fang", cone(0.035, 0.12, 8), fang, 0.35);
     f.position.set(side * 0.06, 0, 0.42);
     f.rotation.x = Math.PI * 0.65;
     root.add(f);
   }
   for (let i = 0; i < 6; i++) {
-    const eye = part("Eye", new THREE.SphereGeometry(0.03, 8, 6), mat(0xff2222, 0.2, 0.3, 0xff0000, 0.5), 0.48);
+    const eye = part("Eye", sphere(0.03, 8, 6), mat(0xff2222, 0.2, 0.3, 0xff0000, 0.5), 0.48);
     eye.position.set(((i % 3) - 1) * 0.07, 0.06, 0.4 + Math.floor(i / 3) * 0.05);
     root.add(eye);
   }
@@ -1109,19 +1110,19 @@ function buildCultist(root: THREE.Group): void {
   const robe = mat(0x3a241c, 0.04, 0.82);
   const skin = mat(0xb89070, 0.05, 0.68);
   const metal = mat(0x8a7a5a, 0.55, 0.35);
-  root.add(part("Robe", new THREE.ConeGeometry(0.38, 1.2, 16), robe, 0.58));
+  root.add(part("Robe", cone(0.38, 1.2, 16), robe, 0.58));
   root.add(part("Shoulders", roundBox(0.55, 0.18, 0.28, 3), robe, 1.15));
-  root.add(part("Head", new THREE.SphereGeometry(0.19, 16, 14), skin, 1.35));
-  const hood = part("Hood", new THREE.ConeGeometry(0.24, 0.32, 12), robe, 1.55);
+  root.add(part("Head", sphere(0.19, 16, 14), skin, 1.35));
+  const hood = part("Hood", cone(0.24, 0.32, 12), robe, 1.55);
   hood.rotation.x = 0.25;
   root.add(hood);
   const mask = part("Mask", roundBox(0.2, 0.12, 0.08, 2), metal, 1.35);
   mask.position.z = 0.14;
   root.add(mask);
-  const staff = part("Staff", new THREE.CylinderGeometry(0.028, 0.04, 1.35, 10), mat(0x5a3a22, 0.1, 0.75), 0.75);
+  const staff = part("Staff", cylinder(0.028, 0.04, 1.35, 10), mat(0x5a3a22, 0.1, 0.75), 0.75);
   staff.position.x = 0.32;
   root.add(staff);
-  const orb = part("Orb", new THREE.SphereGeometry(0.08, 14, 12), mat(0x8866ff, 0.2, 0.3, 0x6644ff, 0.7), 1.45);
+  const orb = part("Orb", sphere(0.08, 14, 12), mat(0x8866ff, 0.2, 0.3, 0x6644ff, 0.7), 1.45);
   orb.position.set(0.32, 0, 0);
   root.add(orb);
 }
@@ -1130,12 +1131,12 @@ function buildSprig(root: THREE.Group): void {
   const wood = mat(0x4a5a32, 0.05, 0.88);
   const leaf = mat(0x6ecf5a, 0.04, 0.55, 0x3a8a2a, 0.2);
   const bark = mat(0x3a2a18, 0.08, 0.9);
-  root.add(part("Trunk", new THREE.CylinderGeometry(0.11, 0.2, 1.0, 12), wood, 0.55));
-  root.add(part("Knot", new THREE.SphereGeometry(0.14, 12, 10), bark, 0.85));
+  root.add(part("Trunk", cylinder(0.11, 0.2, 1.0, 12), wood, 0.55));
+  root.add(part("Knot", sphere(0.14, 12, 10), bark, 0.85));
   root.add(part("Crown", new THREE.IcosahedronGeometry(0.4, 1), leaf, 1.3));
   root.add(part("CrownB", new THREE.IcosahedronGeometry(0.28, 1), leaf, 1.5));
   for (const side of [-1, 1]) {
-    const arm = part("Branch", new THREE.CapsuleGeometry(0.05, 0.4, 8, 12), wood, 0.9);
+    const arm = part("Branch", capsule(0.05, 0.4, 8, 12), wood, 0.9);
     arm.position.x = side * 0.28;
     arm.rotation.z = side * 0.75;
     root.add(arm);
@@ -1168,7 +1169,7 @@ function addDragonWings(
   fold = 0.55,
 ): void {
   for (const side of [-1, 1]) {
-    const rootBone = part("WingRoot", new THREE.CapsuleGeometry(0.045, height * 0.4, 6, 8), horn, y);
+    const rootBone = part("WingRoot", capsule(0.045, height * 0.4, 6, 8), horn, y);
     rootBone.position.set(side * span * 0.28, 0, -0.08);
     rootBone.rotation.z = side * fold;
     root.add(rootBone);
@@ -1178,7 +1179,7 @@ function addDragonWings(
     membrane.rotation.y = side * -0.18;
     root.add(membrane);
     for (let i = 0; i < 3; i++) {
-      const spar = part("WingSpar", new THREE.CapsuleGeometry(0.025, height * 0.6, 4, 6), horn, y);
+      const spar = part("WingSpar", capsule(0.025, height * 0.6, 4, 6), horn, y);
       spar.position.set(side * (span * 0.32 + i * span * 0.14), height * 0.1, -0.1 - i * 0.02);
       spar.rotation.z = side * (fold * 0.85 + i * 0.12);
       root.add(spar);
@@ -1196,8 +1197,8 @@ function addDragonHead(
   size: number,
   spires = 1,
 ): void {
-  root.add(part("Head", new THREE.SphereGeometry(size, 18, 14), scale, y));
-  const snout = part("Snout", new THREE.CapsuleGeometry(size * 0.45, size * 0.7, 6, 10), scale, y - size * 0.15);
+  root.add(part("Head", sphere(size, 18, 14), scale, y));
+  const snout = part("Snout", capsule(size * 0.45, size * 0.7, 6, 10), scale, y - size * 0.15);
   snout.rotation.x = Math.PI / 2;
   snout.position.z = size * 0.85;
   root.add(snout);
@@ -1205,18 +1206,18 @@ function addDragonHead(
   jaw.position.z = size * 0.45;
   root.add(jaw);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeL" : "EyeR", new THREE.SphereGeometry(size * 0.18, 10, 8), core, y + size * 0.1);
+    const eye = part(side < 0 ? "EyeL" : "EyeR", sphere(size * 0.18, 10, 8), core, y + size * 0.1);
     eye.position.set(side * size * 0.45, 0.02, size * 0.7);
     root.add(eye);
     // Sensory horn / ear spines
-    const ear = part("EarSpine", new THREE.ConeGeometry(size * 0.12, size * 0.55, 6), horn, y + size * 0.35);
+    const ear = part("EarSpine", cone(size * 0.12, size * 0.55, 6), horn, y + size * 0.35);
     ear.position.set(side * size * 0.85, 0, -size * 0.1);
     ear.rotation.z = side * -0.7;
     root.add(ear);
   }
   for (let i = 0; i < spires; i++) {
     for (const side of [-1, 1]) {
-      const h = part("Horn", new THREE.ConeGeometry(size * 0.14, size * (0.7 + i * 0.25), 7), horn, y + size * (0.7 + i * 0.35));
+      const h = part("Horn", cone(size * 0.14, size * (0.7 + i * 0.25), 7), horn, y + size * (0.7 + i * 0.35));
       h.position.set(side * size * (0.35 + i * 0.08), 0, -size * (0.15 + i * 0.1));
       h.rotation.z = side * -(0.4 + i * 0.1);
       h.rotation.x = -0.25;
@@ -1224,7 +1225,7 @@ function addDragonHead(
     }
   }
   // Cranial spire
-  const spire = part("Spire", new THREE.ConeGeometry(size * 0.12, size * 0.9, 6), horn, y + size * 1.1);
+  const spire = part("Spire", cone(size * 0.12, size * 0.9, 6), horn, y + size * 1.1);
   spire.position.z = -size * 0.2;
   root.add(spire);
 }
@@ -1240,13 +1241,13 @@ function addCaudalFlukes(
   let z = -0.22;
   for (let i = 0; i < segs; i++) {
     const t = i / Math.max(1, segs - 1);
-    const seg = part(`Tail${i}`, new THREE.CapsuleGeometry(thick * (1 - t * 0.5), 0.16 - t * 0.02, 5, 8), scale, hipY - t * 0.06);
+    const seg = part(`Tail${i}`, capsule(thick * (1 - t * 0.5), 0.16 - t * 0.02, 5, 8), scale, hipY - t * 0.06);
     seg.position.set(0, 0, z);
     seg.rotation.x = 0.4 + t * 0.3;
     root.add(seg);
     if (i % 2 === 0) {
       for (const side of [-1, 1]) {
-        const fluke = part("Fluke", new THREE.ConeGeometry(thick * 0.35, thick * 1.1, 5), horn, hipY - t * 0.04);
+        const fluke = part("Fluke", cone(thick * 0.35, thick * 1.1, 5), horn, hipY - t * 0.04);
         fluke.position.set(side * thick * 0.9, 0, z);
         fluke.rotation.z = side * 1.2;
         root.add(fluke);
@@ -1254,7 +1255,7 @@ function addCaudalFlukes(
     }
     z -= 0.14 - t * 0.015;
   }
-  const tip = part("TailSpike", new THREE.ConeGeometry(thick * 0.7, thick * 2.2, 6), horn, hipY - 0.1);
+  const tip = part("TailSpike", cone(thick * 0.7, thick * 2.2, 6), horn, hipY - 0.1);
   tip.rotation.x = 1.05;
   tip.position.set(0, 0, z - 0.04);
   root.add(tip);
@@ -1263,9 +1264,9 @@ function addCaudalFlukes(
 /** Hatchling — compact bipedal true-dragon stub. */
 function buildWhelp(root: THREE.Group): void {
   const { scale, belly, horn, core, claw } = dragonMats(0xc05028);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.26, 0.42, 10, 14), scale, 0.85));
-  root.add(part("Belly", new THREE.SphereGeometry(0.18, 14, 10), belly, 0.72));
-  root.add(part("Core", new THREE.SphereGeometry(0.08, 10, 8), core, 0.82));
+  root.add(part("Torso", capsule(0.26, 0.42, 10, 14), scale, 0.85));
+  root.add(part("Belly", sphere(0.18, 14, 10), belly, 0.72));
+  root.add(part("Core", sphere(0.08, 10, 8), core, 0.82));
   addDragonHead(root, scale, belly, horn, core, 1.25, 0.2, 1);
   addDragonWings(root, scale, horn, 0.95, 0.55, 0.4, 0.7);
   addDemonArms(root, scale, horn, claw, 0.95, 0.4, 0.055, 0.28);
@@ -1276,8 +1277,8 @@ function buildWhelp(root: THREE.Group): void {
 /** Light-class Wyvern — lean biped, large segmented wings. */
 function buildWyvern(root: THREE.Group): void {
   const { scale, belly, horn, core, claw } = dragonMats(0x8a6a3a);
-  root.add(part("Torso", new THREE.CapsuleGeometry(0.22, 0.55, 10, 14), scale, 1.05));
-  root.add(part("Belly", new THREE.SphereGeometry(0.14, 12, 10), belly, 0.95));
+  root.add(part("Torso", capsule(0.22, 0.55, 10, 14), scale, 1.05));
+  root.add(part("Belly", sphere(0.14, 12, 10), belly, 0.95));
   addDragonHead(root, scale, belly, horn, core, 1.55, 0.18, 1);
   addDragonWings(root, scale, horn, 1.15, 0.85, 0.65, 0.5);
   // Wyverns: vestigial forelimbs / wing-hands only — short arms
@@ -1289,14 +1290,14 @@ function buildWyvern(root: THREE.Group): void {
 /** Medium-class Drake — quadrupedal, folded wings. */
 function buildDrake(root: THREE.Group): void {
   const { scale, belly, horn, core, claw } = dragonMats(0xa03820);
-  root.add(part("Chest", new THREE.CapsuleGeometry(0.32, 0.55, 10, 16), scale, 0.72));
-  const haunch = part("Haunch", new THREE.SphereGeometry(0.34, 16, 12), scale, 0.65);
+  root.add(part("Chest", capsule(0.32, 0.55, 10, 16), scale, 0.72));
+  const haunch = part("Haunch", sphere(0.34, 16, 12), scale, 0.65);
   haunch.position.z = -0.35;
   root.add(haunch);
-  root.add(part("Belly", new THREE.SphereGeometry(0.22, 14, 10), belly, 0.55));
-  root.add(part("Core", new THREE.SphereGeometry(0.1, 10, 8), core, 0.7));
+  root.add(part("Belly", sphere(0.22, 14, 10), belly, 0.55));
+  root.add(part("Core", sphere(0.1, 10, 8), core, 0.7));
   addDragonHead(root, scale, belly, horn, core, 1.05, 0.24, 1);
-  const neck = part("Neck", new THREE.CapsuleGeometry(0.12, 0.28, 6, 10), scale, 0.95);
+  const neck = part("Neck", capsule(0.12, 0.28, 6, 10), scale, 0.95);
   neck.position.z = 0.2;
   neck.rotation.x = -0.4;
   root.add(neck);
@@ -1307,7 +1308,7 @@ function buildDrake(root: THREE.Group): void {
       [0.22, 0.55],
       [-0.32, 0.5],
     ] as const) {
-      const thigh = part("Leg", new THREE.CapsuleGeometry(0.08, 0.28, 6, 10), scale, y);
+      const thigh = part("Leg", capsule(0.08, 0.28, 6, 10), scale, y);
       thigh.position.set(side * 0.22, 0, z);
       root.add(thigh);
       const foot = part("Foot", roundBox(0.14, 0.08, 0.22, 2), claw, 0.12);
@@ -1331,7 +1332,7 @@ function buildTrueDragon(root: THREE.Group): void {
   root.add(part("Belly", roundBox(0.42, 0.55, 0.12, 3), belly, 1.35));
   root.add(part("DragonHeart", new THREE.OctahedronGeometry(0.12, 0), core, 1.45));
   // Elongated thoracic / neck
-  const neck = part("Neck", new THREE.CapsuleGeometry(0.14, 0.35, 8, 10), scale, 2.0);
+  const neck = part("Neck", capsule(0.14, 0.35, 8, 10), scale, 2.0);
   root.add(neck);
   addDragonHead(root, scale, belly, horn, core, 2.35, 0.26, 2);
   addDragonWings(root, scale, horn, 1.7, 1.1, 0.85, 0.45);
@@ -1352,13 +1353,13 @@ function buildAncientWyrm(root: THREE.Group): void {
   }
   root.add(part("Belly", roundBox(0.55, 0.7, 0.14, 3), belly, 1.5));
   root.add(part("ElementalCore", new THREE.OctahedronGeometry(0.16, 0), core, 1.6));
-  const neck = part("Neck", new THREE.CapsuleGeometry(0.2, 0.45, 8, 12), scale, 2.4);
+  const neck = part("Neck", capsule(0.2, 0.45, 8, 12), scale, 2.4);
   root.add(neck);
   addDragonHead(root, scale, belly, horn, core, 2.85, 0.34, 3);
   // Crown ring of spines
   for (let i = 0; i < 5; i++) {
     const a = ((i - 2) / 2) * 0.35;
-    const crown = part("CrownSpine", new THREE.ConeGeometry(0.05, 0.35 + Math.abs(i - 2) * 0.05, 6), horn, 3.25);
+    const crown = part("CrownSpine", cone(0.05, 0.35 + Math.abs(i - 2) * 0.05, 6), horn, 3.25);
     crown.position.set(a * 0.4, 0, -0.15);
     crown.rotation.z = a;
     root.add(crown);
@@ -1374,21 +1375,21 @@ function buildHillock(root: THREE.Group): void {
   const cloth = mat(0x4a3a2a, 0.04, 0.88);
   const stone = mat(0x7a7468, 0.25, 0.55);
   root.add(part("Torso", roundBox(0.9, 1.0, 0.55, 4), skin, 1.4));
-  root.add(part("Head", new THREE.SphereGeometry(0.34, 18, 14), skin, 2.15));
+  root.add(part("Head", sphere(0.34, 18, 14), skin, 2.15));
   root.add(part("Brow", roundBox(0.4, 0.08, 0.12, 2), stone, 2.28));
-  root.add(part("Skirt", new THREE.CylinderGeometry(0.48, 0.55, 0.55, 14), cloth, 0.55));
+  root.add(part("Skirt", cylinder(0.48, 0.55, 0.55, 14), cloth, 0.55));
   for (const side of [-1, 1]) {
-    const arm = part("Arm", new THREE.CapsuleGeometry(0.14, 0.6, 10, 14), skin, 1.4);
+    const arm = part("Arm", capsule(0.14, 0.6, 10, 14), skin, 1.4);
     arm.position.x = side * 0.58;
     root.add(arm);
-    const fist = part("Fist", new THREE.SphereGeometry(0.14, 12, 10), skin, 1.0);
+    const fist = part("Fist", sphere(0.14, 12, 10), skin, 1.0);
     fist.position.x = side * 0.62;
     root.add(fist);
-    const leg = part("Leg", new THREE.CapsuleGeometry(0.15, 0.5, 10, 14), skin, 0.35);
+    const leg = part("Leg", capsule(0.15, 0.5, 10, 14), skin, 0.35);
     leg.position.x = side * 0.24;
     root.add(leg);
   }
-  const club = part("Club", new THREE.CylinderGeometry(0.08, 0.14, 0.9, 10), stone, 1.1);
+  const club = part("Club", cylinder(0.08, 0.14, 0.9, 10), stone, 1.1);
   club.position.set(0.7, 0, 0.1);
   club.rotation.z = 0.4;
   root.add(club);
@@ -1397,12 +1398,12 @@ function buildHillock(root: THREE.Group): void {
 function buildLurker(root: THREE.Group): void {
   const flesh = mat(0x6a5a78, 0.12, 0.55, 0x3a1848, 0.28);
   flesh.sheen = 0.5;
-  root.add(part("Body", new THREE.SphereGeometry(0.5, 24, 18), flesh, 0.58));
-  root.add(part("Dome", new THREE.SphereGeometry(0.35, 18, 14), flesh, 0.95));
+  root.add(part("Body", sphere(0.5, 24, 18), flesh, 0.58));
+  root.add(part("Dome", sphere(0.35, 18, 14), flesh, 0.95));
   for (let i = 0; i < 7; i++) {
     const eye = part(
       "Eye",
-      new THREE.SphereGeometry(0.07, 12, 10),
+      sphere(0.07, 12, 10),
       mat(0xe8d060, 0.25, 0.3, 0xffee88, 0.7),
       0.75,
     );
@@ -1411,7 +1412,7 @@ function buildLurker(root: THREE.Group): void {
     root.add(eye);
   }
   for (let i = 0; i < 6; i++) {
-    const tent = part("Tentacle", new THREE.CapsuleGeometry(0.055, 0.55, 8, 12), flesh, 0.22);
+    const tent = part("Tentacle", capsule(0.055, 0.55, 8, 12), flesh, 0.22);
     const a = (i / 6) * Math.PI * 2;
     tent.position.set(Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25 + 0.15);
     tent.rotation.x = 0.9;
@@ -1424,12 +1425,12 @@ function buildLumen(root: THREE.Group): void {
   const light = mat(0xe7c39a, 0.35, 0.32, 0xffe0b0, 0.75);
   light.clearcoat = 0.8;
   const crack = mat(0x6a5040, 0.25, 0.5);
-  root.add(part("Body", new THREE.CapsuleGeometry(0.3, 0.85, 12, 18), light, 0.95));
-  root.add(part("Halo", new THREE.TorusGeometry(0.4, 0.045, 12, 32), light, 1.85));
-  root.add(part("HaloInner", new THREE.TorusGeometry(0.28, 0.025, 10, 24), light, 1.85));
+  root.add(part("Body", capsule(0.3, 0.85, 12, 18), light, 0.95));
+  root.add(part("Halo", torus(0.4, 0.045, 12, 32), light, 1.85));
+  root.add(part("HaloInner", torus(0.28, 0.025, 10, 24), light, 1.85));
   root.add(part("Crack", roundBox(0.1, 0.55, 0.08, 2), crack, 1.0));
   for (const side of [-1, 1]) {
-    const arm = part("Arm", new THREE.CapsuleGeometry(0.07, 0.45, 8, 12), light, 1.05);
+    const arm = part("Arm", capsule(0.07, 0.45, 8, 12), light, 1.05);
     arm.position.x = side * 0.38;
     root.add(arm);
   }
@@ -1439,9 +1440,9 @@ function buildFlicker(root: THREE.Group): void {
   const glow = mat(0xa8d4e8, 0.2, 0.35, 0x60b0e0, 0.65);
   glow.transparent = true;
   glow.opacity = 0.9;
-  root.add(part("Body", new THREE.SphereGeometry(0.22, 20, 16), glow, 0.58));
+  root.add(part("Body", sphere(0.22, 20, 16), glow, 0.58));
   for (let i = 0; i < 5; i++) {
-    const orb = part("Orb", new THREE.SphereGeometry(0.07, 14, 12), glow, 0.7 + (i % 3) * 0.1);
+    const orb = part("Orb", sphere(0.07, 14, 12), glow, 0.7 + (i % 3) * 0.1);
     const a = (i / 5) * Math.PI * 2;
     orb.position.set(Math.cos(a) * 0.32, Math.sin(a * 2) * 0.08, Math.sin(a) * 0.32);
     root.add(orb);
@@ -1450,5 +1451,5 @@ function buildFlicker(root: THREE.Group): void {
   trail.transparent = true;
   trail.opacity = 0.4;
   trail.depthWrite = false;
-  root.add(part("Trail", new THREE.SphereGeometry(0.35, 14, 10), trail, 0.58));
+  root.add(part("Trail", sphere(0.35, 14, 10), trail, 0.58));
 }

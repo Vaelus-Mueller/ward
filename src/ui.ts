@@ -12,6 +12,7 @@ import { monsterOf } from "./game/monsters";
 import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
 import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type Gender, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
+import { isConstrainedGpu } from "./render/quality";
 import { RacePreview } from "./render/racePreview";
 import { raceDollSvg } from "./ui/dollSilhouette";
 
@@ -126,8 +127,7 @@ export class Ui {
   }
 
   hideTitle(): void {
-    this.stopSlotPreviews();
-    this.racePreview?.stop();
+    this.disposePreviews();
     this.hide("title");
     this.hide("create");
   }
@@ -136,7 +136,11 @@ export class Ui {
     this.createSlot = slot;
     this.createRace = "human";
     this.createGender = "male";
-    this.stopSlotPreviews();
+    // Free slot WebGL contexts before allocating the create-screen preview.
+    for (let i = 0; i < this.slotPreviews.length; i++) {
+      this.slotPreviews[i]?.dispose();
+      this.slotPreviews[i] = null;
+    }
     this.hide("title");
     this.show("create");
     const input = must("create-name") as HTMLInputElement;
@@ -177,7 +181,7 @@ export class Ui {
   }
 
   hideCreate(): void {
-    this.racePreview?.stop();
+    this.disposeRacePreview();
     this.hide("create");
     this.showTitle();
   }
@@ -205,6 +209,8 @@ export class Ui {
   }
 
   private ensureSlotPreviews(): void {
+    // Extra WebGL contexts + 8k floor loads OOM Android WebView — skip slot portraits there.
+    if (isConstrainedGpu()) return;
     for (let i = 0; i < 3; i++) {
       if (this.slotPreviews[i]) continue;
       this.slotPreviews[i] = new RacePreview(must(`slot-view-${i}`) as HTMLCanvasElement);
@@ -213,6 +219,19 @@ export class Ui {
 
   private stopSlotPreviews(): void {
     for (const preview of this.slotPreviews) preview?.stop();
+  }
+
+  private disposeRacePreview(): void {
+    this.racePreview?.dispose();
+    this.racePreview = null;
+  }
+
+  private disposePreviews(): void {
+    this.disposeRacePreview();
+    for (let i = 0; i < this.slotPreviews.length; i++) {
+      this.slotPreviews[i]?.dispose();
+      this.slotPreviews[i] = null;
+    }
   }
 
   private stepRace(delta: number): void {

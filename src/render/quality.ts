@@ -1,9 +1,16 @@
 /**
  * Graphics quality ladder. Ultra is the default target when install size
  * and GPU budget are uncapped; AdaptiveQuality may still step down if frames stall.
+ *
+ * Capacitor / phone GPUs cannot hold the 8k PBR set — keep them on a medium
+ * texture tier and a lower starting quality so WebGL does not OOM at boot.
  */
 
+import { Capacitor } from "@capacitor/core";
+
 export type QualityLevel = "ultra" | "high" | "balanced" | "low";
+/** full = 8k preferred; medium = 4k only; low = 4k albedo/rough only. */
+export type TextureTier = "full" | "medium" | "low";
 
 export interface QualitySettings {
   level: QualityLevel;
@@ -31,19 +38,36 @@ const PRESETS: Record<QualityLevel, Omit<QualitySettings, "level">> = {
 
 const ORDER: QualityLevel[] = ["ultra", "high", "balanced", "low"];
 
-function isMobileShell(): boolean {
+/** True on Capacitor shells and phone browsers — tight GPU / VRAM budget. */
+export function isConstrainedGpu(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints ?? 0) > 1;
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+  } catch {
+    // Capacitor may be unavailable in some test hosts.
+  }
+  return /Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+export function textureTier(): TextureTier {
+  // 8k is stripped from the APK; phones stay on 4k PBR (normals/AO included).
+  if (!isConstrainedGpu()) return "full";
+  return "medium";
 }
 
 function startLevel(): QualityLevel {
-  // Size uncapped — prefer ultra on capable devices, high on phones.
-  if (!isMobileShell()) return "ultra";
+  if (isConstrainedGpu()) {
+    const cores = navigator.hardwareConcurrency || 4;
+    return cores >= 8 ? "balanced" : "low";
+  }
+  if (typeof navigator === "undefined") return "ultra";
+  const mobile = /Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints ?? 0) > 1;
+  if (!mobile) return "ultra";
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const cores = navigator.hardwareConcurrency || 4;
-  if (dpr >= 2.5 && cores >= 8) return "ultra";
-  if (dpr >= 2 || cores >= 6) return "high";
-  return "balanced";
+  if (dpr >= 2.5 && cores >= 8) return "high";
+  if (dpr >= 2 || cores >= 6) return "balanced";
+  return "low";
 }
 
 function stepDown(level: QualityLevel): QualityLevel {

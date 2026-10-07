@@ -124,6 +124,22 @@ export class RacePreview {
     this.draw();
   }
 
+  /** Free the WebGL context — call when leaving title/create so in-game has the GPU. */
+  dispose(): void {
+    this.stop();
+    this.teardownHero();
+    this.race = null;
+    this.gender = null;
+    this.equippedKey = "";
+    this.equipment = emptyEquipment();
+    try {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+    } catch {
+      // Already lost.
+    }
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;

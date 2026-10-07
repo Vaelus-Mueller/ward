@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { raceHasGender } from "../game/races";
 import type { Gender, RaceId } from "../game/types";
+import { capsule, cone, cylinder, roundSegs, sphere, torus } from "./meshBudget";
 
 export const HERO_HEIGHT: Record<RaceId, number> = {
   human: 1.8,
@@ -295,12 +296,12 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
 
   if (race === "insectoid") {
     for (let i = 0; i < 2; i++) {
-      const ring = part(`NeckSeg${i}`, new THREE.CylinderGeometry(0.045 + i * 0.008, 0.055 + i * 0.006, 0.055, 8), i === 0 ? accent : skin);
+      const ring = part(`NeckSeg${i}`, cylinder(0.045 + i * 0.008, 0.055 + i * 0.006, 0.055, 8), i === 0 ? accent : skin);
       ring.position.y = look.torso.h * 0.5 + 0.04 + i * 0.05;
       chest.add(ring);
     }
   } else if (race === "minotaur") {
-    const neck = part("Neck", new THREE.CylinderGeometry(0.1, 0.14, 0.16, 10), skin);
+    const neck = part("Neck", cylinder(0.1, 0.14, 0.16, 10), skin);
     neck.position.y = look.torso.h * 0.5 + 0.08;
     chest.add(neck);
   } else if (race === "golem") {
@@ -310,21 +311,21 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
     chest.add(collar);
   } else if (race === "elf") {
     // Cervical elongation — longer, thinner neck.
-    const neck = part("Neck", new THREE.CylinderGeometry(0.038, 0.048, 0.16, 8), skin);
+    const neck = part("Neck", cylinder(0.038, 0.048, 0.16, 8), skin);
     neck.position.y = look.torso.h * 0.5 + 0.1;
     chest.add(neck);
   } else if (race === "undead") {
     // Cervical decay — thin, patchy vertebrae column.
-    const neck = part("Neck", new THREE.CylinderGeometry(0.035, 0.045, 0.14, 6), accent);
+    const neck = part("Neck", cylinder(0.035, 0.045, 0.14, 6), accent);
     neck.position.y = look.torso.h * 0.5 + 0.08;
     chest.add(neck);
   } else if (race === "lizard") {
     // Cervical elongation array — longer reptilian neck.
-    const neck = part("Neck", new THREE.CylinderGeometry(0.042, 0.055, 0.18, 8), skin);
+    const neck = part("Neck", cylinder(0.042, 0.055, 0.18, 8), skin);
     neck.position.y = look.torso.h * 0.5 + 0.1;
     chest.add(neck);
   } else {
-    const neck = part("Neck", new THREE.CylinderGeometry(0.05, 0.06, race === "human" ? 0.12 : 0.1, 8), skin);
+    const neck = part("Neck", cylinder(0.05, 0.06, race === "human" ? 0.12 : 0.1, 8), skin);
     neck.position.y = look.torso.h * 0.5 + (race === "human" ? 0.08 : 0.06);
     chest.add(neck);
   }
@@ -361,7 +362,7 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
   } else if (race === "lizard") {
     buildLizardHead(head, look, skin, accent, sex);
   } else {
-    const skull = part("Head", new THREE.SphereGeometry(look.head.r, 24, 18), skin);
+    const skull = part("Head", sphere(look.head.r, 24, 18), skin);
     head.add(skull);
     addFace(head, race, look, skin, accent);
   }
@@ -425,7 +426,7 @@ function addFace(head: THREE.Group, race: RaceId, look: RaceLook, skin: THREE.Ma
   const eyeY = look.head.r * 0.15;
   const eyeZ = look.head.r * 0.85;
   const eyeX = look.head.r * 0.35;
-  const eyeGeo = race === "insectoid" ? new THREE.SphereGeometry(0.045, 8, 6) : new THREE.SphereGeometry(0.028, 8, 6);
+  const eyeGeo = race === "insectoid" ? sphere(0.045, 8, 6) : sphere(0.028, 8, 6);
   for (const side of [-1, 1]) {
     const eye = part(side < 0 ? "EyeLeft" : "EyeRight", eyeGeo, eyeMat);
     eye.position.set(side * eyeX, eyeY, eyeZ);
@@ -477,7 +478,7 @@ function buildInsectoidThorax(
   }
   // Modified thoracic mounts where the secondary arms attach.
   for (const side of [-1, 1]) {
-    const mount = part("ThoraxMount", new THREE.SphereGeometry(0.055, 10, 8), accent);
+    const mount = part("ThoraxMount", sphere(0.055, 10, 8), accent);
     mount.position.set(side * look.torso.w * 0.62, -0.12, 0.06);
     chest.add(mount);
     const ridge = part("ThoraxRidge", box(0.04, 0.12, 0.08), accent);
@@ -496,7 +497,7 @@ function buildInsectoidThorax(
   for (let i = 0; i < 3; i++) {
     const seg = part(
       `Gaster${i}`,
-      new THREE.SphereGeometry(0.14 - i * 0.018, 12, 10),
+      sphere(0.14 - i * 0.018, 12, 10),
       i === 1 ? accent : skin,
     );
     seg.scale.set(1.15 - i * 0.08, 0.78, 1.25 - i * 0.1);
@@ -508,7 +509,7 @@ function buildInsectoidThorax(
 /** Compound eyes, mandibles, and multi-segment antennae. */
 function buildInsectoidHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 20, 16), skin);
+  const skull = part("Head", sphere(r, 20, 16), skin);
   skull.scale.set(1.05, 0.95, 1.2);
   head.add(skull);
   const brow = part("BrowPlate", box(r * 1.6, r * 0.35, r * 0.7), accent);
@@ -518,7 +519,7 @@ function buildInsectoidHead(head: THREE.Group, look: RaceLook, skin: THREE.Mater
   const eyeMat = mat(0xa8e050, 0.08, 0.35, 0x6a9a28, 0.45);
   const facetMat = mat(0x3a5020, 0.15, 0.4, 0x243818, 0.15);
   for (const side of [-1, 1]) {
-    const socket = part(side < 0 ? "EyeSocketL" : "EyeSocketR", new THREE.SphereGeometry(0.06, 10, 8), facetMat);
+    const socket = part(side < 0 ? "EyeSocketL" : "EyeSocketR", sphere(0.06, 10, 8), facetMat);
     socket.position.set(side * r * 0.48, r * 0.12, r * 0.78);
     socket.scale.set(1.15, 1.05, 0.85);
     head.add(socket);
@@ -529,11 +530,11 @@ function buildInsectoidHead(head: THREE.Group, look: RaceLook, skin: THREE.Mater
   }
 
   for (const side of [-1, 1]) {
-    const jaw = part(side < 0 ? "MandibleL" : "MandibleR", new THREE.ConeGeometry(0.035, 0.14, 6), accent);
+    const jaw = part(side < 0 ? "MandibleL" : "MandibleR", cone(0.035, 0.14, 6), accent);
     jaw.rotation.set(1.15, 0, side * 0.55);
     jaw.position.set(side * r * 0.28, -r * 0.45, r * 0.7);
     head.add(jaw);
-    const tip = part("MandibleTip", new THREE.ConeGeometry(0.018, 0.07, 5), skin);
+    const tip = part("MandibleTip", cone(0.018, 0.07, 5), skin);
     tip.rotation.copy(jaw.rotation);
     tip.position.set(side * r * 0.38, -r * 0.62, r * 0.88);
     head.add(tip);
@@ -547,14 +548,14 @@ function buildInsectoidHead(head: THREE.Group, look: RaceLook, skin: THREE.Mater
     let y = 0;
     for (let i = 0; i < 3; i++) {
       const segLen = 0.1 - i * 0.012;
-      const seg = part(`AntennaSeg${i}`, new THREE.CylinderGeometry(0.014 - i * 0.002, 0.018 - i * 0.002, segLen, 6), i === 1 ? accent : skin);
+      const seg = part(`AntennaSeg${i}`, cylinder(0.014 - i * 0.002, 0.018 - i * 0.002, segLen, 6), i === 1 ? accent : skin);
       seg.rotation.z = side * (0.28 + i * 0.12);
       seg.rotation.x = -0.15 * i;
       seg.position.set(side * i * 0.02, y + segLen * 0.5, i * 0.01);
       base.add(seg);
       y += segLen * 0.85;
     }
-    const tip = part("AntennaTip", new THREE.SphereGeometry(0.028, 8, 6), accent);
+    const tip = part("AntennaTip", sphere(0.028, 8, 6), accent);
     tip.position.set(side * 0.08, y + 0.04, 0.04);
     base.add(tip);
   }
@@ -578,32 +579,32 @@ function addInsectoidArm(
   group.position.set(x, 0.16 + yOffset, zOffset);
   parent.add(group);
 
-  const shoulder = part(`${name}Shoulder`, new THREE.SphereGeometry(thick * 1.55, 10, 8), accent);
+  const shoulder = part(`${name}Shoulder`, sphere(thick * 1.55, 10, 8), accent);
   shoulder.position.y = 0.02;
   group.add(shoulder);
 
-  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.42), 6, 10), skin);
+  const upper = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.42), 6, 10), skin);
   upper.position.y = -length * 0.28;
   group.add(upper);
   const upperPlate = part(`${name}Plate`, box(thick * 2.2, length * 0.28, thick * 1.4), accent);
   upperPlate.position.set(0, -length * 0.24, thick * 0.6);
   group.add(upperPlate);
 
-  const elbow = part(`${name}Elbow`, new THREE.SphereGeometry(thick * 1.25, 10, 8), accent);
+  const elbow = part(`${name}Elbow`, sphere(thick * 1.25, 10, 8), accent);
   elbow.position.y = -length * 0.52;
   group.add(elbow);
 
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.88, Math.max(0.08, length * 0.36), 6, 10), skin);
+  const lower = part(`${name}Lower`, capsule(thick * 0.88, Math.max(0.08, length * 0.36), 6, 10), skin);
   lower.position.y = -length * 0.74;
   group.add(lower);
 
   const left = name.startsWith("ArmLeft");
   const handY = -length * 0.96;
-  const palm = part(left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`, new THREE.SphereGeometry(thick * 1.2, 10, 8), skin);
+  const palm = part(left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`, sphere(thick * 1.2, 10, 8), skin);
   palm.position.y = handY;
   group.add(palm);
   for (let i = 0; i < 3; i++) {
-    const claw = part("Claw", new THREE.ConeGeometry(thick * 0.35, thick * 1.8, 5), accent);
+    const claw = part("Claw", cone(thick * 0.35, thick * 1.8, 5), accent);
     claw.rotation.x = Math.PI;
     claw.position.set((i - 1) * thick * 1.1, handY - thick * 1.4, thick * (i === 1 ? 0.6 : 0.15));
     group.add(claw);
@@ -630,22 +631,22 @@ function addInsectoidLeg(
   group.position.set(x, 0, 0);
   parent.add(group);
 
-  const hip = part(`${name}Hip`, new THREE.SphereGeometry(thick * 1.5, 10, 8), accent);
+  const hip = part(`${name}Hip`, sphere(thick * 1.5, 10, 8), accent);
   group.add(hip);
 
-  const thigh = part(`${name}Upper`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.38), 6, 10), skin);
+  const thigh = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.38), 6, 10), skin);
   thigh.position.set(0, -length * 0.28, 0.02);
   group.add(thigh);
 
-  const knee = part(`${name}Knee`, new THREE.SphereGeometry(thick * 1.3, 10, 8), accent);
+  const knee = part(`${name}Knee`, sphere(thick * 1.3, 10, 8), accent);
   knee.position.set(0, -length * 0.5, 0.06);
   group.add(knee);
 
-  const shin = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.32), 6, 10), skin);
+  const shin = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.32), 6, 10), skin);
   shin.position.set(0, -length * 0.72, 0.1);
   group.add(shin);
 
-  const ankle = part(`${name}Ankle`, new THREE.SphereGeometry(thick * 1.05, 8, 6), accent);
+  const ankle = part(`${name}Ankle`, sphere(thick * 1.05, 8, 6), accent);
   ankle.position.set(0, -length * 0.9, 0.16);
   group.add(ankle);
 
@@ -655,7 +656,7 @@ function addInsectoidLeg(
   group.add(metatarsal);
 
   for (let i = 0; i < 3; i++) {
-    const toe = part("ToeClaw", new THREE.ConeGeometry(0.02, 0.09, 5), accent);
+    const toe = part("ToeClaw", cone(0.02, 0.09, 5), accent);
     toe.rotation.x = Math.PI / 2;
     toe.position.set((i - 1) * foot.w * 0.32, -length - foot.h * 0.05, foot.d * 0.72);
     group.add(toe);
@@ -675,7 +676,7 @@ function buildMinotaurThorax(
   pec.position.set(0, look.torso.h * 0.12, 0.04);
   chest.add(pec);
   for (const side of [-1, 1]) {
-    const deltoid = part("Deltoid", new THREE.SphereGeometry(0.12, 10, 8), skin);
+    const deltoid = part("Deltoid", sphere(0.12, 10, 8), skin);
     deltoid.scale.set(1.15, 0.9, 1.05);
     deltoid.position.set(side * look.torso.w * 0.55, look.torso.h * 0.28, 0.02);
     chest.add(deltoid);
@@ -694,20 +695,20 @@ function buildMinotaurThorax(
 /** Bull head with reinforced upward-curving horns and broad muzzle. */
 function buildMinotaurHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 18, 14), skin);
+  const skull = part("Head", sphere(r, 18, 14), skin);
   skull.scale.set(1.15, 1.05, 1.2);
   head.add(skull);
-  const muzzle = part("Muzzle", new THREE.CapsuleGeometry(0.09, 0.16, 5, 10), skin);
+  const muzzle = part("Muzzle", capsule(0.09, 0.16, 5, 10), skin);
   muzzle.rotation.x = Math.PI / 2;
   muzzle.position.set(0, -r * 0.25, r * 0.95);
   head.add(muzzle);
-  const nose = part("NoseRing", new THREE.TorusGeometry(0.04, 0.01, 6, 12), accent);
+  const nose = part("NoseRing", torus(0.04, 0.01, 6, 12), accent);
   nose.position.set(0, -r * 0.35, r * 1.25);
   nose.rotation.x = Math.PI / 2;
   head.add(nose);
   const eyeMat = mat(0x1a120c, 0.05, 0.55);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.032, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.032, 8, 6), eyeMat);
     eye.position.set(side * r * 0.42, r * 0.15, r * 0.85);
     head.add(eye);
     const brow = part("Brow", box(0.1, 0.04, 0.06), skin);
@@ -716,26 +717,26 @@ function buildMinotaurHead(head: THREE.Group, look: RaceLook, skin: THREE.Materi
     head.add(brow);
   }
   for (const side of [-1, 1]) {
-    const base = part(side < 0 ? "HornLeft" : "HornRight", new THREE.CylinderGeometry(0.045, 0.06, 0.14, 8), accent);
+    const base = part(side < 0 ? "HornLeft" : "HornRight", cylinder(0.045, 0.06, 0.14, 8), accent);
     base.rotation.z = side * -0.55;
     base.rotation.x = -0.35;
     base.position.set(side * r * 0.7, r * 0.55, -0.02);
     head.add(base);
-    const mid = part("HornMid", new THREE.CylinderGeometry(0.028, 0.042, 0.18, 7), accent);
+    const mid = part("HornMid", cylinder(0.028, 0.042, 0.18, 7), accent);
     mid.rotation.z = side * -0.95;
     mid.rotation.x = -0.15;
     mid.position.set(side * r * 0.95, r * 0.85, -0.04);
     head.add(mid);
-    const tip = part("HornTip", new THREE.ConeGeometry(0.028, 0.16, 7), accent);
+    const tip = part("HornTip", cone(0.028, 0.16, 7), accent);
     tip.rotation.z = side * -1.15;
     tip.rotation.x = 0.1;
     tip.position.set(side * r * 1.12, r * 1.12, -0.02);
     head.add(tip);
   }
-  const earL = part("EarLeft", new THREE.ConeGeometry(0.05, 0.1, 6), skin);
+  const earL = part("EarLeft", cone(0.05, 0.1, 6), skin);
   earL.rotation.set(0.4, 0, 1.1);
   earL.position.set(-r * 0.95, r * 0.15, 0);
-  const earR = part("EarRight", new THREE.ConeGeometry(0.05, 0.1, 6), skin);
+  const earR = part("EarRight", cone(0.05, 0.1, 6), skin);
   earR.rotation.set(0.4, 0, -1.1);
   earR.position.set(r * 0.95, r * 0.15, 0);
   head.add(earL, earR);
@@ -755,25 +756,25 @@ function addMinotaurArm(
   group.position.set(x, 0.22, 0.02);
   parent.add(group);
 
-  const shoulder = part(`${name}Shoulder`, new THREE.SphereGeometry(thick * 1.7, 10, 8), skin);
+  const shoulder = part(`${name}Shoulder`, sphere(thick * 1.7, 10, 8), skin);
   group.add(shoulder);
-  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick * 1.15, Math.max(0.08, length * 0.4), 6, 10), skin);
+  const upper = part(`${name}Upper`, capsule(thick * 1.15, Math.max(0.08, length * 0.4), 6, 10), skin);
   upper.position.y = -length * 0.28;
   group.add(upper);
-  const elbow = part(`${name}Elbow`, new THREE.SphereGeometry(thick * 1.2, 8, 6), accent);
+  const elbow = part(`${name}Elbow`, sphere(thick * 1.2, 8, 6), accent);
   elbow.position.y = -length * 0.52;
   group.add(elbow);
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.34), 6, 10), skin);
+  const lower = part(`${name}Lower`, capsule(thick, Math.max(0.08, length * 0.34), 6, 10), skin);
   lower.position.y = -length * 0.74;
   group.add(lower);
 
   const left = name.startsWith("ArmLeft");
   const handY = -length * 0.96;
-  const palm = part(left ? "hand.l" : "hand.r", new THREE.SphereGeometry(thick * 1.25, 10, 8), skin);
+  const palm = part(left ? "hand.l" : "hand.r", sphere(thick * 1.25, 10, 8), skin);
   palm.position.y = handY;
   group.add(palm);
   for (let i = 0; i < 4; i++) {
-    const finger = part("Finger", new THREE.CapsuleGeometry(thick * 0.28, thick * 0.7, 3, 6), skin);
+    const finger = part("Finger", capsule(thick * 0.28, thick * 0.7, 3, 6), skin);
     finger.position.set((i - 1.5) * thick * 0.7, handY - thick * 1.35, thick * 0.2);
     group.add(finger);
   }
@@ -799,19 +800,19 @@ function addMinotaurLeg(
   group.position.set(x, 0, 0);
   parent.add(group);
 
-  const thigh = part(`${name}Upper`, new THREE.CapsuleGeometry(thick * 1.2, Math.max(0.08, length * 0.36), 6, 10), skin);
+  const thigh = part(`${name}Upper`, capsule(thick * 1.2, Math.max(0.08, length * 0.36), 6, 10), skin);
   thigh.position.set(0, -length * 0.26, 0.02);
   group.add(thigh);
-  const knee = part(`${name}Knee`, new THREE.SphereGeometry(thick * 1.25, 8, 6), accent);
+  const knee = part(`${name}Knee`, sphere(thick * 1.25, 8, 6), accent);
   knee.position.set(0, -length * 0.48, 0.05);
   group.add(knee);
-  const shin = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.95, Math.max(0.08, length * 0.28), 6, 10), skin);
+  const shin = part(`${name}Lower`, capsule(thick * 0.95, Math.max(0.08, length * 0.28), 6, 10), skin);
   shin.position.set(0, -length * 0.68, 0.1);
   group.add(shin);
-  const hock = part(`${name}Hock`, new THREE.SphereGeometry(thick * 1.05, 8, 6), accent);
+  const hock = part(`${name}Hock`, sphere(thick * 1.05, 8, 6), accent);
   hock.position.set(0, -length * 0.86, 0.14);
   group.add(hock);
-  const cannon = part(`${name}Cannon`, new THREE.CapsuleGeometry(thick * 0.7, Math.max(0.06, length * 0.12), 5, 8), skin);
+  const cannon = part(`${name}Cannon`, capsule(thick * 0.7, Math.max(0.06, length * 0.12), 5, 8), skin);
   cannon.position.set(0, -length * 0.96, 0.2);
   group.add(cannon);
 
@@ -854,7 +855,7 @@ function buildGolemThorax(
   const core = part("Core", new THREE.OctahedronGeometry(0.1, 0), coreGlow);
   core.position.set(0, 0.02, look.torso.d * 0.55);
   chest.add(core);
-  const rune = part("RuneRing", new THREE.TorusGeometry(0.14, 0.018, 6, 16), coreGlow);
+  const rune = part("RuneRing", torus(0.14, 0.018, 6, 16), coreGlow);
   rune.position.copy(core.position);
   rune.position.z += 0.02;
   chest.add(rune);
@@ -966,24 +967,24 @@ function addHumanoidArm(
   group.name = name;
   group.position.set(x, lean ? 0.2 : 0.18, 0);
   parent.add(group);
-  const shoulder = part(`${name}Shoulder`, new THREE.SphereGeometry(thick * (lean ? 1.25 : 1.45), 10, 8), skin);
+  const shoulder = part(`${name}Shoulder`, sphere(thick * (lean ? 1.25 : 1.45), 10, 8), skin);
   group.add(shoulder);
-  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.42), 6, 10), skin);
+  const upper = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.42), 6, 10), skin);
   upper.position.y = -length * 0.28;
   group.add(upper);
-  const elbow = part(`${name}Elbow`, new THREE.SphereGeometry(thick * 1.1, 8, 6), accent);
+  const elbow = part(`${name}Elbow`, sphere(thick * 1.1, 8, 6), accent);
   elbow.position.y = -length * 0.52;
   group.add(elbow);
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.34), 6, 10), skin);
+  const lower = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.34), 6, 10), skin);
   lower.position.y = -length * 0.74;
   group.add(lower);
   const left = name.startsWith("ArmLeft");
   const handY = -length * 0.96;
-  const palm = part(left ? "hand.l" : "hand.r", new THREE.SphereGeometry(thick * 1.15, 10, 8), skin);
+  const palm = part(left ? "hand.l" : "hand.r", sphere(thick * 1.15, 10, 8), skin);
   palm.position.y = handY;
   group.add(palm);
   for (let i = 0; i < 4; i++) {
-    const finger = part("Finger", new THREE.CapsuleGeometry(thick * 0.22, thick * 0.55, 3, 5), skin);
+    const finger = part("Finger", capsule(thick * 0.22, thick * 0.55, 3, 5), skin);
     finger.position.set((i - 1.5) * thick * 0.65, handY - thick * 1.2, thick * 0.15);
     group.add(finger);
   }
@@ -1009,20 +1010,20 @@ function addHumanoidLeg(
   group.name = name;
   group.position.set(x, 0, 0);
   parent.add(group);
-  const thigh = part(`${name}Upper`, new THREE.CapsuleGeometry(thick * (lean ? 0.95 : 1.1), Math.max(0.08, length * 0.4), 6, 10), skin);
+  const thigh = part(`${name}Upper`, capsule(thick * (lean ? 0.95 : 1.1), Math.max(0.08, length * 0.4), 6, 10), skin);
   thigh.position.y = -length * 0.3;
   group.add(thigh);
-  const knee = part(`${name}Knee`, new THREE.SphereGeometry(thick * 1.05, 8, 6), cloth);
+  const knee = part(`${name}Knee`, sphere(thick * 1.05, 8, 6), cloth);
   knee.position.y = -length * 0.55;
   group.add(knee);
-  const shin = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.34), 6, 10), skin);
+  const shin = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.34), 6, 10), skin);
   shin.position.y = -length * 0.78;
   group.add(shin);
   const shoe = part(name === "LegLeft" ? "FootLeft" : "FootRight", box(foot.w, foot.h, foot.d), hairyFeet ? skin : cloth);
   shoe.position.set(0, -length - foot.h * 0.2, foot.d * 0.15);
   group.add(shoe);
   if (hairyFeet) {
-    const fur = part("FootFur", new THREE.SphereGeometry(foot.w * 0.45, 8, 6), cloth);
+    const fur = part("FootFur", sphere(foot.w * 0.45, 8, 6), cloth);
     fur.scale.set(1.2, 0.45, 1.4);
     fur.position.set(0, -length - foot.h * 0.05, foot.d * 0.2);
     group.add(fur);
@@ -1044,14 +1045,14 @@ function buildHumanThorax(
   chest.add(pec);
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.07, 10, 8), skin);
+      const breast = part("Breast", sphere(0.07, 10, 8), skin);
       breast.scale.set(1.1, 0.85, 0.9);
       breast.position.set(side * 0.08, look.torso.h * 0.08, look.torso.d * 0.45);
       chest.add(breast);
     }
   } else {
     for (const side of [-1, 1]) {
-      const deltoid = part("Deltoid", new THREE.SphereGeometry(0.08, 8, 6), skin);
+      const deltoid = part("Deltoid", sphere(0.08, 8, 6), skin);
       deltoid.position.set(side * look.torso.w * 0.5, look.torso.h * 0.22, 0);
       chest.add(deltoid);
     }
@@ -1067,16 +1068,16 @@ function buildHumanThorax(
 
 function buildHumanHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 20, 16), skin);
+  const skull = part("Head", sphere(r, 20, 16), skin);
   skull.scale.set(sex === "female" ? 0.95 : 1.05, 1, sex === "female" ? 0.95 : 1.05);
   head.add(skull);
   const eyeMat = mat(0x1a1410, 0.05, 0.55);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.026, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.026, 8, 6), eyeMat);
     eye.position.set(side * r * 0.35, r * 0.12, r * 0.85);
     head.add(eye);
   }
-  const nose = part("Nose", new THREE.ConeGeometry(0.02, 0.05, 5), skin);
+  const nose = part("Nose", cone(0.02, 0.05, 5), skin);
   nose.rotation.x = Math.PI / 2;
   nose.position.set(0, 0, r * 0.95);
   head.add(nose);
@@ -1085,7 +1086,7 @@ function buildHumanHead(head: THREE.Group, look: RaceLook, skin: THREE.Material,
     jaw.position.set(0, -r * 0.45, r * 0.15);
     head.add(jaw);
   } else {
-    const cheek = part("CheekSoft", new THREE.SphereGeometry(r * 0.9, 12, 10), skin);
+    const cheek = part("CheekSoft", sphere(r * 0.9, 12, 10), skin);
     cheek.scale.set(1.05, 0.85, 0.95);
     cheek.position.y = -r * 0.1;
     head.add(cheek);
@@ -1107,7 +1108,7 @@ function buildElfThorax(
   chest.add(rib);
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.055, 10, 8), skin);
+      const breast = part("Breast", sphere(0.055, 10, 8), skin);
       breast.scale.set(1.05, 0.8, 0.85);
       breast.position.set(side * 0.065, look.torso.h * 0.1, look.torso.d * 0.48);
       chest.add(breast);
@@ -1123,16 +1124,16 @@ function buildElfThorax(
 
 function buildElfHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 20, 16), skin);
+  const skull = part("Head", sphere(r, 20, 16), skin);
   skull.scale.set(0.95, 1.08, 1.05);
   head.add(skull);
   const eyeMat = mat(0x3a5a48, 0.08, 0.45, 0x2a4030, 0.12);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.028, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.028, 8, 6), eyeMat);
     eye.scale.set(1, sex === "female" ? 1.15 : 1, 1);
     eye.position.set(side * r * 0.32, r * 0.14, r * 0.88);
     head.add(eye);
-    const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.035, sex === "female" ? 0.2 : 0.24, 6), skin);
+    const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.035, sex === "female" ? 0.2 : 0.24, 6), skin);
     ear.rotation.z = side * 0.85;
     ear.rotation.x = -0.4;
     ear.position.set(side * r * 0.95, r * 0.1, -0.02);
@@ -1150,13 +1151,13 @@ function buildGnomeThorax(
   cloth: THREE.Material,
   sex: Gender,
 ): void {
-  const belly = part("GnomeBelly", new THREE.SphereGeometry(look.torso.w * 0.55, 12, 10), skin);
+  const belly = part("GnomeBelly", sphere(look.torso.w * 0.55, 12, 10), skin);
   belly.scale.set(1.1, 0.85, 1.15);
   belly.position.set(0, -look.torso.h * 0.05, 0.04);
   chest.add(belly);
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.05, 8, 6), skin);
+      const breast = part("Breast", sphere(0.05, 8, 6), skin);
       breast.position.set(side * 0.06, look.torso.h * 0.12, look.torso.d * 0.5);
       chest.add(breast);
     }
@@ -1178,32 +1179,32 @@ function buildGnomeHead(
   sex: Gender,
 ): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 18, 14), skin);
+  const skull = part("Head", sphere(r, 18, 14), skin);
   skull.scale.set(1.1, 1.05, 1.1);
   head.add(skull);
   const eyeMat = mat(0x2a2418, 0.05, 0.55);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.032, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.032, 8, 6), eyeMat);
     eye.position.set(side * r * 0.38, r * 0.08, r * 0.82);
     head.add(eye);
-    const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.04, 0.14, 6), skin);
+    const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.04, 0.14, 6), skin);
     ear.rotation.z = side * 0.75;
     ear.position.set(side * r * 0.95, r * 0.05, 0);
     head.add(ear);
   }
   if (sex === "male") {
-    const beard = part("Beard", new THREE.SphereGeometry(r * 0.7, 10, 8), accent);
+    const beard = part("Beard", sphere(r * 0.7, 10, 8), accent);
     beard.scale.set(1.1, 0.85, 0.7);
     beard.position.set(0, -r * 0.55, r * 0.35);
     head.add(beard);
-    const hat = part("Hat", new THREE.ConeGeometry(0.16, 0.34, 10), cloth);
+    const hat = part("Hat", cone(0.16, 0.34, 10), cloth);
     hat.position.y = r + 0.12;
     head.add(hat);
   } else {
-    const bun = part("HairBun", new THREE.SphereGeometry(0.07, 10, 8), accent);
+    const bun = part("HairBun", sphere(0.07, 10, 8), accent);
     bun.position.set(0, r * 0.85, -r * 0.3);
     head.add(bun);
-    const fringe = part("Fringe", new THREE.SphereGeometry(r * 1.05, 10, 8), accent);
+    const fringe = part("Fringe", sphere(r * 1.05, 10, 8), accent);
     fringe.scale.y = 0.45;
     fringe.position.y = r * 0.4;
     head.add(fringe);
@@ -1224,7 +1225,7 @@ function buildDwarfThorax(
   chest.add(barrel);
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.075, 10, 8), skin);
+      const breast = part("Breast", sphere(0.075, 10, 8), skin);
       breast.scale.set(1.15, 0.85, 0.9);
       breast.position.set(side * 0.1, look.torso.h * 0.1, look.torso.d * 0.48);
       chest.add(breast);
@@ -1240,34 +1241,34 @@ function buildDwarfThorax(
 
 function buildDwarfHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 18, 14), skin);
+  const skull = part("Head", sphere(r, 18, 14), skin);
   skull.scale.set(1.15, 1.0, 1.1);
   head.add(skull);
   const eyeMat = mat(0x1a1410, 0.05, 0.55);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.028, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.028, 8, 6), eyeMat);
     eye.position.set(side * r * 0.35, r * 0.1, r * 0.85);
     head.add(eye);
-    const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.035, 0.1, 5), skin);
+    const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.035, 0.1, 5), skin);
     ear.rotation.z = side * 0.5;
     ear.position.set(side * r * 0.95, 0, 0);
     head.add(ear);
   }
   if (sex === "male") {
-    const beard = part("Beard", new THREE.ConeGeometry(0.14, 0.28, 8), accent);
+    const beard = part("Beard", cone(0.14, 0.28, 8), accent);
     beard.position.set(0, -r * 0.75, r * 0.35);
     head.add(beard);
-    const braid = part("BeardBraid", new THREE.CylinderGeometry(0.03, 0.04, 0.16, 6), accent);
+    const braid = part("BeardBraid", cylinder(0.03, 0.04, 0.16, 6), accent);
     braid.position.set(0, -r * 1.15, r * 0.4);
     head.add(braid);
   } else {
     for (const side of [-1, 1]) {
-      const braid = part("HairBraid", new THREE.CylinderGeometry(0.025, 0.035, 0.28, 6), accent);
+      const braid = part("HairBraid", cylinder(0.025, 0.035, 0.28, 6), accent);
       braid.position.set(side * r * 0.55, -r * 0.2, -r * 0.15);
       braid.rotation.z = side * 0.25;
       head.add(braid);
     }
-    const crown = part("HairCrown", new THREE.SphereGeometry(r * 1.05, 10, 8), accent);
+    const crown = part("HairCrown", sphere(r * 1.05, 10, 8), accent);
     crown.scale.y = 0.5;
     crown.position.y = r * 0.45;
     head.add(crown);
@@ -1283,13 +1284,13 @@ function buildHobbitThorax(
   cloth: THREE.Material,
   sex: Gender,
 ): void {
-  const round = part("HobbitTorso", new THREE.SphereGeometry(look.torso.w * 0.62, 12, 10), skin);
+  const round = part("HobbitTorso", sphere(look.torso.w * 0.62, 12, 10), skin);
   round.scale.set(1.05, 0.9, 1.15);
   round.position.set(0, 0, 0.03);
   chest.add(round);
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.055, 8, 6), skin);
+      const breast = part("Breast", sphere(0.055, 8, 6), skin);
       breast.position.set(side * 0.07, look.torso.h * 0.1, look.torso.d * 0.5);
       chest.add(breast);
     }
@@ -1304,25 +1305,25 @@ function buildHobbitThorax(
 
 function buildHobbitHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 18, 14), skin);
+  const skull = part("Head", sphere(r, 18, 14), skin);
   skull.scale.set(1.08, 1.0, 1.05);
   head.add(skull);
   const eyeMat = mat(0x2a2018, 0.05, 0.55);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.028, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.028, 8, 6), eyeMat);
     eye.position.set(side * r * 0.34, r * 0.1, r * 0.85);
     head.add(eye);
-    const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.03, 0.09, 5), skin);
+    const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.03, 0.09, 5), skin);
     ear.rotation.z = side * 0.45;
     ear.position.set(side * r * 0.92, 0.02, 0);
     head.add(ear);
   }
-  const hair = part("Hair", new THREE.SphereGeometry(r * 1.08, 12, 10), accent);
+  const hair = part("Hair", sphere(r * 1.08, 12, 10), accent);
   hair.scale.y = sex === "female" ? 0.65 : 0.5;
   hair.position.y = r * (sex === "female" ? 0.35 : 0.45);
   head.add(hair);
   if (sex === "male") {
-    const sideburns = part("Sideburns", new THREE.SphereGeometry(r * 0.45, 8, 6), accent);
+    const sideburns = part("Sideburns", sphere(r * 0.45, 8, 6), accent);
     sideburns.scale.set(1.3, 0.6, 0.5);
     sideburns.position.set(0, -r * 0.15, r * 0.2);
     head.add(sideburns);
@@ -1349,7 +1350,7 @@ function buildUndeadThorax(
   }
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.055, 8, 6), skin);
+      const breast = part("Breast", sphere(0.055, 8, 6), skin);
       breast.scale.set(1.05, 0.75, 0.8);
       breast.position.set(side * 0.07, look.torso.h * 0.1, look.torso.d * 0.42);
       chest.add(breast);
@@ -1359,7 +1360,7 @@ function buildUndeadThorax(
     sternum.position.set(0, 0.04, look.torso.d * 0.55);
     chest.add(sternum);
   }
-  const rot = part("RotPatch", new THREE.SphereGeometry(0.08, 8, 6), cloth);
+  const rot = part("RotPatch", sphere(0.08, 8, 6), cloth);
   rot.position.set(0.08, -look.torso.h * 0.12, look.torso.d * 0.4);
   chest.add(rot);
   const shreds = part("Shroud", box(look.torso.w * 0.9, 0.08, look.torso.d * 1.05), cloth);
@@ -1373,7 +1374,7 @@ function buildUndeadThorax(
 
 function buildUndeadHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 16, 12), skin);
+  const skull = part("Head", sphere(r, 16, 12), skin);
   skull.scale.set(sex === "female" ? 0.95 : 1.05, 1.0, 1.05);
   head.add(skull);
   const jaw = part("JawBone", box(r * (sex === "female" ? 0.9 : 1.1), r * 0.3, r * 0.7), accent);
@@ -1381,21 +1382,21 @@ function buildUndeadHead(head: THREE.Group, look: RaceLook, skin: THREE.Material
   head.add(jaw);
   const eyeMat = mat(0x7a9a40, 0.1, 0.4, 0x4a6820, 0.55);
   for (const side of [-1, 1]) {
-    const socket = part(side < 0 ? "SocketL" : "SocketR", new THREE.SphereGeometry(0.04, 8, 6), accent);
+    const socket = part(side < 0 ? "SocketL" : "SocketR", sphere(0.04, 8, 6), accent);
     socket.position.set(side * r * 0.35, r * 0.12, r * 0.72);
     head.add(socket);
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.022, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.022, 8, 6), eyeMat);
     eye.position.set(side * r * 0.35, r * 0.12, r * 0.88);
     head.add(eye);
     if (sex === "female") {
-      const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.028, 0.1, 5), skin);
+      const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.028, 0.1, 5), skin);
       ear.rotation.z = side * 0.55;
       ear.position.set(side * r * 0.92, 0.02, 0);
       head.add(ear);
     }
   }
   // Sparse necrotic hair / scalp peel
-  const scalp = part("Scalp", new THREE.SphereGeometry(r * 1.02, 10, 8), accent);
+  const scalp = part("Scalp", sphere(r * 1.02, 10, 8), accent);
   scalp.scale.y = 0.35;
   scalp.position.y = r * 0.55;
   head.add(scalp);
@@ -1430,7 +1431,7 @@ function buildLizardThorax(
 
   if (sex === "female") {
     for (const side of [-1, 1]) {
-      const breast = part("Breast", new THREE.SphereGeometry(0.065, 10, 8), skin);
+      const breast = part("Breast", sphere(0.065, 10, 8), skin);
       breast.scale.set(1.05, 0.78, 0.85);
       breast.position.set(side * 0.075, look.torso.h * 0.12, look.torso.d * 0.4);
       chest.add(breast);
@@ -1443,7 +1444,7 @@ function buildLizardThorax(
     pec.position.set(0, look.torso.h * 0.18, look.torso.d * 0.42);
     chest.add(pec);
     for (const side of [-1, 1]) {
-      const deltoid = part("Deltoid", new THREE.SphereGeometry(0.08, 8, 6), skin);
+      const deltoid = part("Deltoid", sphere(0.08, 8, 6), skin);
       deltoid.position.set(side * look.torso.w * 0.48, look.torso.h * 0.28, 0.02);
       chest.add(deltoid);
     }
@@ -1459,7 +1460,7 @@ function buildLizardThorax(
     const t = i / 4;
     const segLen = 0.14 - t * 0.02;
     const segR = 0.055 - t * 0.032;
-    const seg = part(`TailSeg${i}`, new THREE.CapsuleGeometry(segR, segLen, 4, 8), i % 2 === 0 ? skin : accent);
+    const seg = part(`TailSeg${i}`, capsule(segR, segLen, 4, 8), i % 2 === 0 ? skin : accent);
     seg.rotation.x = 0.55 + t * 0.35;
     seg.position.set(0, -0.02 - t * 0.08, -prev - segLen * 0.55);
     tailRoot.add(seg);
@@ -1469,20 +1470,20 @@ function buildLizardThorax(
 
 function buildLizardHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material, sex: Gender): void {
   const r = look.head.r;
-  const skull = part("Head", new THREE.SphereGeometry(r, 18, 14), skin);
+  const skull = part("Head", sphere(r, 18, 14), skin);
   skull.scale.set(sex === "female" ? 0.92 : 1.05, sex === "female" ? 0.95 : 1.0, 1.15);
   head.add(skull);
 
   // Cranial regenerative crest — male taller / female subtler.
   const crestH = sex === "female" ? 0.12 : 0.2;
   for (let i = 0; i < (sex === "female" ? 3 : 5); i++) {
-    const spike = part(`Crest${i}`, new THREE.ConeGeometry(0.028 - i * 0.003, crestH - i * 0.02, 5), accent);
+    const spike = part(`Crest${i}`, cone(0.028 - i * 0.003, crestH - i * 0.02, 5), accent);
     spike.rotation.x = 0.55;
     spike.position.set(0, r * (0.55 - i * 0.12), -r * (0.15 + i * 0.08));
     head.add(spike);
   }
 
-  const snout = part("Snout", new THREE.CapsuleGeometry(sex === "female" ? 0.05 : 0.065, sex === "female" ? 0.1 : 0.14, 4, 8), skin);
+  const snout = part("Snout", capsule(sex === "female" ? 0.05 : 0.065, sex === "female" ? 0.1 : 0.14, 4, 8), skin);
   snout.rotation.x = Math.PI / 2;
   snout.position.set(0, -r * 0.15, r * 1.05);
   head.add(snout);
@@ -1493,12 +1494,12 @@ function buildLizardHead(head: THREE.Group, look: RaceLook, skin: THREE.Material
 
   const eyeMat = mat(0xd4b840, 0.15, 0.35, 0xa88820, 0.35);
   for (const side of [-1, 1]) {
-    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
+    const eye = part(side < 0 ? "EyeLeft" : "EyeRight", sphere(0.03, 8, 6), eyeMat);
     eye.scale.set(1, 0.7, 1.1);
     eye.position.set(side * r * 0.42, r * 0.12, r * 0.85);
     head.add(eye);
     // Subtle pointed ear / sensory ridge
-    const ear = part(side < 0 ? "EarLeft" : "EarRight", new THREE.ConeGeometry(0.025, sex === "female" ? 0.09 : 0.07, 5), skin);
+    const ear = part(side < 0 ? "EarLeft" : "EarRight", cone(0.025, sex === "female" ? 0.09 : 0.07, 5), skin);
     ear.rotation.z = side * (sex === "female" ? 0.7 : 0.45);
     ear.rotation.x = -0.2;
     ear.position.set(side * r * 0.9, r * 0.1, -r * 0.1);
@@ -1507,7 +1508,7 @@ function buildLizardHead(head: THREE.Group, look: RaceLook, skin: THREE.Material
 
   // Nostril slits on snout tip
   for (const side of [-1, 1]) {
-    const nare = part("Nare", new THREE.SphereGeometry(0.012, 6, 4), accent);
+    const nare = part("Nare", sphere(0.012, 6, 4), accent);
     nare.position.set(side * 0.025, -r * 0.12, r * 1.35);
     head.add(nare);
   }
@@ -1527,26 +1528,26 @@ function addLizardArm(
   group.position.set(x, 0.2, 0.02);
   parent.add(group);
 
-  const shoulder = part(`${name}Shoulder`, new THREE.SphereGeometry(thick * 1.45, 10, 8), skin);
+  const shoulder = part(`${name}Shoulder`, sphere(thick * 1.45, 10, 8), skin);
   group.add(shoulder);
-  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick * 1.05, Math.max(0.08, length * 0.42), 6, 10), skin);
+  const upper = part(`${name}Upper`, capsule(thick * 1.05, Math.max(0.08, length * 0.42), 6, 10), skin);
   upper.position.y = -length * 0.28;
   group.add(upper);
-  const elbow = part(`${name}Elbow`, new THREE.SphereGeometry(thick * 1.1, 8, 6), accent);
+  const elbow = part(`${name}Elbow`, sphere(thick * 1.1, 8, 6), accent);
   elbow.position.y = -length * 0.52;
   group.add(elbow);
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.92, Math.max(0.08, length * 0.36), 6, 10), skin);
+  const lower = part(`${name}Lower`, capsule(thick * 0.92, Math.max(0.08, length * 0.36), 6, 10), skin);
   lower.position.y = -length * 0.74;
   group.add(lower);
 
   const left = name.startsWith("ArmLeft");
   const handY = -length * 0.96;
-  const palm = part(left ? "hand.l" : "hand.r", new THREE.SphereGeometry(thick * 1.15, 10, 8), skin);
+  const palm = part(left ? "hand.l" : "hand.r", sphere(thick * 1.15, 10, 8), skin);
   palm.position.y = handY;
   group.add(palm);
   // Agile talon grips
   for (let i = 0; i < 4; i++) {
-    const claw = part("Talon", new THREE.ConeGeometry(thick * 0.18, thick * 0.85, 5), accent);
+    const claw = part("Talon", cone(thick * 0.18, thick * 0.85, 5), accent);
     claw.rotation.x = Math.PI;
     claw.position.set((i - 1.5) * thick * 0.55, handY - thick * 1.4, thick * 0.15);
     group.add(claw);
@@ -1573,19 +1574,19 @@ function addLizardLeg(
   group.position.set(x, 0, 0);
   parent.add(group);
 
-  const thigh = part(`${name}Upper`, new THREE.CapsuleGeometry(thick * 1.15, Math.max(0.08, length * 0.34), 6, 10), skin);
+  const thigh = part(`${name}Upper`, capsule(thick * 1.15, Math.max(0.08, length * 0.34), 6, 10), skin);
   thigh.position.set(0, -length * 0.24, 0.02);
   group.add(thigh);
-  const knee = part(`${name}Knee`, new THREE.SphereGeometry(thick * 1.2, 8, 6), accent);
+  const knee = part(`${name}Knee`, sphere(thick * 1.2, 8, 6), accent);
   knee.position.set(0, -length * 0.46, 0.06);
   group.add(knee);
-  const shin = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.26), 6, 10), skin);
+  const shin = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.26), 6, 10), skin);
   shin.position.set(0, -length * 0.66, 0.12);
   group.add(shin);
-  const hock = part(`${name}Hock`, new THREE.SphereGeometry(thick, 8, 6), accent);
+  const hock = part(`${name}Hock`, sphere(thick, 8, 6), accent);
   hock.position.set(0, -length * 0.84, 0.16);
   group.add(hock);
-  const metatarsal = part(`${name}Meta`, new THREE.CapsuleGeometry(thick * 0.65, Math.max(0.05, length * 0.12), 5, 8), skin);
+  const metatarsal = part(`${name}Meta`, capsule(thick * 0.65, Math.max(0.05, length * 0.12), 5, 8), skin);
   metatarsal.position.set(0, -length * 0.94, 0.22);
   group.add(metatarsal);
 
@@ -1596,7 +1597,7 @@ function addLizardLeg(
     const toe = part("ClawToe", box(foot.w * 0.28, foot.h * 0.55, foot.d * 0.28), accent);
     toe.position.set((i - 1) * foot.w * 0.32, -length - foot.h * 0.1, foot.d * 0.58);
     group.add(toe);
-    const talon = part("FootTalon", new THREE.ConeGeometry(0.015, 0.06, 5), accent);
+    const talon = part("FootTalon", cone(0.015, 0.06, 5), accent);
     talon.rotation.x = Math.PI / 2;
     talon.position.set((i - 1) * foot.w * 0.32, -length - foot.h * 0.05, foot.d * 0.78);
     group.add(talon);
@@ -1622,11 +1623,11 @@ function addLimb(
   group.position.set(x, isLeg ? 0 : 0.18 + yOffset, zOffset);
   parent.add(group);
 
-  const upper = part(`${name}Upper`, new THREE.CapsuleGeometry(thick, Math.max(0.08, length * 0.55), 6, 12), isLeg ? cloth : skin);
+  const upper = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.55), 6, 12), isLeg ? cloth : skin);
   upper.position.y = isLeg ? -length * 0.35 : -length * 0.28;
   group.add(upper);
 
-  const lower = part(`${name}Lower`, new THREE.CapsuleGeometry(thick * 0.9, Math.max(0.08, length * 0.4), 6, 12), skin);
+  const lower = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.4), 6, 12), skin);
   lower.position.y = isLeg ? -length * 0.78 : -length * 0.72;
   group.add(lower);
 
@@ -1637,7 +1638,7 @@ function addLimb(
   } else {
     const left = name.startsWith("ArmLeft");
     const handName = left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`;
-    const hand = part(handName, new THREE.SphereGeometry(thick * 1.15, 12, 10), skin);
+    const hand = part(handName, sphere(thick * 1.15, 12, 10), skin);
     hand.position.y = -length * 0.95;
     group.add(hand);
     const slot = new THREE.Group();
@@ -1660,7 +1661,7 @@ function box(w: number, h: number, d: number): THREE.BufferGeometry {
   const radius = Math.min(w, h, d) * 0.12;
   const safe = Math.min(radius, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
   if (safe <= 0.001) return new THREE.BoxGeometry(w, h, d);
-  return new RoundedBoxGeometry(w, h, d, 2, safe);
+  return new RoundedBoxGeometry(w, h, d, roundSegs(2), safe);
 }
 
 /** Soft organic skin — no clearcoat (that’s what made everyone look like vinyl). */

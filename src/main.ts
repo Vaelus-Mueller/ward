@@ -163,7 +163,11 @@ function frame(now: number): void {
       persist();
     }
   }
-  renderer.draw(box.sim);
+  try {
+    renderer.draw(box.sim);
+  } catch {
+    // WebGL context loss must not freeze HUD (defaults in HTML are 1/1 HP).
+  }
   ui.sync(box.sim);
   requestAnimationFrame(frame);
 }
