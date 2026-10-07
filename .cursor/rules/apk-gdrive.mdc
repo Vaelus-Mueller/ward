@@ -1,0 +1,19 @@
+---
+description: Always copy built APKs to Google Drive releases folder
+alwaysApply: true
+---
+
+# APK builds → Google Drive
+
+Whenever you build an Android APK for Ward (`gradlew assembleDebug` / `assembleRelease`, or after `npm run android:sync`):
+
+1. Copy the APK to **`G:\My Drive\Ward\releases\`** (create the folder if needed).
+2. Write both:
+   - `ward-debug.apk` (or `ward-release.apk`) — latest overwrite
+   - `ward-debug-YYYY-MM-DD.apk` (or release equivalent) — dated copy
+3. Confirm the copy with file size/path in your reply to the user.
+4. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
+
+Source path after a successful debug build:
+
+`android/app/build/outputs/apk/debug/app-debug.apk`
