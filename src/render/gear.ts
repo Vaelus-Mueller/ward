@@ -42,8 +42,12 @@ export function elementOf(item: Item | null | undefined): GearElement | null {
 }
 
 export function syncHeroGear(root: THREE.Object3D, equipment: Record<SlotName, Item | null>, timeMs: number): void {
-  attachWeapon(root, "handslot.r", "gear-main", equipment.weapon, false);
-  attachWeapon(root, "handslot.l", "gear-off", equipment.offhand, true);
+  const main = equipment.weapon;
+  const twoHand = !!main && main.hands === 2;
+  // Main hand always carries the equipped weapon; 2H clears the offhand weapon and adds a support grip.
+  attachWeapon(root, "handslot.r", "gear-main", main, false);
+  attachWeapon(root, "handslot.l", "gear-off", twoHand ? null : equipment.offhand, true);
+  attachTwoHandSupport(root, twoHand ? main : null);
   attachWeapon(root, "handslot.r2", "gear-arm3", equipment.weapon3, false, 0.85);
   attachWeapon(root, "handslot.l2", "gear-arm4", equipment.weapon4, true, 0.85);
   attachArmor(root, "chest", "gear-chest-plate", equipment.chest, "chest");
@@ -98,6 +102,54 @@ function attachWeapon(
   }
   holder.visible = true;
   styleGearMaterials(holder, item);
+}
+
+/** Left-hand wrap so both arms read as gripping a two-handed weapon. */
+function attachTwoHandSupport(root: THREE.Object3D, item: Item | null): void {
+  const bone = root.getObjectByName("handslot.l") ?? root.getObjectByName("hand.l");
+  if (!bone) return;
+  let grip = bone.getObjectByName("gear-2h-grip") as THREE.Group | undefined;
+  if (!item || item.hands !== 2) {
+    if (grip) {
+      bone.remove(grip);
+      disposeObject(grip);
+    }
+    return;
+  }
+  const uid = item.uid;
+  if (grip && grip.userData.itemUid !== uid) {
+    bone.remove(grip);
+    disposeObject(grip);
+    grip = undefined;
+  }
+  if (!grip) {
+    grip = buildTwoHandSupport(item);
+    grip.name = "gear-2h-grip";
+    grip.userData.itemUid = uid;
+    bone.add(grip);
+  }
+  grip.visible = true;
+}
+
+function buildTwoHandSupport(item: Item): THREE.Group {
+  const group = new THREE.Group();
+  const dye = item.dye || 0xcfc6b8;
+  // Longer wrap so the off-hand clearly shares the haft with the main grip.
+  const wrap = part("SupportGrip", new THREE.CylinderGeometry(0.03, 0.034, 0.28, 8), mat(0x3a2a1c, 0.05, 0.85));
+  const band = part("SupportBand", new THREE.TorusGeometry(0.036, 0.012, 6, 12), mat(dye, 0.85, 0.28));
+  band.rotation.x = Math.PI / 2;
+  band.position.y = 0.04;
+  const collar = part("SupportCollar", new THREE.TorusGeometry(0.032, 0.008, 5, 10), mat(dye, 0.7, 0.35));
+  collar.rotation.x = Math.PI / 2;
+  collar.position.y = -0.08;
+  group.add(wrap, band, collar);
+  // Seat like the main 2H weapon, then reach inward toward the right-hand haft.
+  seatWeaponInHand(group, true, item.style, item.family ?? "sword", true);
+  group.position.x += 0.1;
+  group.position.y -= 0.06;
+  group.position.z += 0.04;
+  group.rotation.z += 0.25;
+  return group;
 }
 
 function attachArmor(
@@ -166,20 +218,21 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
 
   const group = new THREE.Group();
   const style: WeaponStyle = item.style;
+  const family = item.family ?? "sword";
   const dye = item.dye || 0xcfc6b8;
   const metal = mat(dye, 0.85, 0.28);
   const grip = mat(0x3a2a1c, 0.05, 0.85);
   const accent = mat(0xe4c37a, 0.7, 0.35);
   const twoHand = item.hands === 2;
 
-  if (style === "bow") {
+  if (style === "bow" || family === "bow") {
     const limb = part("BowLimb", new THREE.TorusGeometry(0.42, 0.028, 6, 18, Math.PI * 1.15), metal);
     limb.rotation.z = Math.PI / 2;
     limb.rotation.y = Math.PI / 2;
     const string = part("BowString", new THREE.CylinderGeometry(0.006, 0.006, 0.78, 4), mat(0xd8d0c4, 0.05, 0.6));
     string.position.z = 0.2;
     group.add(limb, string);
-  } else if (style === "handbow") {
+  } else if (style === "handbow" || family === "handbow") {
     const body = part("Handbow", new THREE.BoxGeometry(0.08, 0.14, 0.28), metal);
     body.position.set(0, 0.12, 0.08);
     const prod = part("Prod", new THREE.BoxGeometry(0.28, 0.04, 0.04), accent);
@@ -188,12 +241,31 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     stock.position.set(0, 0.06, -0.02);
     group.add(body, prod, stock);
   } else if (style === "thrown") {
-    const blade = part("Thrown", new THREE.BoxGeometry(0.04, 0.28, 0.02), metal);
-    blade.position.y = 0.22;
-    const haft = part("Haft", new THREE.CylinderGeometry(0.015, 0.018, 0.16, 6), grip);
-    haft.position.y = 0.04;
-    group.add(blade, haft);
-  } else if (style === "focus") {
+    if (family === "axe") {
+      const head = part("ThrownAxe", new THREE.BoxGeometry(0.14, 0.1, 0.03), metal);
+      head.position.set(0.04, 0.28, 0);
+      const haft = part("Haft", new THREE.CylinderGeometry(0.014, 0.018, 0.28, 6), grip);
+      haft.position.y = 0.1;
+      group.add(head, haft);
+    } else if (family === "polearm") {
+      const shaft = part("Javelin", new THREE.CylinderGeometry(0.012, 0.016, 0.85, 6), grip);
+      shaft.position.y = 0.28;
+      const tip = part("Tip", new THREE.ConeGeometry(0.035, 0.16, 6), metal);
+      tip.position.y = 0.78;
+      group.add(shaft, tip);
+    } else if (item.name.toLowerCase().includes("chakram")) {
+      const ring = part("Chakram", new THREE.TorusGeometry(0.14, 0.018, 6, 16), metal);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.18;
+      group.add(ring);
+    } else {
+      const blade = part("Thrown", new THREE.BoxGeometry(0.04, 0.28, 0.02), metal);
+      blade.position.y = 0.22;
+      const haft = part("Haft", new THREE.CylinderGeometry(0.015, 0.018, 0.16, 6), grip);
+      haft.position.y = 0.04;
+      group.add(blade, haft);
+    }
+  } else if (family === "wand" || (style === "focus" && !twoHand)) {
     const shaft = part("Wand", new THREE.CylinderGeometry(0.018, 0.024, 0.72, 8), grip);
     shaft.position.y = 0.2;
     const orb = part("FocusOrb", new THREE.IcosahedronGeometry(0.09, 1), accent);
@@ -202,7 +274,16 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     collar.position.y = 0.5;
     collar.rotation.x = Math.PI / 2;
     group.add(shaft, orb, collar);
-  } else if (item.rangeBonus > 15 || (twoHand && item.name.toLowerCase().includes("spear"))) {
+  } else if (family === "staff" || (style === "focus" && twoHand)) {
+    const shaft = part("Staff", new THREE.CylinderGeometry(0.022, 0.03, 1.35, 8), grip);
+    shaft.position.y = 0.45;
+    const tip = part("StaffTip", new THREE.OctahedronGeometry(0.1, 0), accent);
+    tip.position.y = 1.18;
+    const band = part("Band", new THREE.TorusGeometry(0.04, 0.012, 6, 12), metal);
+    band.position.y = 1.02;
+    band.rotation.x = Math.PI / 2;
+    group.add(shaft, tip, band);
+  } else if (family === "polearm") {
     const shaft = part("Spear", new THREE.CylinderGeometry(0.018, 0.022, twoHand ? 1.35 : 1.15, 8), grip);
     shaft.position.y = 0.4;
     const tip = part("SpearTip", new THREE.ConeGeometry(0.055, 0.24, 7), metal);
@@ -210,6 +291,29 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     const guard = part("SpearGuard", new THREE.BoxGeometry(0.16, 0.03, 0.04), accent);
     guard.position.y = 0.98;
     group.add(shaft, tip, guard);
+  } else if (family === "axe") {
+    const haft = part("AxeHaft", new THREE.CylinderGeometry(0.02, 0.025, twoHand ? 0.85 : 0.55, 8), grip);
+    haft.position.y = twoHand ? 0.28 : 0.16;
+    const blade = part("AxeHead", new THREE.BoxGeometry(twoHand ? 0.28 : 0.18, twoHand ? 0.22 : 0.16, 0.04), metal);
+    blade.position.set(twoHand ? 0.1 : 0.07, twoHand ? 0.72 : 0.48, 0);
+    group.add(haft, blade);
+  } else if (family === "mace") {
+    const haft = part("MaceHaft", new THREE.CylinderGeometry(0.022, 0.028, twoHand ? 0.9 : 0.5, 8), grip);
+    haft.position.y = twoHand ? 0.3 : 0.14;
+    const head = part("MaceHead", new THREE.SphereGeometry(twoHand ? 0.12 : 0.08, 10, 8), metal);
+    head.position.y = twoHand ? 0.82 : 0.46;
+    const flange = part("Flange", new THREE.BoxGeometry(twoHand ? 0.2 : 0.14, 0.04, 0.04), accent);
+    flange.position.y = twoHand ? 0.82 : 0.46;
+    group.add(haft, head, flange);
+  } else if (family === "flail") {
+    const haft = part("FlailHaft", new THREE.CylinderGeometry(0.02, 0.024, 0.42, 8), grip);
+    haft.position.y = 0.12;
+    const chain = part("Chain", new THREE.CylinderGeometry(0.01, 0.01, 0.28, 5), metal);
+    chain.position.set(0.04, 0.4, 0);
+    chain.rotation.z = -0.45;
+    const ball = part("FlailBall", new THREE.SphereGeometry(0.07, 8, 6), metal);
+    ball.position.set(0.12, 0.58, 0);
+    group.add(haft, chain, ball);
   } else if (twoHand) {
     const blade = part("Greatblade", new THREE.BoxGeometry(0.07, 0.95, 0.028), metal);
     blade.position.y = 0.62;
@@ -220,16 +324,6 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     const pommel = part("Pommel", new THREE.SphereGeometry(0.04, 8, 6), accent);
     pommel.position.y = -0.1;
     group.add(blade, gripMesh, guard, pommel);
-  } else if (item.damageMax - item.damageMin >= 6 || item.speed < 0.9) {
-    const blade = part("Cleaver", new THREE.BoxGeometry(0.08, 0.55, 0.03), metal);
-    blade.position.set(0.02, 0.42, 0);
-    const tip = part("CleaverTip", new THREE.BoxGeometry(0.1, 0.12, 0.028), metal);
-    tip.position.set(0.03, 0.72, 0);
-    const gripMesh = part("Grip", new THREE.CylinderGeometry(0.025, 0.028, 0.22, 8), grip);
-    gripMesh.position.y = 0.08;
-    const guard = part("Guard", new THREE.BoxGeometry(0.18, 0.04, 0.05), accent);
-    guard.position.y = 0.2;
-    group.add(blade, tip, gripMesh, guard);
   } else {
     const blade = part("1H_Sword", new THREE.BoxGeometry(0.045, 0.62, 0.018), metal);
     blade.position.y = 0.45;
@@ -246,15 +340,43 @@ function buildWeapon(item: Item, offhand: boolean): THREE.Group {
     group.add(blade, fuller, tip, guard, gripMesh, pommel);
   }
 
-  group.rotation.z = offhand ? 0.15 : -0.12;
-  group.rotation.x = -0.15;
-  group.position.set(offhand ? -0.02 : 0.02, -0.02, 0.04);
+  seatWeaponInHand(group, offhand, style, family, twoHand);
   if (offhand) group.scale.setScalar(0.92);
   if (twoHand && !offhand) group.scale.setScalar(1.08);
 
   const element = elementOf(item);
   if (element) addElementAura(group, element);
   return group;
+}
+
+/**
+ * Arms hang along local -Y; weapon meshes are authored along +Y.
+ * Flip/seat so the blade or shaft continues past the fingers, not back up the forearm.
+ */
+function seatWeaponInHand(
+  group: THREE.Group,
+  offhand: boolean,
+  style: WeaponStyle,
+  family: string,
+  twoHand: boolean,
+): void {
+  if (style === "bow" || family === "bow") {
+    group.rotation.set(Math.PI * 0.5, offhand ? 0.1 : -0.1, Math.PI * 0.5);
+    group.position.set(offhand ? -0.02 : 0.02, 0.02, 0.08);
+    return;
+  }
+  if (style === "handbow" || family === "handbow") {
+    group.rotation.set(Math.PI * 0.55, 0, offhand ? 0.2 : -0.2);
+    group.position.set(offhand ? -0.02 : 0.02, 0.02, 0.1);
+    return;
+  }
+  // π flip: authored +Y (tip) becomes arm -Y (past the hand). Slight pitch tips the point forward.
+  const pitch = Math.PI + (twoHand ? 0.32 : 0.22);
+  const yaw = offhand ? 0.12 : -0.12;
+  const roll = offhand ? 0.22 : -0.22;
+  group.rotation.set(pitch, yaw, roll);
+  // 2H: nest the grip a bit deeper in the palm so both hands can share the haft.
+  group.position.set(offhand ? -0.04 : 0.04, twoHand ? 0.04 : 0.01, twoHand ? 0.06 : 0.04);
 }
 
 function buildShield(item: Item): THREE.Group {

@@ -4,7 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { AudioBus } from "./audio";
 import { createCharacter } from "./game/character";
-import { cleanName, clearSlot, nameSlot, readSlots, writeSlot } from "./game/save";
+import { cleanName, clearSlot, readSlots, writeSlot } from "./game/save";
 import { Sim } from "./game/sim";
 import { Input } from "./input";
 import { Renderer } from "./render";
@@ -28,6 +28,8 @@ const input = new Input(canvas, must("joy"), (x, y) => renderer.pick(x, y));
 let activeSlot = 0;
 
 must("save-slots").addEventListener("click", (event) => {
+  const card = (event.target as HTMLElement).closest<HTMLElement>(".save-slot");
+  if (card?.dataset.slot !== undefined) ui.selectSaveSlot(Number(card.dataset.slot));
   const target = (event.target as HTMLElement).closest<HTMLElement>("[data-play], [data-delete]");
   if (!target) return;
   if (target.dataset.delete !== undefined) {
@@ -35,11 +37,10 @@ must("save-slots").addEventListener("click", (event) => {
     if (index < 0 || index > 2) return;
     const slot = readSlots(localStorage)[index];
     if (!slot?.save) return;
-    const label = slot.name || slot.save.character.name || `Slot ${index + 1}`;
+    const label = slot.save.character.name || slot.name || `Slot ${index + 1}`;
     if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
     audio.hit();
     clearSlot(localStorage, index);
-    (must(`slot-name-${index}`) as HTMLInputElement).value = "";
     ui.showTitle();
     return;
   }
@@ -49,21 +50,12 @@ must("save-slots").addEventListener("click", (event) => {
   playSlot(index);
 });
 
-must("save-slots").addEventListener("change", (event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.dataset.slot) return;
-  nameSlot(localStorage, Number(input.dataset.slot), input.value);
-  ui.showTitle();
-});
-
 must("create-enter").addEventListener("click", () => {
   audio.hit();
   const choice = ui.createChoice();
   activeSlot = choice.slot;
   const name = cleanName(choice.name);
-  (must(`slot-name-${choice.slot}`) as HTMLInputElement).value = name;
-  nameSlot(localStorage, choice.slot, name);
-  box.sim = new Sim(createCharacter(name, choice.race), Date.now() >>> 0 || 1);
+  box.sim = new Sim(createCharacter(name, choice.race, choice.gender), Date.now() >>> 0 || 1);
   box.sim.begin();
   startRun();
 });
@@ -132,7 +124,12 @@ window.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) persist();
+  if (document.hidden) {
+    persist();
+    return;
+  }
+  // WebViews suspend AudioContext in the background — wake it so SFX are not dropped.
+  audio.resume();
 });
 
 paintMute();
@@ -263,17 +260,15 @@ function startRun(): void {
 
 function playSlot(index: number): void {
   activeSlot = index;
-  const name = cleanName((must(`slot-name-${index}`) as HTMLInputElement).value);
   const existing = readSlots(localStorage)[index]?.save;
   if (existing) {
-    existing.character.name = name;
     box.sim = new Sim(existing.character, 1);
     box.sim.applySnapshot(existing);
     box.sim.begin();
     startRun();
     return;
   }
-  ui.openCreate(index, name);
+  ui.openCreate(index, "Exile");
 }
 
 function persist(): void {
@@ -303,5 +298,8 @@ async function nativeChrome(): Promise<void> {
   }
   await App.addListener("backButton", () => {
     if (!ui.closeTop()) void App.minimizeApp();
+  });
+  await App.addListener("appStateChange", ({ isActive }) => {
+    if (isActive) audio.resume();
   });
 }

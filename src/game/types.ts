@@ -35,18 +35,35 @@ export type SectorId = DamagePair;
 export type SkillKind = "passive" | "active" | "aura" | "channel" | "key" | "capstone";
 export type EnemyKind =
   | "hound"
+  | "skeleton"
+  | "zombie"
+  | "zombieF"
   | "sentinel"
   | "archer"
   | "brute"
   | "wolf"
+  | "wolfF"
+  | "rat"
+  | "roofrat"
+  | "packrat"
+  | "giantrat"
+  | "direrat"
   | "slime"
   | "gargoyle"
   | "wisp"
   | "imp"
+  | "slayer"
+  | "assassin"
+  | "legionnaire"
+  | "archdemon"
   | "spider"
   | "cultist"
   | "sprig"
   | "whelp"
+  | "wyvern"
+  | "drake"
+  | "dragon"
+  | "wyrm"
   | "hillock"
   | "lurker"
   | "lumen"
@@ -67,7 +84,7 @@ export const ATTR_HINT: Record<Attr, string> = {
   agility: "Minor dodge, minor crit, and extra damage for swift classes.",
   stamina: "Life total and a little armor.",
   luck: "Crit rate, gold find, magic find, and better vendor deals.",
-  spirit: "Energy regen and a little more energy storage.",
+  spirit: "Skill charge rate and deeper spell skill wells.",
 };
 
 export const DAMAGE_PAIR_LABEL: Record<DamagePair, { primary: string; secondary: string; blurb: string }> = {
@@ -113,6 +130,31 @@ export type GemKind = "ruby" | "sapphire" | "topaz" | "emerald" | "diamond" | "a
 export type MaterialId = "weave" | "hide" | "rings" | "plate" | "steel" | "dust";
 export type WeaponStyle = "melee" | "bow" | "focus" | "thrown" | "handbow";
 export type WeaponHands = 1 | 2;
+/** Shape / class shown in tooltips and used for gear meshes. */
+export type WeaponFamily =
+  | "sword"
+  | "axe"
+  | "mace"
+  | "flail"
+  | "polearm"
+  | "staff"
+  | "wand"
+  | "bow"
+  | "handbow"
+  | "thrown";
+
+export const WEAPON_FAMILY_LABEL: Record<WeaponFamily, string> = {
+  sword: "Sword",
+  axe: "Axe",
+  mace: "Mace",
+  flail: "Flail",
+  polearm: "Polearm",
+  staff: "Staff",
+  wand: "Wand",
+  bow: "Bow",
+  handbow: "Hand Crossbow",
+  thrown: "Thrown",
+};
 
 export const RARITIES: Rarity[] = ["grey", "white", "green", "blue", "purple", "orange", "yellow", "gold", "red", "rainbow"];
 
@@ -215,6 +257,8 @@ export interface Item {
   uniqueId: string | null;
   style: WeaponStyle;
   hands: WeaponHands;
+  /** Weapon class for description/mesh; null on armor and jewelry. */
+  family: WeaponFamily | null;
   damageMin: number;
   damageMax: number;
   armor: number;
@@ -244,9 +288,12 @@ export type RaceId =
   | "lizard"
   | "undead";
 
+export type Gender = "male" | "female";
+
 export interface Character {
   name: string;
   race: RaceId;
+  gender: Gender;
   level: number;
   xp: number;
   gold: number;

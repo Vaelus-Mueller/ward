@@ -13,14 +13,16 @@ import {
   type Attr,
   emptyEquipment,
   type Character,
+  type Gender,
   type RaceId,
   type SectorId,
 } from "./types";
 
-export function createCharacter(name = "Exile", race: RaceId = "human"): Character {
+export function createCharacter(name = "Exile", race: RaceId = "human", gender: Gender = "male"): Character {
   return {
     name,
     race,
+    gender: gender === "female" ? "female" : "male",
     level: 1,
     xp: 0,
     gold: 0,

@@ -1,4 +1,4 @@
-import { addGem, defaultHands } from "./items";
+import { addGem, defaultHands, inferWeaponFamily } from "./items";
 import { isRaceId } from "./races";
 import {
   classPointsForLevel,
@@ -44,6 +44,7 @@ export function deserialize(raw: string): SaveFile | null {
     migrateClassPoints(data.character);
     data.character.name = cleanName(data.character.name);
     data.character.race = isRaceId(data.character.race) ? data.character.race : "human";
+    data.character.gender = data.character.gender === "female" ? "female" : "male";
     if (!Number.isFinite(data.character.paragon)) data.character.paragon = 0;
     if (!Number.isFinite(data.wave) || !Number.isFinite(data.hp)) return null;
     return data;
@@ -100,6 +101,9 @@ function migrateItem(item: Item): void {
   if (typeof item.uniqueId !== "string") item.uniqueId = null;
   if (item.hands !== 1 && item.hands !== 2) {
     item.hands = defaultHands(item.slot as ItemSlot, item.style as WeaponStyle, item.name);
+  }
+  if (item.family == null || item.family === undefined) {
+    item.family = inferWeaponFamily(item.slot as ItemSlot, item.style as WeaponStyle, item.name);
   }
   if (!Number.isFinite(item.quality)) item.quality = item.slot === "gem" ? 1 : 0;
   if (!Number.isFinite(item.sockets)) item.sockets = 0;

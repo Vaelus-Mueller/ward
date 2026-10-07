@@ -270,23 +270,23 @@ export const PASSIVE_PER_RANK: Record<string, Partial<Mods>> = {
   cutpurse: { bleedChance: 0.01, meleeMult: 0.008 },
   "deep-cut": { bleedChance: 0.06 },
   hemorrhage: { bleedChance: 0.14, meleeMult: 0.1 },
-  "ember-flow": { energyRegen: 0.4 },
+  "ember-flow": { spellMult: 0.015 },
   kindling: { spellMult: 0.035 },
   ashmark: { spellMult: 0.06 },
   pyre: { spellMult: 0.012 },
-  "ash-plume": { spellMult: 0.02, energyRegen: 0.15 },
+  "ash-plume": { spellMult: 0.03 },
   inferno: { spellMult: 0.18 },
-  reservoir: { energy: 8 },
+  reservoir: { life: 8, chargeMax: 0.25 },
   tidemark: { spellMult: 0.06 },
-  tide: { spellMult: 0.01, cdr: 0.004 },
-  undertow: { energy: 4, energyRegen: 0.2 },
+  tide: { spellMult: 0.014 },
+  undertow: { life: 6, spellMult: 0.01 },
   deluge: { spellMult: 0.16 },
-  "first-rite": { spellMult: 0.01, energy: 1 },
+  "first-rite": { spellMult: 0.012 },
   vespers: { spellMult: 0.02 },
   darkmark: { spellMult: 0.06 },
-  cantor: { spellMult: 0.01, cdr: 0.004 },
-  breath: { energyRegen: 0.45 },
-  benediction: { spellMult: 0.12, lifeRegen: 0.8, energyRegen: 0.5 },
+  cantor: { spellMult: 0.014 },
+  breath: { lifeRegen: 0.35, spellMult: 0.01 },
+  benediction: { spellMult: 0.12, lifeRegen: 0.8 },
 };
 
 /** Target (mult × shots / cooldown) for damaging actives at rank 1, before CDR. */
@@ -780,9 +780,6 @@ function scaleAura(aura: Partial<Mods>, rank: number, syn = 1): Partial<Mods> {
 
 const MOD_LABEL: Partial<Record<keyof Mods, (value: number) => string>> = {
   life: (value) => `${signed(value)} life`,
-  energy: (value) => `${signed(value)} energy`,
-  energyMax: (value) => `${signed(value)} max energy`,
-  energyOnHit: (value) => `${signed(value)} energy on hit`,
   chargeMax: (value) => `${signed(value)} skill charges`,
   armor: (value) => `${signed(Math.round(value))} armor`,
   armorPct: (value) => `${signedPct(value)} armor`,
@@ -793,8 +790,6 @@ const MOD_LABEL: Partial<Record<keyof Mods, (value: number) => string>> = {
   crit: (value) => `${signedPct(value)} critical chance`,
   attackRating: (value) => `${signed(Math.round(value))} attack rating`,
   lifeRegen: (value) => `${value.toFixed(1)} life each second`,
-  energyRegen: (value) => `${value.toFixed(1)} energy each second`,
-  cdr: (value) => `${signedPct(value)} cooldown recovery`,
   damageReduction: (value) => `${Math.round(value * 100)}% less damage taken`,
   bleedChance: (value) => `${Math.round(value * 100)}% bleed chance`,
   goldFind: (value) => `${signedPct(value)} gold found`,
@@ -842,26 +837,30 @@ export function describeSkill(id: string, rank: number, ranks: Record<string, nu
   if (!spec) return skill.blurb;
   const bits = [skill.blurb];
   if (spec.kind === "aura") {
-    bits.push(`While toggled: ${formatMods(spec.aura)}. Drains ${spec.energyPerSec.toFixed(1)} energy each second.`);
+    bits.push(
+      `While toggled: ${formatMods(spec.aura)}. Drains ${spec.energyPerSec.toFixed(1)} charge energy each second. Fills only from normal attacks.`,
+    );
   } else if (spec.kind === "channel") {
     bits.push(
       `Channel ${spec.channelTime.toFixed(1)}s. Restores ${Math.round(spec.healFrac * 100)}% life${
-        id === "litany" ? " and a share of energy" : ""
-      }. Cooldown ${spec.cooldown.toFixed(1)}s.`,
+        id === "litany" ? " and feeds skill charges" : ""
+      }. Needs a full charge well; fills only from normal attacks.`,
     );
   } else if (spec.kind === "buff") {
     if (spec.shieldFrac > 0) bits.push(`Grants a shield of ${Math.round(spec.shieldFrac * 100)}% life for ${spec.buffTime.toFixed(0)}s.`);
     if (spec.invuln > 0) bits.push(`Cannot be hit for ${spec.invuln.toFixed(2)}s.`);
-    bits.push(`Cooldown ${spec.cooldown.toFixed(1)}s. Energy ${spec.energyCost}.`);
+    bits.push("Spends one stored charge. Charges build from normal attacks.");
   } else {
     const school = spec.scaling === "spell" ? "spell" : "weapon";
-    bits.push(`${Math.round(spec.mult * 100)}% ${school} damage. Cooldown ${spec.cooldown.toFixed(1)}s. Energy ${spec.energyCost}.`);
+    bits.push(
+      `${Math.round(spec.mult * 100)}% weapon damage (after gear), scaled by charge pace and max charges. Spends one stored charge.`,
+    );
     if (spec.stun) bits.push(`Stuns for ${spec.stun.toFixed(1)}s.`);
     if (spec.slow) bits.push("Slows.");
     if (spec.burn) bits.push("Burns.");
     if (spec.dash) bits.push("Dashes along your facing.");
   }
-  if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise power; damage skills keep pace with their cooldown.");
+  if (rank === 0 && skill.maxRank > 1) bits.push("Ranks raise power and shrink the charge well.");
   bits.push(describeSynergies(id, ranks).trim());
   return bits.filter(Boolean).join(" ");
 }

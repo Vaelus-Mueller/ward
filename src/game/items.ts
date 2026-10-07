@@ -14,7 +14,16 @@ import type {
   WeaponHands,
   WeaponStyle,
 } from "./types";
-import { ARMOR_LABEL, GEAR_SLOTS, INVENTORY_CAP, MATERIAL_LABEL, MATERIAL_ORDER, RARITY_LABEL } from "./types";
+import {
+  ARMOR_LABEL,
+  GEAR_SLOTS,
+  INVENTORY_CAP,
+  MATERIAL_LABEL,
+  MATERIAL_ORDER,
+  RARITY_LABEL,
+  WEAPON_FAMILY_LABEL,
+  type WeaponFamily,
+} from "./types";
 
 /**
  * Reminder for later — do not implement yet.
@@ -28,6 +37,7 @@ interface BaseItem {
   armorType: ArmorType | null;
   style: WeaponStyle;
   hands: WeaponHands;
+  family: WeaponFamily | null;
   damageMin: number;
   damageMax: number;
   armor: number;
@@ -38,30 +48,77 @@ interface BaseItem {
   reqEne: number;
 }
 
+function w(
+  partial: Omit<BaseItem, "slot" | "armorType" | "armor" | "rangeBonus"> &
+    Partial<Pick<BaseItem, "armor" | "rangeBonus">>,
+): BaseItem {
+  return {
+    slot: "weapon",
+    armorType: null,
+    armor: 0,
+    rangeBonus: 0,
+    ...partial,
+  };
+}
+
 const WEAPONS: BaseItem[] = [
-  { name: "Ash Blade", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
-  { name: "Split Cleaver", slot: "weapon", armorType: null, style: "melee", hands: 1, damageMin: 8, damageMax: 14, armor: 0, speed: 0.84, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
-  { name: "Gate Spear", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 7, damageMax: 12, armor: 0, speed: 0.95, rangeBonus: 30, reqStr: 14, reqDex: 0, reqEne: 0 },
-  { name: "Oak Maul", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 11, damageMax: 18, armor: 0, speed: 0.78, rangeBonus: 0, reqStr: 22, reqDex: 0, reqEne: 0 },
-  { name: "Great Ashblade", slot: "weapon", armorType: null, style: "melee", hands: 2, damageMin: 10, damageMax: 16, armor: 0, speed: 0.88, rangeBonus: 0, reqStr: 20, reqDex: 0, reqEne: 0 },
-  { name: "Reed Bow", slot: "weapon", armorType: null, style: "bow", hands: 2, damageMin: 4, damageMax: 8, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 14, reqEne: 0 },
-  { name: "Palm Crossbow", slot: "weapon", armorType: null, style: "handbow", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 0.92, rangeBonus: 0, reqStr: 0, reqDex: 12, reqEne: 0 },
-  { name: "Throwing Knives", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 3, damageMax: 7, armor: 0, speed: 1.18, rangeBonus: 0, reqStr: 0, reqDex: 10, reqEne: 0 },
-  { name: "Bone Hatchet", slot: "weapon", armorType: null, style: "thrown", hands: 1, damageMin: 5, damageMax: 9, armor: 0, speed: 1.02, rangeBonus: 0, reqStr: 8, reqDex: 10, reqEne: 0 },
-  { name: "Moon Focus", slot: "weapon", armorType: null, style: "focus", hands: 1, damageMin: 3, damageMax: 6, armor: 0, speed: 1.08, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 12 },
+  // Swords
+  w({ name: "Ash Blade", family: "sword", style: "melee", hands: 1, damageMin: 5, damageMax: 9, speed: 1, reqStr: 12, reqDex: 0, reqEne: 0 }),
+  w({ name: "Ward Sabre", family: "sword", style: "melee", hands: 1, damageMin: 6, damageMax: 10, speed: 1.06, reqStr: 10, reqDex: 8, reqEne: 0 }),
+  w({ name: "Short Falchion", family: "sword", style: "melee", hands: 1, damageMin: 7, damageMax: 11, speed: 0.96, reqStr: 14, reqDex: 0, reqEne: 0 }),
+  w({ name: "Great Ashblade", family: "sword", style: "melee", hands: 2, damageMin: 10, damageMax: 16, speed: 0.88, reqStr: 20, reqDex: 0, reqEne: 0 }),
+  w({ name: "Claymore", family: "sword", style: "melee", hands: 2, damageMin: 12, damageMax: 18, speed: 0.82, reqStr: 24, reqDex: 0, reqEne: 0 }),
+  // Axes
+  w({ name: "Hand Axe", family: "axe", style: "melee", hands: 1, damageMin: 6, damageMax: 11, speed: 0.94, reqStr: 14, reqDex: 0, reqEne: 0 }),
+  w({ name: "Split Cleaver", family: "axe", style: "melee", hands: 1, damageMin: 8, damageMax: 14, speed: 0.84, reqStr: 18, reqDex: 0, reqEne: 0 }),
+  w({ name: "Battle Axe", family: "axe", style: "melee", hands: 2, damageMin: 11, damageMax: 17, speed: 0.8, reqStr: 22, reqDex: 0, reqEne: 0 }),
+  w({ name: "Greataxe", family: "axe", style: "melee", hands: 2, damageMin: 13, damageMax: 20, speed: 0.74, reqStr: 26, reqDex: 0, reqEne: 0 }),
+  // Maces
+  w({ name: "Flanged Mace", family: "mace", style: "melee", hands: 1, damageMin: 6, damageMax: 10, speed: 0.92, reqStr: 14, reqDex: 0, reqEne: 0 }),
+  w({ name: "War Hammer", family: "mace", style: "melee", hands: 1, damageMin: 8, damageMax: 12, speed: 0.86, reqStr: 18, reqDex: 0, reqEne: 0 }),
+  w({ name: "Oak Maul", family: "mace", style: "melee", hands: 2, damageMin: 11, damageMax: 18, speed: 0.78, reqStr: 22, reqDex: 0, reqEne: 0 }),
+  w({ name: "Great Club", family: "mace", style: "melee", hands: 2, damageMin: 13, damageMax: 19, speed: 0.72, reqStr: 24, reqDex: 0, reqEne: 0 }),
+  // Flails
+  w({ name: "Chain Flail", family: "flail", style: "melee", hands: 1, damageMin: 5, damageMax: 12, speed: 0.9, reqStr: 12, reqDex: 8, reqEne: 0 }),
+  w({ name: "Morning Star", family: "flail", style: "melee", hands: 1, damageMin: 7, damageMax: 13, speed: 0.88, reqStr: 16, reqDex: 0, reqEne: 0 }),
+  w({ name: "Great Flail", family: "flail", style: "melee", hands: 2, damageMin: 10, damageMax: 18, speed: 0.76, reqStr: 20, reqDex: 6, reqEne: 0 }),
+  // Polearms
+  w({ name: "Gate Spear", family: "polearm", style: "melee", hands: 2, damageMin: 7, damageMax: 12, speed: 0.95, rangeBonus: 30, reqStr: 14, reqDex: 0, reqEne: 0 }),
+  w({ name: "Halberd", family: "polearm", style: "melee", hands: 2, damageMin: 9, damageMax: 15, speed: 0.86, rangeBonus: 24, reqStr: 18, reqDex: 6, reqEne: 0 }),
+  w({ name: "Pike", family: "polearm", style: "melee", hands: 2, damageMin: 8, damageMax: 13, speed: 0.9, rangeBonus: 40, reqStr: 16, reqDex: 8, reqEne: 0 }),
+  w({ name: "Glaive", family: "polearm", style: "melee", hands: 2, damageMin: 10, damageMax: 16, speed: 0.84, rangeBonus: 28, reqStr: 18, reqDex: 10, reqEne: 0 }),
+  // Staves & wands
+  w({ name: "Oak Staff", family: "staff", style: "focus", hands: 2, damageMin: 4, damageMax: 9, speed: 0.95, reqStr: 0, reqDex: 0, reqEne: 14 }),
+  w({ name: "Ash Staff", family: "staff", style: "focus", hands: 2, damageMin: 5, damageMax: 11, speed: 0.9, reqStr: 0, reqDex: 0, reqEne: 18 }),
+  w({ name: "Moon Wand", family: "wand", style: "focus", hands: 1, damageMin: 3, damageMax: 6, speed: 1.08, reqStr: 0, reqDex: 0, reqEne: 12 }),
+  w({ name: "Bone Wand", family: "wand", style: "focus", hands: 1, damageMin: 4, damageMax: 7, speed: 1.04, reqStr: 0, reqDex: 0, reqEne: 14 }),
+  w({ name: "Ember Rod", family: "wand", style: "focus", hands: 1, damageMin: 3, damageMax: 8, speed: 1.1, reqStr: 0, reqDex: 0, reqEne: 16 }),
+  // Bows
+  w({ name: "Reed Bow", family: "bow", style: "bow", hands: 2, damageMin: 4, damageMax: 8, speed: 1, reqStr: 0, reqDex: 14, reqEne: 0 }),
+  w({ name: "Yew Longbow", family: "bow", style: "bow", hands: 2, damageMin: 6, damageMax: 11, speed: 0.92, reqStr: 0, reqDex: 18, reqEne: 0 }),
+  w({ name: "Palm Crossbow", family: "handbow", style: "handbow", hands: 1, damageMin: 5, damageMax: 9, speed: 0.92, reqStr: 0, reqDex: 12, reqEne: 0 }),
+  w({ name: "Wrist Bow", family: "handbow", style: "handbow", hands: 1, damageMin: 4, damageMax: 8, speed: 1.05, reqStr: 0, reqDex: 14, reqEne: 0 }),
+  // Throwing weapons of several shapes (family names the thrown type).
+  w({ name: "Throwing Knives", family: "thrown", style: "thrown", hands: 1, damageMin: 3, damageMax: 7, speed: 1.18, reqStr: 0, reqDex: 10, reqEne: 0 }),
+  w({ name: "Bone Hatchet", family: "axe", style: "thrown", hands: 1, damageMin: 5, damageMax: 9, speed: 1.02, reqStr: 8, reqDex: 10, reqEne: 0 }),
+  w({ name: "Throwing Axe", family: "axe", style: "thrown", hands: 1, damageMin: 6, damageMax: 10, speed: 0.98, reqStr: 10, reqDex: 12, reqEne: 0 }),
+  w({ name: "Javelin", family: "polearm", style: "thrown", hands: 1, damageMin: 5, damageMax: 10, speed: 1.05, rangeBonus: 20, reqStr: 8, reqDex: 12, reqEne: 0 }),
+  w({ name: "War Dart", family: "thrown", style: "thrown", hands: 1, damageMin: 4, damageMax: 8, speed: 1.22, reqStr: 0, reqDex: 12, reqEne: 0 }),
+  w({ name: "Chakram", family: "thrown", style: "thrown", hands: 1, damageMin: 4, damageMax: 9, speed: 1.12, reqStr: 0, reqDex: 14, reqEne: 0 }),
+  w({ name: "Throwing Spear", family: "polearm", style: "thrown", hands: 1, damageMin: 6, damageMax: 11, speed: 0.96, rangeBonus: 28, reqStr: 10, reqDex: 14, reqEne: 0 }),
 ];
 
 const SHIELDS: BaseItem[] = [
-  { name: "Wood Buckler", slot: "shield", armorType: "leather", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 8, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Iron Targe", slot: "shield", armorType: "mail", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 14, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
-  { name: "Tower Plate", slot: "shield", armorType: "plate", style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 22, speed: 1, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
+  { name: "Wood Buckler", slot: "shield", armorType: "leather", style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 8, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Targe", slot: "shield", armorType: "mail", style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 14, speed: 1, rangeBonus: 0, reqStr: 12, reqDex: 0, reqEne: 0 },
+  { name: "Tower Plate", slot: "shield", armorType: "plate", style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 22, speed: 1, rangeBonus: 0, reqStr: 18, reqDex: 0, reqEne: 0 },
 ];
 
 const ARMOR_ROWS: Record<
   ArmorType,
   Record<
     "head" | "chest" | "belt" | "boots" | "gloves",
-    Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "rangeBonus" | "damageMin" | "damageMax" | "hands"> & {
+    Omit<BaseItem, "slot" | "armorType" | "style" | "speed" | "rangeBonus" | "damageMin" | "damageMax" | "hands" | "family"> & {
       armor: number;
     }
   >
@@ -97,12 +154,12 @@ const ARMOR_ROWS: Record<
 };
 
 const JEWELRY: BaseItem[] = [
-  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
-  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", hands: 1, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Iron Band", slot: "ring", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Circle", slot: "ring", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Copper Chain", slot: "neck", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ward Torc", slot: "neck", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Bone Stud", slot: "earring", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
+  { name: "Ash Drop", slot: "earring", armorType: null, style: "melee", hands: 1, family: null, damageMin: 0, damageMax: 0, armor: 0, speed: 1, rangeBonus: 0, reqStr: 0, reqDex: 0, reqEne: 0 },
 ];
 
 const DYES: Record<ArmorType, number[]> = {
@@ -119,12 +176,10 @@ const AFFIXES: { affix: Affix; prefix: string; weight: number }[] = [
   { prefix: "Sage", affix: { key: "spirit", value: 3, label: "+3 Spirit" }, weight: 3 },
   { prefix: "Lucky", affix: { key: "luck", value: 3, label: "+3 Luck" }, weight: 3 },
   { prefix: "Stalwart", affix: { key: "life", value: 14, label: "+14 Life" }, weight: 4 },
-  { prefix: "Well", affix: { key: "energy", value: 10, label: "+10 Energy" }, weight: 3 },
   { prefix: "Plated", affix: { key: "armor", value: 8, label: "+8 Armor" }, weight: 3 },
   { prefix: "Keen", affix: { key: "damage", value: 2, label: "+2 Weapon Damage" }, weight: 3 },
   { prefix: "True", affix: { key: "attackRating", value: 12, label: "+12 Attack Rating" }, weight: 2 },
   { prefix: "Cruel", affix: { key: "crit", value: 0.03, label: "+3% Critical Chance" }, weight: 2 },
-  { prefix: "Flowing", affix: { key: "energyRegen", value: 0.35, label: "+0.35 Energy Regeneration" }, weight: 2 },
   { prefix: "Ember", affix: { key: "burn", value: 2.5, label: "+2.5 Fire Burn on Hit" }, weight: 2 },
   { prefix: "Rime", affix: { key: "frost", value: 0.2, label: "Chill: 20% slow on Hit" }, weight: 2 },
   { prefix: "Storm", affix: { key: "lightning", value: 4, label: "+4 Lightning Damage" }, weight: 2 },
@@ -214,6 +269,7 @@ function armorBases(): BaseItem[] {
         armorType,
         style: "melee",
         hands: 1,
+        family: null,
         damageMin: 0,
         damageMax: 0,
         speed: 1,
@@ -233,6 +289,7 @@ interface UniqueDef {
   armorType: ArmorType | null;
   style: WeaponStyle;
   hands?: WeaponHands;
+  family?: WeaponFamily | null;
   minWave: number;
   damageMin: number;
   damageMax: number;
@@ -256,6 +313,8 @@ const UNIQUES: UniqueDef[] = [
     slot: "weapon",
     armorType: null,
     style: "melee",
+    hands: 1,
+    family: "sword",
     minWave: 3,
     damageMin: 12,
     damageMax: 20,
@@ -280,6 +339,8 @@ const UNIQUES: UniqueDef[] = [
     slot: "weapon",
     armorType: null,
     style: "focus",
+    hands: 1,
+    family: "wand",
     minWave: 6,
     damageMin: 8,
     damageMax: 14,
@@ -294,8 +355,8 @@ const UNIQUES: UniqueDef[] = [
     affixes: [
       { key: "spellMult", value: 0.14, label: "Rite: 14% more spell damage" },
       { key: "spirit", value: 4, label: "+4 Spirit" },
-      { key: "energy", value: 12, label: "+12 Energy" },
-      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
+      { key: "life", value: 16, label: "+16 Life" },
+      { key: "damage", value: 2, label: "+2 Weapon Damage" },
     ],
   },
   {
@@ -412,9 +473,9 @@ const UNIQUES: UniqueDef[] = [
     sockets: 0,
     dye: 0x3d4a78,
     affixes: [
-      { key: "cdr", value: 0.08, label: "Measured Cast: 8% cooldown reduction" },
+      { key: "spellMult", value: 0.08, label: "Measured Cast: 8% more spell damage" },
       { key: "spirit", value: 3, label: "+3 Spirit" },
-      { key: "energy", value: 10, label: "+10 Energy" },
+      { key: "life", value: 14, label: "+14 Life" },
       { key: "crit", value: 0.03, label: "+3% Critical Chance" },
     ],
   },
@@ -461,8 +522,8 @@ const UNIQUES: UniqueDef[] = [
     dye: 0x3d7a8a,
     affixes: [
       { key: "lifeRegen", value: 1.2, label: "Ward Pulse: +1.20 life regeneration" },
-      { key: "energy", value: 14, label: "+14 Energy" },
-      { key: "energyRegen", value: 0.4, label: "+0.40 Energy Regeneration" },
+      { key: "life", value: 18, label: "+18 Life" },
+      { key: "armor", value: 6, label: "+6 Armor" },
       { key: "spirit", value: 3, label: "+3 Spirit" },
     ],
   },
@@ -480,7 +541,7 @@ export function uniqueChance(wave: number): number {
   return Math.min(0.04, 0.018 + Math.max(0, wave - 1) * 0.001);
 }
 
-function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "quality" | "sockets" | "gems" | "hands"> & Partial<Item>): Item {
+function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "ilvl" | "dye" | "quality" | "sockets" | "gems" | "hands" | "family"> & Partial<Item>): Item {
   return {
     ethereal: false,
     uniqueId: null,
@@ -491,6 +552,7 @@ function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "
     sockets: 0,
     gems: [],
     hands: 1,
+    family: null,
     ...partial,
   };
 }
@@ -615,6 +677,7 @@ function makeUnique(unique: UniqueDef, rng: () => number, uid: string, wave: num
     uniqueId: unique.id,
     style: unique.style,
     hands: unique.hands ?? defaultHands(unique.slot, unique.style, unique.name),
+    family: unique.family ?? inferWeaponFamily(unique.slot, unique.style, unique.name),
     damageMin: unique.damageMin,
     damageMax: unique.damageMax,
     armor: unique.armor,
@@ -640,13 +703,12 @@ export function rolledAffixAmount(key: string, base: number, power: number): num
 }
 
 function roundStored(key: string, value: number): number {
-  if (key === "crit" || key === "energyRegen") return Math.round(value * 100) / 100;
+  if (key === "crit") return Math.round(value * 100) / 100;
   return Math.max(1, Math.round(value));
 }
 
 function storedLabel(key: string, value: number): string {
   if (key === "crit") return `+${Math.round(value * 100)}% Critical Chance`;
-  if (key === "energyRegen") return `+${value.toFixed(2)} Energy Regeneration`;
   const names: Record<string, string> = {
     strength: "Strength",
     agility: "Agility",
@@ -654,7 +716,6 @@ function storedLabel(key: string, value: number): string {
     luck: "Luck",
     spirit: "Spirit",
     life: "Life",
-    energy: "Energy",
     armor: "Armor",
     damage: "Weapon Damage",
     attackRating: "Attack Rating",
@@ -800,10 +861,77 @@ export function canWieldTwoHand(c: Character): boolean {
 export function defaultHands(slot: ItemSlot, style: WeaponStyle, name = ""): WeaponHands {
   if (slot === "shield") return 1;
   if (style === "bow") return 2;
-  if (style === "thrown" || style === "handbow" || style === "focus") return 1;
+  if (style === "thrown" || style === "handbow") return 1;
   const lower = name.toLowerCase();
-  if (lower.includes("great") || lower.includes("maul") || lower.includes("spear") || lower.includes("pike")) return 2;
+  if (lower.includes("staff") || lower.includes("stave")) return 2;
+  if (style === "focus") return lower.includes("wand") || lower.includes("rod") || lower.includes("focus") ? 1 : 2;
+  if (
+    lower.includes("great") ||
+    lower.includes("maul") ||
+    lower.includes("spear") ||
+    lower.includes("pike") ||
+    lower.includes("halberd") ||
+    lower.includes("glaive") ||
+    lower.includes("claymore") ||
+    lower.includes("greataxe") ||
+    lower.includes("battle axe")
+  ) {
+    return 2;
+  }
   return 1;
+}
+
+/** Infer weapon class from style/name for saves and uniques that omit family. */
+export function inferWeaponFamily(slot: ItemSlot, style: WeaponStyle, name = ""): WeaponFamily | null {
+  if (slot !== "weapon") return null;
+  if (style === "bow") return "bow";
+  if (style === "handbow") return "handbow";
+  const lower = name.toLowerCase();
+  if (style === "focus") {
+    if (lower.includes("staff") || lower.includes("stave")) return "staff";
+    return "wand";
+  }
+  if (lower.includes("flail") || lower.includes("morning star") || lower.includes("morningstar")) return "flail";
+  if (lower.includes("mace") || lower.includes("maul") || lower.includes("hammer") || lower.includes("club")) return "mace";
+  if (
+    lower.includes("spear") ||
+    lower.includes("pike") ||
+    lower.includes("halberd") ||
+    lower.includes("glaive") ||
+    lower.includes("javelin") ||
+    lower.includes("pole")
+  ) {
+    return "polearm";
+  }
+  if (lower.includes("axe") || lower.includes("hatchet") || lower.includes("cleaver") || lower.includes("greataxe")) {
+    return "axe";
+  }
+  if (lower.includes("staff") || lower.includes("stave")) return "staff";
+  if (lower.includes("wand") || lower.includes("rod") || lower.includes("focus")) return "wand";
+  if (style === "thrown") {
+    if (lower.includes("axe") || lower.includes("hatchet")) return "axe";
+    if (lower.includes("spear") || lower.includes("javelin")) return "polearm";
+    return "thrown";
+  }
+  if (lower.includes("blade") || lower.includes("sword") || lower.includes("sabre") || lower.includes("falchion") || lower.includes("claymore")) {
+    return "sword";
+  }
+  return style === "melee" ? "sword" : "thrown";
+}
+
+export function weaponKindLabel(item: Item): string {
+  if (item.slot === "shield") return "Shield";
+  if (item.slot !== "weapon") return "";
+  const family = item.family ?? inferWeaponFamily(item.slot, item.style, item.name);
+  const familyName = family ? WEAPON_FAMILY_LABEL[family] : "Weapon";
+  if (item.style === "thrown") {
+    if (family && family !== "thrown") return `Thrown ${familyName}`;
+    return "Thrown Weapon";
+  }
+  if (item.style === "bow") return "Two-Hand Bow";
+  if (item.style === "handbow") return "One-Hand Crossbow";
+  const hands = itemHands(item) === 2 ? "Two-Hand" : "One-Hand";
+  return `${hands} ${familyName}`;
 }
 
 export function equipItem(c: Character, uid: string): string | null {
@@ -895,22 +1023,9 @@ export function itemSummary(item: Item, level = 1): string {
   if (item.armorType) bits.push(ARMOR_LABEL[item.armorType]);
   if (item.ethereal) bits.push(item.slot === "weapon" ? "+10% damage" : "+10% defence");
   if (item.slot === "weapon" || item.slot === "shield") {
-    const style =
-      item.slot === "shield"
-        ? "Shield"
-        : item.style === "bow"
-          ? "Bow"
-          : item.style === "handbow"
-            ? "Hand Crossbow"
-            : item.style === "thrown"
-              ? "Thrown"
-              : item.style === "focus"
-                ? "Focus"
-                : itemHands(item) === 2
-                  ? "Two-Hand"
-                  : "One-Hand";
-    if (item.slot === "shield") bits.push(`${style} ${live.armor} armor`);
-    else bits.push(`${style} ${live.damageMin}–${live.damageMax}`);
+    const kind = weaponKindLabel(item);
+    if (item.slot === "shield") bits.push(`${kind} ${live.armor} armor`);
+    else bits.push(`${kind} ${live.damageMin}–${live.damageMax}`);
   } else if (live.armor > 0) bits.push(`${live.armor} armor`);
   if (item.sockets > 0) {
     const filled = item.gems.filter((gem) => gem).length;
@@ -935,7 +1050,6 @@ const RARITY_YIELD: Record<Rarity, number> = {
 
 const FRACTION_AFFIX = new Set([
   "crit",
-  "energyRegen",
   "lifeRegen",
   "goldFind",
   "meleeMult",
@@ -944,10 +1058,16 @@ const FRACTION_AFFIX = new Set([
   "damageReduction",
   "moveSpeed",
   "bleedChance",
-  "cdr",
   "attackSpeed",
   "frost",
 ]);
+
+/** Affixes retired with the charge system — stripped from saves and rolls. */
+const RETIRED_AFFIX = new Set(["energy", "energyMax", "energyOnHit", "energyRegen", "cdr", "mana", "manaRegen"]);
+
+export function stripRetiredAffixes(item: Item): void {
+  item.affixes = item.affixes.filter((affix) => !RETIRED_AFFIX.has(affix.key));
+}
 
 export function materialFor(item: Item): MaterialId {
   if (item.slot === "weapon") return "steel";

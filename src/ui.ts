@@ -3,13 +3,15 @@ import { derive, requirementText, xpGoal } from "./game/formulas";
 import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
 import { ACTIVES, describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { bankReady, skillChargeProfile } from "./game/skillCharge";
 import { appendSkillIcon } from "./game/skillIcons";
-import { readSlots } from "./game/save";
-import { RACES, raceById, raceName, type RaceId } from "./game/races";
+import { cleanName, readSlots } from "./game/save";
+import { RACES, raceById, raceHasGender, raceName, type RaceId } from "./game/races";
 import { buyPrice, buyStockItem, gambleBlurb, gambleCost, gambleItem, merchantStock, sellItem, sellPrice, TOWN_NAME, VENDORS, type TownVendor } from "./game/town";
+import { monsterOf } from "./game/monsters";
 import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
-import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
+import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type Gender, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
 import { RacePreview } from "./render/racePreview";
 import { raceDollSvg } from "./ui/dollSilhouette";
 
@@ -17,8 +19,11 @@ export class Ui {
   treeFilter: SectorId | "all" = "all";
   selectedId: string | null = null;
   createRace: RaceId = "human";
+  createGender: Gender = "male";
   private createSlot = 0;
   private racePreview: RacePreview | null = null;
+  private slotPreviews: (RacePreview | null)[] = [null, null, null];
+  private selectedSlot = -1;
   private session: Record<Attr, number> = { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 };
   private treeKey = "";
   private packKey = "";
@@ -68,24 +73,60 @@ export class Ui {
     this.racePreview?.stop();
     this.hide("create");
     this.show("title");
+    this.ensureSlotPreviews();
     const slots = readSlots(localStorage);
     slots.forEach((slot, index) => {
-      const input = must(`slot-name-${index}`) as HTMLInputElement;
-      if (document.activeElement !== input) input.value = slot.name;
       const occupied = slot.save !== null;
-      const race = occupied ? raceName(slot.save?.character.race) : "";
+      const character = slot.save?.character;
+      const name = occupied ? cleanName(character?.name || slot.name) : "Empty";
+      text(`slot-name-${index}`, name);
+      const race = occupied ? raceName(character?.race) : "";
       text(
         `slot-meta-${index}`,
-        occupied ? `${race} · Level ${slot.save?.character.level} · ${levelName(slot.save?.wave ?? 1)}` : "Empty",
+        occupied ? `${race} · Level ${character?.level ?? 1} · ${levelName(slot.save?.wave ?? 1)}` : "No exile yet",
       );
       text(`slot-play-${index}`, occupied ? "Continue" : "New");
       const del = must(`slot-delete-${index}`) as HTMLButtonElement;
       del.disabled = !occupied;
       del.hidden = false;
+      const canvas = must(`slot-view-${index}`);
+      const empty = must(`slot-empty-${index}`);
+      const preview = this.slotPreviews[index];
+      const card = must(`slot-name-${index}`).closest(".save-slot") as HTMLElement | null;
+      card?.classList.toggle("selected", occupied && this.selectedSlot === index);
+      if (occupied && character && preview) {
+        canvas.classList.remove("hidden");
+        empty.classList.add("hidden");
+        const gender = character.gender === "female" ? "female" : "male";
+        preview.show(character.race, gender, character.equipment, { spin: false });
+      } else {
+        canvas.classList.add("hidden");
+        empty.classList.remove("hidden");
+        preview?.clear();
+        if (this.selectedSlot === index) this.selectedSlot = -1;
+      }
     });
   }
 
+  /** Highlight a save slot and play a one-shot weapon swing on its portrait. */
+  selectSaveSlot(index: number): void {
+    if (index < 0 || index > 2) return;
+    const slots = readSlots(localStorage);
+    const occupied = !!slots[index]?.save;
+    for (let i = 0; i < 3; i++) {
+      const card = document.querySelector(`.save-slot[data-slot="${i}"]`);
+      card?.classList.toggle("selected", occupied && i === index);
+    }
+    if (!occupied) {
+      this.selectedSlot = -1;
+      return;
+    }
+    this.selectedSlot = index;
+    this.slotPreviews[index]?.playAttackOnce();
+  }
+
   hideTitle(): void {
+    this.stopSlotPreviews();
     this.racePreview?.stop();
     this.hide("title");
     this.hide("create");
@@ -94,6 +135,8 @@ export class Ui {
   openCreate(slot: number, name: string): void {
     this.createSlot = slot;
     this.createRace = "human";
+    this.createGender = "male";
+    this.stopSlotPreviews();
     this.hide("title");
     this.show("create");
     const input = must("create-name") as HTMLInputElement;
@@ -139,17 +182,37 @@ export class Ui {
     this.showTitle();
   }
 
-  createChoice(): { slot: number; name: string; race: RaceId } {
+  createChoice(): { slot: number; name: string; race: RaceId; gender: Gender } {
+    const gendered = raceHasGender(this.createRace);
     return {
       slot: this.createSlot,
       name: (must("create-name") as HTMLInputElement).value,
       race: this.createRace,
+      // Unisex races (minotaur / golem) always store male as the canonical form.
+      gender: gendered ? this.createGender : "male",
     };
+  }
+
+  private setGender(gender: Gender): void {
+    if (!raceHasGender(this.createRace)) return;
+    this.createGender = gender;
+    this.paintCreate();
   }
 
   private ensureRacePreview(): void {
     if (this.racePreview) return;
     this.racePreview = new RacePreview(must("race-view") as HTMLCanvasElement);
+  }
+
+  private ensureSlotPreviews(): void {
+    for (let i = 0; i < 3; i++) {
+      if (this.slotPreviews[i]) continue;
+      this.slotPreviews[i] = new RacePreview(must(`slot-view-${i}`) as HTMLCanvasElement);
+    }
+  }
+
+  private stopSlotPreviews(): void {
+    for (const preview of this.slotPreviews) preview?.stop();
   }
 
   private stepRace(delta: number): void {
@@ -180,7 +243,17 @@ export class Ui {
       special.textContent = race.passive;
       passives.append(special);
     }
-    this.racePreview?.show(race.id);
+    const gendered = raceHasGender(race.id);
+    const picker = must("gender-picker");
+    picker.classList.toggle("unisex", !gendered);
+    must("gender-unisex").classList.toggle("hidden", gendered);
+    must("gender-male").classList.toggle("on", gendered && this.createGender === "male");
+    must("gender-female").classList.toggle("on", gendered && this.createGender === "female");
+    must("gender-male").setAttribute("aria-pressed", gendered && this.createGender === "male" ? "true" : "false");
+    must("gender-female").setAttribute("aria-pressed", gendered && this.createGender === "female" ? "true" : "false");
+    must("gender-male").toggleAttribute("disabled", !gendered);
+    must("gender-female").toggleAttribute("disabled", !gendered);
+    this.racePreview?.show(race.id, gendered ? this.createGender : "male");
   }
 
   hideDead(): void {
@@ -189,6 +262,22 @@ export class Ui {
 
   showDead(): void {
     this.show("dead");
+  }
+
+  private syncTargetFrame(sim: Sim): void {
+    const frame = must("target-frame");
+    const focus = sim.focusEnemy();
+    frame.classList.toggle("hidden", !focus);
+    if (!focus) return;
+    const def = monsterOf(focus.kind);
+    text("target-name", def.name);
+    const elite = must("target-elite");
+    elite.classList.toggle("hidden", !focus.elite);
+    frame.classList.toggle("elite", focus.elite);
+    const ratio = Math.max(0, focus.hp / Math.max(1, focus.maxHp));
+    must("target-hp-fill").style.transform = `scaleX(${Math.max(0.001, ratio)})`;
+    text("target-hp", `${Math.ceil(focus.hp)}`);
+    text("target-hp-max", `${Math.ceil(focus.maxHp)}`);
   }
 
   sync(sim: Sim): void {
@@ -205,6 +294,7 @@ export class Ui {
     text("hp-max", `${derived.life}`);
     const life = must("life-globe");
     life.style.setProperty("--fill", String(sim.player.hp / Math.max(1, derived.life)));
+    this.syncTargetFrame(sim);
     must("btn-character").classList.toggle("attention", c.unspentStats > 0);
     must("btn-tree").classList.toggle("attention", c.unspentSkills > 0 || (c.unspentClass ?? 0) > 0);
     const banner = must("banner");
@@ -221,21 +311,46 @@ export class Ui {
 
     for (let i = 0; i < 3; i++) {
       const button = must(`skill-${i}`);
+      const label = button.querySelector(".skill-label") as HTMLElement | null;
+      const pipsHost = button.querySelector(".skill-pips") as HTMLElement | null;
       const id = c.slotted[i];
-      const spec = id ? scaledActive(id, c.skillRanks[id] ?? 0, c.skillRanks) : null;
+      const rank = id ? c.skillRanks[id] ?? 0 : 0;
+      const spec = id ? scaledActive(id, rank, c.skillRanks) : null;
       const skill = id ? skillById(id) : undefined;
-      const cost = spec && spec.kind !== "aura" ? spec.energyCost : spec?.energyPerSec ?? 0;
-      const charged = !spec || spec.kind === "aura" || sim.player.energy >= (spec.energyCost || 0);
-      button.textContent = skill ? skill.name : "Empty";
-      button.title = skill && cost ? `${skill.name} · ${Math.round(cost)}${spec?.kind === "aura" ? "/s" : ""} energy` : skill?.name ?? "Empty";
-      const max = spec ? Math.max(0.2, spec.cooldown) : 1;
-      const ratio = spec && spec.kind !== "aura" ? Math.min(1, sim.player.skillCd[i]! / max) : 0;
-      button.style.setProperty("--cd", String(ratio));
+      const profile = id ? skillChargeProfile(id, rank, c.skillRanks, derived, sim.mods, c) : null;
+      const bank = sim.player.skillBanks[i]!;
+      const ready = !profile || (spec?.kind === "aura" ? bank.energy > 0 : bankReady(bank, profile));
+      if (label) label.textContent = skill ? skill.name : "Empty";
+      button.title = skill
+        ? profile?.continuous
+          ? `${skill.name} · ${Math.round(bank.energy)}/${profile.pool} charge${spec?.kind === "aura" ? ` · ${spec.energyPerSec.toFixed(1)}/s` : ""}`
+          : `${skill.name} · ${bank.charges}/${profile?.maxCharges ?? 0} charges`
+        : "Empty";
       button.classList.toggle("on", !!sim.player.auras[i]);
       button.classList.toggle("empty", !skill);
-      button.classList.toggle("starved", !!skill && !charged && spec?.kind !== "aura");
-      const fill = Math.min(1, sim.player.energy / Math.max(1, derived.energy));
-      button.style.setProperty("--energy", String(fill));
+      button.classList.toggle("starved", !!skill && !ready);
+      button.classList.toggle("has-meter", !!profile?.continuous);
+      button.classList.toggle("has-inner", !!profile && !profile.continuous);
+      button.classList.toggle("channel-meter", !!profile?.continuous);
+      const fill = profile ? Math.min(1, bank.energy / Math.max(1, profile.pool)) : 0;
+      button.style.setProperty("--ring", profile?.color ?? "var(--gold)");
+      button.style.setProperty("--fill", String(fill));
+      if (pipsHost) {
+        const max = profile && !profile.continuous ? profile.maxCharges : 0;
+        if (pipsHost.childElementCount !== max) {
+          pipsHost.replaceChildren();
+          for (let p = 0; p < max; p++) {
+            const pip = document.createElement("span");
+            pip.className = "skill-pip";
+            const angle = max === 1 ? -90 : -90 + (p / max) * 360;
+            pip.style.setProperty("--a", `${angle}deg`);
+            pipsHost.appendChild(pip);
+          }
+        }
+        Array.from(pipsHost.children).forEach((node, p) => {
+          node.classList.toggle("on", p < bank.charges);
+        });
+      }
     }
 
     if (this.open("sheet")) this.paintSheet(sim);
@@ -304,6 +419,8 @@ export class Ui {
     must("create-back").addEventListener("click", () => this.hideCreate());
     must("race-prev").addEventListener("click", () => this.stepRace(-1));
     must("race-next").addEventListener("click", () => this.stepRace(1));
+    must("gender-male").addEventListener("click", () => this.setGender("male"));
+    must("gender-female").addEventListener("click", () => this.setGender("female"));
     const createName = must("create-name") as HTMLInputElement;
     createName.addEventListener("pointerup", () => this.focusNameField(createName));
     createName.addEventListener("touchend", () => this.focusNameField(createName), { passive: true });

@@ -563,7 +563,12 @@ describe("the ward", () => {
     expect(near.hp).toBe(before);
     const far = new Sim(createCharacter(), 2);
     far.begin();
-    const out = makeEnemy("hound", 1, far.player.x + 500, far.player.y, 52);
+    // Place far along the road (Y) — X offsets get clamped into the lane and land in melee.
+    const out = makeEnemy("hound", 1, far.player.x, far.player.y - 800, 52);
+    out.homeX = out.x;
+    out.homeY = out.y;
+    out.anchorX = out.x;
+    out.anchorY = out.y;
     far.enemies = [out];
     const farHp = out.hp;
     for (let i = 0; i < 20; i++) far.update(emptyIntent(), 0.1);
@@ -818,16 +823,30 @@ describe("the ward", () => {
     expect(synergyPower("breaker", { "ruin-strike": 10, cleave: 10 })).toBeGreaterThan(0);
   });
 
-  it("charges skill energy when attacks land", () => {
-    const sim = new Sim(createCharacter(), 1);
+  it("charges skill banks from normal attacks only, with no timed cooldown", () => {
+    const hero = createCharacter();
+    hero.skillRanks["heavy-blow"] = 1;
+    hero.unspentSkills = 0;
+    slotSkill(hero, "heavy-blow", 0);
+    const sim = new Sim(hero, 1);
     sim.begin();
-    sim.player.energy = 0;
+    const before = { ...sim.player.skillBanks[0]! };
     const hound = makeEnemy("hound", 1, sim.player.x + 30, sim.player.y, 40);
     sim.enemies = [hound];
     const intent = emptyIntent();
     intent.attack = true;
-    for (let i = 0; i < 20; i++) sim.update(intent, 0.1);
-    expect(sim.player.energy).toBeGreaterThan(0);
+    for (let i = 0; i < 40; i++) sim.update(intent, 0.1);
+    const bank = sim.player.skillBanks[0]!;
+    expect(bank.energy + bank.charges).toBeGreaterThan(before.energy + before.charges);
+    // Banks do not fill on their own while idle out of combat.
+    const mid = { energy: bank.energy, charges: bank.charges };
+    sim.enemies = [];
+    intent.attack = false;
+    sim.player.dest = null;
+    sim.player.aimId = null;
+    for (let i = 0; i < 30; i++) sim.update(intent, 0.1);
+    expect(sim.player.skillBanks[0]!.energy).toBe(mid.energy);
+    expect(sim.player.skillBanks[0]!.charges).toBe(mid.charges);
   });
 
   it("lets insectoids wield four weapons with innate armor and thin gear plating", () => {

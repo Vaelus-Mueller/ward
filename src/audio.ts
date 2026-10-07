@@ -9,6 +9,11 @@ const LINES: Record<VoiceLine, string[]> = {
   maxCritTaken: ["That hurt!", "Heavy hit!", "I'm hit hard!", "Crushing blow!"],
 };
 
+/** Minimum spacing between identical combat cues (ms). Stops Android WebView underruns. */
+const HIT_GAP_MS = 48;
+const HURT_GAP_MS = 90;
+const SFX_VOICE_CAP = 10;
+
 /**
  * Procedural SFX + a dark pipe-organ title bed (SotN-adjacent mood, original voicing).
  * No recorded Castlevania assets — additive organ + cathedral impulse, offline-safe.
@@ -29,10 +34,17 @@ export class AudioBus {
   private themeTimer: number | null = null;
   private themeOn = false;
   private master: GainNode | null = null;
+  private outBus: GainNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private sfxBus: GainNode | null = null;
   private organBus: GainNode | null = null;
+  private pipeWave: PeriodicWave | null = null;
   private chordIndex = 0;
   private nativeShell = Capacitor.isNativePlatform();
+  private lastHitAt = 0;
+  private lastHurtAt = 0;
+  private liveSfx = 0;
+  private unlocking: Promise<void> | null = null;
 
   toggle(): boolean {
     this.muted = !this.muted;
@@ -44,8 +56,10 @@ export class AudioBus {
       }
       this.setThemeGain(0);
     } else if (this.themeOn) {
-      if (this.themeNodes.length === 0) this.buildTheme();
-      else this.setThemeGain(1);
+      void this.unlock().then(() => {
+        if (this.themeNodes.length === 0) this.buildTheme();
+        else this.setThemeGain(1);
+      });
     }
     return this.muted;
   }
@@ -54,26 +68,33 @@ export class AudioBus {
   startOminous(): void {
     this.themeOn = true;
     if (this.muted) return;
-    const ctx = this.context();
-    if (!ctx) return;
-    void ctx.resume().then(() => this.buildTheme());
+    void this.unlock().then(() => this.buildTheme());
+  }
+
+  /** Wake a suspended AudioContext after backgrounding without forcing title music. */
+  resume(): void {
+    if (this.muted) return;
+    void this.unlock().then(() => {
+      if (this.themeOn && this.themeNodes.length === 0) this.buildTheme();
+    });
   }
 
   private buildTheme(): void {
     const ctx = this.ctx;
-    if (!ctx || this.muted || this.themeNodes.length > 0) return;
+    if (!ctx || this.muted || this.themeNodes.length > 0 || ctx.state !== "running") return;
+    this.ensureGraph(ctx);
 
     const master = ctx.createGain();
     master.gain.value = 0.0001;
-    master.connect(ctx.destination);
+    master.connect(this.outBus!);
     this.master = master;
-    master.gain.exponentialRampToValueAtTime(0.7, ctx.currentTime + 1.8);
+    master.gain.linearRampToValueAtTime(0.42, ctx.currentTime + 1.6);
 
-    // Cathedral space via a short synthetic impulse.
+    // Cathedral space — keep wet modest so the sum doesn't clip phone DACs.
     const wet = ctx.createGain();
     const dry = ctx.createGain();
-    wet.gain.value = 0.55;
-    dry.gain.value = 0.7;
+    wet.gain.value = 0.28;
+    dry.gain.value = 0.62;
     const convolver = ctx.createConvolver();
     convolver.buffer = this.cathedralImpulse(ctx);
     const organ = ctx.createGain();
@@ -84,12 +105,12 @@ export class AudioBus {
     convolver.connect(wet);
     dry.connect(master);
     wet.connect(master);
-    this.themeNodes.push(organ, dry, wet, convolver);
+    this.themeNodes.push(organ, dry, wet, convolver, master);
 
     // Deep pedal — D minor tonic / dominant under the chorale.
-    this.pipePedal(ctx, organ, 36.71, 0.07); // D1
-    this.pipePedal(ctx, organ, 55.0, 0.045); // A1
-    this.pipePedal(ctx, organ, 73.42, 0.03); // D2
+    this.pipePedal(ctx, organ, 36.71, 0.045); // D1
+    this.pipePedal(ctx, organ, 55.0, 0.03); // A1
+    this.pipePedal(ctx, organ, 73.42, 0.02); // D2
 
     this.chordIndex = 0;
     this.scheduleChorale(ctx, organ);
@@ -110,7 +131,7 @@ export class AudioBus {
     const now = ctx.currentTime;
     master.gain.cancelScheduledValues(now);
     master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + fadeMs / 1000);
+    master.gain.linearRampToValueAtTime(0.0001, now + fadeMs / 1000);
     window.setTimeout(() => this.clearTheme(), fadeMs + 80);
   }
 
@@ -119,7 +140,7 @@ export class AudioBus {
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
-    this.master.gain.exponentialRampToValueAtTime(Math.max(0.0001, level * 0.7), now + 0.4);
+    this.master.gain.linearRampToValueAtTime(Math.max(0.0001, level * 0.42), now + 0.35);
   }
 
   private clearTheme(): void {
@@ -134,14 +155,13 @@ export class AudioBus {
       }
     }
     this.themeNodes = [];
-    this.master?.disconnect();
     this.master = null;
     this.organBus = null;
   }
 
   /** Slow D-minor gothic chorale — original progression, organ timbre. */
   private scheduleChorale(ctx: AudioContext, dest: AudioNode): void {
-    if (!this.themeOn || this.muted) return;
+    if (!this.themeOn || this.muted || ctx.state !== "running") return;
     // Dm · Bb · Am · Gm · Dm/A · C · A · Dm — solemn, castlevania-adjacent mood.
     const chords: number[][] = [
       [146.83, 174.61, 220.0], // D3 F3 A3
@@ -156,20 +176,24 @@ export class AudioBus {
     const chord = chords[this.chordIndex % chords.length]!;
     this.chordIndex += 1;
     const now = ctx.currentTime;
-    const hold = 3.6;
+    const hold = 3.4;
     for (const freq of chord) {
-      this.pipeVoice(ctx, dest, freq, now, hold, 0.028);
-      // Soft quint mixture above for pipe glitter.
-      this.pipeVoice(ctx, dest, freq * 2, now + 0.04, hold - 0.1, 0.01);
+      this.pipeVoice(ctx, dest, freq, now, hold, 0.02);
+      // Soft octave mixture — one partial, quieter, avoids polyphony crackle.
+      this.pipeVoice(ctx, dest, freq * 2, now + 0.05, hold - 0.15, 0.006);
     }
-    this.themeTimer = window.setTimeout(() => this.scheduleChorale(ctx, dest), hold * 1000 - 180);
+    // Schedule slightly before the previous chord ends so the gap never goes silent,
+    // but leave enough room that we do not stack three full chords.
+    this.themeTimer = window.setTimeout(() => this.scheduleChorale(ctx, dest), hold * 1000 - 420);
   }
 
   private pipePedal(ctx: AudioContext, dest: AudioNode, freq: number, gainValue: number): void {
-    const voice = this.makePipe(ctx, freq, gainValue * 0.85);
-    voice.gain.gain.value = gainValue;
+    const voice = this.makePipe(ctx, freq);
+    voice.gain.gain.value = 0.0001;
+    const now = ctx.currentTime;
+    voice.gain.gain.linearRampToValueAtTime(gainValue, now + 0.8);
     voice.out.connect(dest);
-    voice.osc.start();
+    voice.osc.start(now);
     this.themeNodes.push(voice.osc, voice.filter, voice.gain, voice.out);
   }
 
@@ -181,17 +205,16 @@ export class AudioBus {
     duration: number,
     peak: number,
   ): void {
-    const voice = this.makePipe(ctx, freq, peak);
+    const voice = this.makePipe(ctx, freq);
     const g = voice.gain.gain;
     g.setValueAtTime(0.0001, when);
-    g.exponentialRampToValueAtTime(peak, when + 0.35);
-    g.setValueAtTime(peak * 0.92, when + duration - 0.8);
-    g.exponentialRampToValueAtTime(0.0001, when + duration);
+    g.linearRampToValueAtTime(peak, when + 0.45);
+    g.linearRampToValueAtTime(peak * 0.88, when + duration - 0.9);
+    g.linearRampToValueAtTime(0.0001, when + duration);
     voice.out.connect(dest);
     voice.osc.start(when);
-    voice.osc.stop(when + duration + 0.05);
-    // Don't keep stopped oscillators in themeNodes forever — schedule disconnect.
-    window.setTimeout(() => {
+    voice.osc.stop(when + duration + 0.02);
+    voice.osc.onended = () => {
       try {
         voice.osc.disconnect();
         voice.filter.disconnect();
@@ -200,26 +223,26 @@ export class AudioBus {
       } catch {
         // Already gone.
       }
-    }, (duration + 0.2) * 1000);
+    };
   }
 
   /** Additive-ish organ: sine fundamental + odd harmonics through a gentle lowpass. */
   private makePipe(
     ctx: AudioContext,
     freq: number,
-    _peak: number,
   ): { osc: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; out: GainNode } {
-    // Use a custom periodic wave approximating wooden/flue pipe harmonics.
-    const real = new Float32Array([0, 1, 0.45, 0.28, 0.12, 0.08, 0.04, 0.025]);
-    const imag = new Float32Array(real.length);
-    const wave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    if (!this.pipeWave) {
+      const real = new Float32Array([0, 1, 0.42, 0.24, 0.1, 0.06, 0.03, 0.018]);
+      const imag = new Float32Array(real.length);
+      this.pipeWave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    }
     const osc = ctx.createOscillator();
-    osc.setPeriodicWave(wave);
+    osc.setPeriodicWave(this.pipeWave);
     osc.frequency.value = freq;
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = Math.min(3200, freq * 8);
-    filter.Q.value = 0.4;
+    filter.frequency.value = Math.min(2400, freq * 6.5);
+    filter.Q.value = 0.35;
     const gain = ctx.createGain();
     const out = ctx.createGain();
     out.gain.value = 1;
@@ -230,21 +253,52 @@ export class AudioBus {
   }
 
   private cathedralImpulse(ctx: AudioContext): AudioBuffer {
-    const seconds = 2.4;
+    const seconds = 1.8;
     const rate = ctx.sampleRate;
     const length = Math.floor(rate * seconds);
     const buffer = ctx.createBuffer(2, length, rate);
     for (let ch = 0; ch < 2; ch++) {
       const data = buffer.getChannelData(ch);
+      const delay = Math.floor(rate * (0.018 + ch * 0.007));
       for (let i = 0; i < length; i++) {
         const t = i / rate;
-        const decay = Math.exp(-t * 2.1) * (1 - i / length);
-        // Sparse early reflections + noise tail.
-        const tick = i % Math.floor(rate * (0.029 + ch * 0.004)) === 0 ? 0.35 : 0;
-        data[i] = (Math.random() * 2 - 1) * 0.22 * decay + tick * decay;
+        // Smooth exponential tail — no hard reflection spikes (those click on mobile).
+        const decay = Math.exp(-t * 2.6) * (1 - i / length);
+        let sample = (Math.random() * 2 - 1) * 0.14 * decay;
+        if (i > delay) {
+          sample += data[i - delay]! * 0.35;
+        }
+        data[i] = sample;
       }
+      // Gentle DC / click soften at the head.
+      const fade = Math.min(256, length);
+      for (let i = 0; i < fade; i++) data[i]! *= i / fade;
     }
     return buffer;
+  }
+
+  private ensureGraph(ctx: AudioContext): void {
+    if (this.outBus && this.sfxBus && this.compressor) return;
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.18;
+
+    const outBus = ctx.createGain();
+    outBus.gain.value = 0.9;
+    outBus.connect(compressor);
+    compressor.connect(ctx.destination);
+
+    const sfxBus = ctx.createGain();
+    sfxBus.gain.value = 0.55;
+    sfxBus.connect(outBus);
+
+    this.compressor = compressor;
+    this.outBus = outBus;
+    this.sfxBus = sfxBus;
   }
 
   private context(): AudioContext | null {
@@ -252,50 +306,73 @@ export class AudioBus {
     if (!this.ctx) {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return null;
-      this.ctx = new Ctx();
-      this.sfxBus = this.ctx.createGain();
-      this.sfxBus.gain.value = 0.65;
-      this.sfxBus.connect(this.ctx.destination);
+      try {
+        this.ctx = new Ctx({ latencyHint: "interactive" });
+      } catch {
+        this.ctx = new Ctx();
+      }
+      this.ensureGraph(this.ctx);
     }
-    if (this.ctx.state === "suspended") void this.ctx.resume();
     return this.ctx;
   }
 
+  /** Resume a suspended context (required after app background / before first gesture). */
+  private unlock(): Promise<void> {
+    if (this.muted) return Promise.resolve();
+    const ctx = this.context();
+    if (!ctx) return Promise.resolve();
+    if (ctx.state === "running") return Promise.resolve();
+    if (this.unlocking) return this.unlocking;
+    this.unlocking = ctx
+      .resume()
+      .catch(() => undefined)
+      .then(() => {
+        this.unlocking = null;
+      });
+    return this.unlocking;
+  }
+
   hit(): void {
-    this.blip(420, 0.035, "triangle", 0.04);
+    const now = performance.now();
+    if (now - this.lastHitAt < HIT_GAP_MS) return;
+    this.lastHitAt = now;
+    this.blip(420, 0.04, "triangle", 0.032);
   }
 
   hurt(): void {
-    this.blip(110, 0.07, "sine", 0.045);
+    const now = performance.now();
+    if (now - this.lastHurtAt < HURT_GAP_MS) return;
+    this.lastHurtAt = now;
+    this.blip(110, 0.08, "sine", 0.038);
   }
 
   level(): void {
-    this.blip(392, 0.07, "sine", 0.035);
-    window.setTimeout(() => this.blip(523, 0.09, "triangle", 0.03), 90);
+    this.blip(392, 0.08, "sine", 0.03);
+    window.setTimeout(() => this.blip(523, 0.1, "triangle", 0.026), 90);
   }
 
   eliteAggro(): void {
-    this.blip(140, 0.1, "triangle", 0.045);
-    window.setTimeout(() => this.blip(90, 0.14, "sine", 0.035), 70);
+    this.blip(140, 0.11, "triangle", 0.038);
+    window.setTimeout(() => this.blip(90, 0.15, "sine", 0.03), 70);
     this.speak("eliteAggro", 0.95, 0.7);
   }
 
   uniqueFind(): void {
-    this.blip(440, 0.06, "sine", 0.035);
-    window.setTimeout(() => this.blip(554, 0.07, "triangle", 0.03), 80);
-    window.setTimeout(() => this.blip(659, 0.1, "sine", 0.025), 160);
+    this.blip(440, 0.07, "sine", 0.03);
+    window.setTimeout(() => this.blip(554, 0.08, "triangle", 0.026), 80);
+    window.setTimeout(() => this.blip(659, 0.11, "sine", 0.022), 160);
     this.speak("uniqueFind", 1.05, 0.85);
   }
 
   maxCritDealt(): void {
-    this.blip(620, 0.045, "triangle", 0.035);
-    window.setTimeout(() => this.blip(880, 0.07, "sine", 0.025), 50);
+    this.blip(620, 0.05, "triangle", 0.03);
+    window.setTimeout(() => this.blip(880, 0.08, "sine", 0.022), 50);
     this.speak("maxCritDealt", 1.15, 1);
   }
 
   maxCritTaken(): void {
-    this.blip(85, 0.09, "sine", 0.045);
-    window.setTimeout(() => this.blip(60, 0.12, "triangle", 0.035), 60);
+    this.blip(85, 0.1, "sine", 0.038);
+    window.setTimeout(() => this.blip(60, 0.13, "triangle", 0.03), 60);
     this.speak("maxCritTaken", 0.9, 0.55);
   }
 
@@ -329,25 +406,49 @@ export class AudioBus {
 
   /** Soft filtered blip — avoids harsh square/saw that crackles on phone speakers. */
   private blip(freq: number, duration: number, type: OscillatorType, gainValue: number): void {
-    const ctx = this.context();
-    if (!ctx || !this.sfxBus) return;
+    if (this.muted) return;
+    void this.unlock().then(() => this.playBlip(freq, duration, type, gainValue));
+  }
+
+  private playBlip(freq: number, duration: number, type: OscillatorType, gainValue: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== "running" || !this.sfxBus) return;
+    // Drop rather than queue when the WebView audio thread is already busy.
+    if (this.liveSfx >= SFX_VOICE_CAP) return;
+
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
     const gain = ctx.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.72), ctx.currentTime + duration);
-    filter.type = "lowpass";
-    filter.frequency.value = Math.min(2400, freq * 3.2);
-    filter.Q.value = 0.6;
     const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.72), now + duration);
+    filter.type = "lowpass";
+    filter.frequency.value = Math.min(1800, freq * 2.8);
+    filter.Q.value = 0.45;
+
+    // Short linear attack / release — exponential ramps from ~0 often click on mobile.
+    const peak = gainValue;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(peak, now + 0.012);
+    gain.gain.linearRampToValueAtTime(peak * 0.55, now + duration * 0.45);
+    gain.gain.linearRampToValueAtTime(0, now + duration);
+
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.sfxBus);
+    this.liveSfx += 1;
+    osc.onended = () => {
+      this.liveSfx = Math.max(0, this.liveSfx - 1);
+      try {
+        osc.disconnect();
+        filter.disconnect();
+        gain.disconnect();
+      } catch {
+        // Already torn down.
+      }
+    };
     osc.start(now);
-    osc.stop(now + duration + 0.02);
+    osc.stop(now + duration + 0.03);
   }
 }

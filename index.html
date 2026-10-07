@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#07060a" />
     <meta name="color-scheme" content="dark" />
     <title>Ward</title>
@@ -46,6 +46,14 @@
           </div>
           <div id="gold">0</div>
         </header>
+        <div id="target-frame" class="hidden" aria-live="polite">
+          <div class="target-meta">
+            <span id="target-name">—</span>
+            <span id="target-elite" class="hidden">Elite</span>
+          </div>
+          <div class="target-bar"><i id="target-hp-fill"></i></div>
+          <div class="target-hp"><span id="target-hp">0</span> / <span id="target-hp-max">0</span></div>
+        </div>
         <div id="banner" class="hidden"></div>
         <div id="portal-cast" class="hidden" aria-live="polite">
           <span>Opening portal</span>
@@ -61,9 +69,24 @@
         <div id="actions">
           <button id="loot" type="button" class="hidden">Take</button>
           <button id="attack" type="button">Attack</button>
-          <button id="skill-0" type="button" class="skill empty">Empty</button>
-          <button id="skill-1" type="button" class="skill empty">Empty</button>
-          <button id="skill-2" type="button" class="skill empty">Empty</button>
+          <button id="skill-0" type="button" class="skill empty">
+            <span class="skill-ring outer" aria-hidden="true"></span>
+            <span class="skill-ring inner" aria-hidden="true"></span>
+            <span class="skill-pips" aria-hidden="true"></span>
+            <span class="skill-label">Empty</span>
+          </button>
+          <button id="skill-1" type="button" class="skill empty">
+            <span class="skill-ring outer" aria-hidden="true"></span>
+            <span class="skill-ring inner" aria-hidden="true"></span>
+            <span class="skill-pips" aria-hidden="true"></span>
+            <span class="skill-label">Empty</span>
+          </button>
+          <button id="skill-2" type="button" class="skill empty">
+            <span class="skill-ring outer" aria-hidden="true"></span>
+            <span class="skill-ring inner" aria-hidden="true"></span>
+            <span class="skill-pips" aria-hidden="true"></span>
+            <span class="skill-label">Empty</span>
+          </button>
         </div>
       </div>
 
@@ -75,25 +98,37 @@
           <p class="lede">An exile holds a ruined ward. Paths open on a wheel. Attributes are spent by hand.</p>
           <div class="ornament thin" aria-hidden="true"></div>
           <div id="save-slots" class="save-slots">
-            <article class="save-slot">
-              <label class="slot-name">Slot 1<input id="slot-name-0" data-slot="0" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
-              <p id="slot-meta-0" class="muted">Empty</p>
+            <article class="save-slot" data-slot="0">
+              <div class="slot-portrait">
+                <canvas id="slot-view-0" width="220" height="260" aria-hidden="true"></canvas>
+                <div id="slot-empty-0" class="slot-empty">Empty</div>
+              </div>
+              <strong id="slot-name-0" class="slot-label">Empty</strong>
+              <p id="slot-meta-0" class="muted">No exile yet</p>
               <div class="slot-actions">
                 <button id="slot-play-0" data-play="0" type="button" class="primary">New</button>
                 <button id="slot-delete-0" data-delete="0" type="button" class="slot-delete" disabled>Delete</button>
               </div>
             </article>
-            <article class="save-slot">
-              <label class="slot-name">Slot 2<input id="slot-name-1" data-slot="1" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
-              <p id="slot-meta-1" class="muted">Empty</p>
+            <article class="save-slot" data-slot="1">
+              <div class="slot-portrait">
+                <canvas id="slot-view-1" width="220" height="260" aria-hidden="true"></canvas>
+                <div id="slot-empty-1" class="slot-empty">Empty</div>
+              </div>
+              <strong id="slot-name-1" class="slot-label">Empty</strong>
+              <p id="slot-meta-1" class="muted">No exile yet</p>
               <div class="slot-actions">
                 <button id="slot-play-1" data-play="1" type="button" class="primary">New</button>
                 <button id="slot-delete-1" data-delete="1" type="button" class="slot-delete" disabled>Delete</button>
               </div>
             </article>
-            <article class="save-slot">
-              <label class="slot-name">Slot 3<input id="slot-name-2" data-slot="2" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
-              <p id="slot-meta-2" class="muted">Empty</p>
+            <article class="save-slot" data-slot="2">
+              <div class="slot-portrait">
+                <canvas id="slot-view-2" width="220" height="260" aria-hidden="true"></canvas>
+                <div id="slot-empty-2" class="slot-empty">Empty</div>
+              </div>
+              <strong id="slot-name-2" class="slot-label">Empty</strong>
+              <p id="slot-meta-2" class="muted">No exile yet</p>
               <div class="slot-actions">
                 <button id="slot-play-2" data-play="2" type="button" class="primary">New</button>
                 <button id="slot-delete-2" data-delete="2" type="button" class="slot-delete" disabled>Delete</button>
@@ -117,6 +152,11 @@
             <button id="create-back" type="button">Back</button>
           </header>
           <label class="create-name">Name<input id="create-name" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
+          <div class="gender-picker" role="group" aria-label="Choose gender">
+            <button id="gender-male" type="button" class="gender-btn on" aria-pressed="true">Male</button>
+            <button id="gender-female" type="button" class="gender-btn" aria-pressed="false">Female</button>
+            <div id="gender-unisex" class="gender-unisex hidden">Unisex form</div>
+          </div>
           <div class="race-picker" aria-label="Choose race">
             <button id="race-prev" type="button" class="race-arrow" aria-label="Previous race">‹</button>
             <div class="race-stage">
@@ -229,7 +269,7 @@
                 <div class="statline"><span>Skill Healing Bonus</span><b id="s-skillheal">0%</b></div>
                 <div class="statline"><span>Damage Reduction</span><b id="s-dr">0%</b></div>
                 <div class="statline"><span>Defence</span><b id="s-def">0</b></div>
-                <div class="statline"><span>Energy</span><b id="s-mana">0</b></div>
+                <div class="statline"><span>Charge Well</span><b id="s-mana">0</b></div>
                 <h3>Elemental resistance</h3>
                 <div class="statline"><span>Physical Resistance</span><b id="s-pres">0</b></div>
                 <div class="statline"><span>Fire Resistance</span><b id="s-fres">0</b></div>
@@ -257,10 +297,10 @@
                 <div class="statline"><span>Dodge Chance</span><b id="s-dodge">0%</b></div>
                 <div class="statline"><span>Block Chance</span><b id="s-block">0%</b></div>
                 <h3>Resources</h3>
-                <div class="statline"><span>Energy on Hit</span><b id="s-ehit">0</b></div>
-                <div class="statline"><span>Energy Cost Reduction</span><b id="s-ecdr">0%</b></div>
-                <div class="statline"><span>Energy Regen</span><b id="s-eregen">0</b></div>
-                <div class="statline"><span>Energy on Kill</span><b id="s-ekill">0</b></div>
+                <div class="statline"><span>Charge on Hit</span><b id="s-ehit">0</b></div>
+                <div class="statline"><span>Charge Well Ease</span><b id="s-ecdr">0%</b></div>
+                <div class="statline"><span>Charge Assist</span><b id="s-eregen">0</b></div>
+                <div class="statline"><span>Charge on Kill</span><b id="s-ekill">0</b></div>
                 <div class="statline"><span>Life Steal</span><b id="s-steal">0%</b></div>
                 <div class="statline"><span>Life on Hit</span><b id="s-lhit">0</b></div>
                 <div class="statline"><span>Life on Kill</span><b id="s-lkill">0</b></div>

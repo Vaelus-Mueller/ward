@@ -4,9 +4,10 @@ import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { ARENA, type Item } from "./game/types";
-import { ROAD_X, roadSpine, worldPacks } from "./game/world";
+import { pathBoundsAt, pathHalfAt, roadSpine, roadXAt, worldPacks } from "./game/world";
 import type { Burst, Enemy, FloatText, Shot, Sim } from "./game/sim";
-import { buildHero, heroAnimationClips, HERO_ATTACK_DUR, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import { buildHero, heroAnimationClips, heroHeightFor, HERO_ATTACK_DUR, HERO_HEIGHT, isHeroRace } from "./render/heroes";
+import type { Gender } from "./game/types";
 import { syncHeroGear } from "./render/gear";
 import { AdaptiveQuality } from "./render/quality";
 import { AtmosphereFx } from "./render/atmosphere";
@@ -128,6 +129,7 @@ export class Renderer {
   private readonly enemyRoots: THREE.Object3D[] = [];
   private player: Actor | null = null;
   private playerKind = "";
+  private playerGender = "";
   private readonly shots: THREE.Group[] = [];
   private readonly bursts: { kind: string; group: THREE.Group }[] = [];
   private readonly rings: THREE.Mesh[] = [];
@@ -193,8 +195,9 @@ export class Renderer {
     this.webgl.toneMappingExposure = 1.12;
     this.webgl.shadowMap.enabled = q.shadows;
     this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.camera = new THREE.PerspectiveCamera(44, 1, 0.1, 200);
-    this.scene.fog = new THREE.Fog(0x6d6256, 36, 110);
+    // Far plane hugs fog so the corridor walls read as the hard edge of the world.
+    this.camera = new THREE.PerspectiveCamera(44, 1, 0.1, 96);
+    this.scene.fog = new THREE.Fog(0x6d6256, 28, 88);
     this.hemi = new THREE.HemisphereLight(0xfff6ea, 0x8a6a48, 1.45);
     this.scene.add(this.hemi);
     this.moon = new THREE.DirectionalLight(0xfff8f0, 2.1);
@@ -683,10 +686,6 @@ export class Renderer {
 
   private buildDungeon(): void {
     this.propsBuilt = true;
-    const minX = ARENA.margin * SCALE;
-    const maxX = (ARENA.width - ARENA.margin) * SCALE;
-    const minZ = ARENA.margin * SCALE;
-    const maxZ = (ARENA.height - ARENA.margin) * SCALE;
     const place = (key: string, x: number, z: number, rot: number, width: number) => {
       const piece = this.templates.get(key);
       if (!piece) return;
@@ -706,17 +705,9 @@ export class Renderer {
       group.rotation.y = rot;
       this.scene.add(group);
     };
-    const step = 22;
-    for (let x = minX; x <= maxX; x += step) {
-      const broken = Math.round(x) % 44 === 0;
-      place(broken ? "wall-broken" : "wall", x, minZ, 0, step);
-      place(broken ? "wall-broken" : "wall", x, maxZ, Math.PI, step);
-    }
-    for (let z = minZ + step; z <= maxZ - step; z += step) {
-      place("wall", minX, z, Math.PI / 2, step);
-      place("wall", maxX, z, -Math.PI / 2, step);
-    }
     const spine = roadSpine();
+    const fromY = Math.max(spine.fromY, spine.toY);
+    const toY = Math.min(spine.fromY, spine.toY);
     this.roadMat = new THREE.MeshStandardMaterial({
       color: 0xd8d0c4,
       roughness: 0.9,
@@ -732,36 +723,61 @@ export class Renderer {
       displacementBias: this.roadDisp ? -0.025 : 0,
     });
     if (this.roadMat.normalMap) this.roadMat.normalScale.set(1.05, 1.05);
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(7, Math.max(1, (spine.fromY - spine.toY) * SCALE), 1, 1),
-      this.roadMat,
-    );
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(spine.x * SCALE, 0.02, ((spine.fromY + spine.toY) / 2) * SCALE);
-    road.receiveShadow = true;
-    // aoMap needs a second UV channel — copy uv → uv2
-    const roadGeo = road.geometry as THREE.BufferGeometry;
-    if (roadGeo.getAttribute("uv") && !roadGeo.getAttribute("uv2")) {
-      roadGeo.setAttribute("uv2", roadGeo.getAttribute("uv").clone());
+
+    // Segmented road follows the soft curve; width tracks local corridor.
+    const segLen = 110;
+    for (let y0 = fromY; y0 > toY; y0 -= segLen) {
+      const y1 = Math.max(toY, y0 - segLen);
+      const x0 = roadXAt(y0);
+      const x1 = roadXAt(y1);
+      const midY = (y0 + y1) / 2;
+      const midX = (x0 + x1) / 2;
+      const dx = (x1 - x0) * SCALE;
+      const dz = (y1 - y0) * SCALE;
+      const len = Math.max(1.2, Math.hypot(dx, dz));
+      const half = pathHalfAt(midY) * SCALE;
+      const roadW = Math.min(7.2, Math.max(5.2, half * 0.9));
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(roadW, len, 1, 1), this.roadMat);
+      road.rotation.x = -Math.PI / 2;
+      road.rotation.z = Math.atan2(dx, dz);
+      road.position.set(midX * SCALE, 0.02, midY * SCALE);
+      road.receiveShadow = true;
+      const roadGeo = road.geometry as THREE.BufferGeometry;
+      if (roadGeo.getAttribute("uv") && !roadGeo.getAttribute("uv2")) {
+        roadGeo.setAttribute("uv2", roadGeo.getAttribute("uv").clone());
+      }
+      this.scene.add(road);
     }
-    this.scene.add(road);
+
+    // Corridor walls sit on the same plane as pathBoundsAt (collision clip).
     const borderKeys = ["wall", "wall-broken", "column", "pillar", "rubble", "rubble-half", "wall-arch"] as const;
-    const borderStep = 21;
-    const borderXs = [(ROAD_X - 200) * SCALE, (ROAD_X + 200) * SCALE];
-    const borderZHi = Math.max(spine.fromY, spine.toY) * SCALE;
-    const borderZLo = Math.min(spine.fromY, spine.toY) * SCALE;
+    const borderStep = 20;
     let borderIdx = 0;
-    for (let bz = borderZHi; bz >= borderZLo; bz -= borderStep) {
+    for (let y = fromY; y >= toY; y -= borderStep / SCALE) {
+      const lane = pathBoundsAt(y);
+      const bz = y * SCALE;
       for (let side = 0; side < 2; side++) {
         const key = borderKeys[borderIdx % borderKeys.length]!;
-        const bx = borderXs[side]!;
-        const rot = (side === 0 ? Math.PI / 2 : -Math.PI / 2) + (borderIdx % 7) * 0.06;
+        const bx = (side === 0 ? lane.minX : lane.maxX) * SCALE;
+        const tangent = roadXAt(y + 40) - roadXAt(y - 40);
+        const face = Math.atan2(1, -tangent * 0.002) + (side === 0 ? Math.PI / 2 : -Math.PI / 2);
+        const rot = face + (borderIdx % 7) * 0.04;
         const width =
           key === "wall-arch" ? 3.1 : key === "pillar" || key === "column" ? 2.3 : key.startsWith("rubble") ? 2.6 : 2.5;
         place(key, bx, bz, rot, width);
         borderIdx += 1;
       }
     }
+    // Caps at the near/far ends of the road so the far clip doesn't open into void.
+    const endStep = 18;
+    for (const endY of [fromY, toY]) {
+      const lane = pathBoundsAt(endY);
+      const ez = endY * SCALE;
+      for (let x = lane.minX; x <= lane.maxX; x += endStep / SCALE) {
+        place("wall", x * SCALE, ez, endY === fromY ? 0 : Math.PI, 2.6);
+      }
+    }
+
     // Emissive torch bowls + denser dressing at pack columns.
     const torchMat = new THREE.MeshStandardMaterial({
       color: 0x2a1c12,
@@ -779,7 +795,8 @@ export class Renderer {
       if (!pack.branch && pack.id !== `${pack.level}-0`) continue;
       if (seen.has(key)) continue;
       seen.add(key);
-      const markX = (pack.branch ? pack.x : ROAD_X + 220) * SCALE;
+      const lane = pathBoundsAt(pack.y);
+      const markX = (pack.branch ? pack.x : lane.cx + lane.half * 0.55) * SCALE;
       const markZ = pack.y * SCALE;
       place("column", markX, markZ, 0, 2.4);
       place(dressing[dressIdx % dressing.length]!, markX + 1.4, markZ + 0.6, dressIdx * 0.7, 1.1);
@@ -797,11 +814,13 @@ export class Renderer {
 
   private syncPlayer(sim: Sim, dt: number): void {
     const kind = sim.character.race || "human";
-    const height = HERO_HEIGHT[kind] ?? 1.78;
-    if (!this.player || this.playerKind !== kind) {
+    const gender: Gender = sim.character.gender === "female" ? "female" : "male";
+    const height = isHeroRace(kind) ? heroHeightFor(kind, gender) : HERO_HEIGHT[kind as keyof typeof HERO_HEIGHT] ?? 1.78;
+    if (!this.player || this.playerKind !== kind || this.playerGender !== gender) {
       if (this.player) this.scene.remove(this.player.root);
-      this.player = this.makeActor(kind, height, false);
+      this.player = this.makeActor(kind, height, false, gender);
       this.playerKind = kind;
+      this.playerGender = gender;
       if (this.player) this.scene.add(this.player.root);
     }
     if (!this.player) return;
@@ -860,11 +879,16 @@ export class Renderer {
       if (!actor.placeholder && !actor.armed) actor.armed = this.arm(actor.root, actor.kind);
       this.placeActor(actor, enemy.x, enemy.y, facingOf(enemy, sim), dt, moving, winding, 0.8, enemy.flash > 0 && !winding);
       if (actor.bar && actor.hpFill) {
-        const ratio = Math.max(0, enemy.hp / Math.max(1, enemy.maxHp));
-        actor.hpFill.scale.x = Math.max(0.001, ratio);
-        actor.hpFill.position.x = (ratio - 1) * 0.42;
-        actor.bar.position.set(enemy.x * SCALE, (HEIGHT[enemy.kind] ?? 1.7) + 0.28, enemy.y * SCALE);
-        actor.bar.quaternion.copy(this.camera.quaternion);
+        // Overhead bars only after the enemy has taken damage — full-health packs stay clean.
+        const damaged = enemy.hp < enemy.maxHp - 0.05;
+        actor.bar.visible = damaged;
+        if (damaged) {
+          const ratio = Math.max(0, enemy.hp / Math.max(1, enemy.maxHp));
+          actor.hpFill.scale.x = Math.max(0.001, ratio);
+          actor.hpFill.position.x = (ratio - 1) * 0.42;
+          actor.bar.position.set(enemy.x * SCALE, (HEIGHT[enemy.kind] ?? 1.7) + 0.28, enemy.y * SCALE);
+          actor.bar.quaternion.copy(this.camera.quaternion);
+        }
       }
     }
     for (const [id, actor] of this.enemies) {
@@ -875,12 +899,12 @@ export class Renderer {
     }
   }
 
-  private makeActor(kind: string, height: number, enemy: boolean): Actor {
+  private makeActor(kind: string, height: number, enemy: boolean, gender: Gender = "male"): Actor {
     const hero = isHeroRace(kind);
     const procedural = !hero && isProceduralMonster(kind);
     const loaded = hero || procedural ? null : this.templates.get(kind);
     const template = hero
-      ? { scene: buildHero(kind), clips: heroAnimationClips(kind) }
+      ? { scene: buildHero(kind, gender), clips: heroAnimationClips(kind) }
       : procedural
         ? { scene: buildMonster(kind as import("./game/types").EnemyKind), clips: [] as THREE.AnimationClip[] }
         : loaded ?? fallbackFigure(kind, height);
@@ -892,7 +916,7 @@ export class Renderer {
     root.add(model);
     const marker = markerFor(hero ? "knight" : kind);
     const big = kind === "brute" || kind === "hillock";
-    const small = kind === "hound" || kind === "wolf";
+    const small = kind === "hound" || kind === "wolf" || kind === "wolfF";
     const ring = new THREE.Mesh(
       new THREE.CircleGeometry(big ? 0.62 : small ? 0.36 : hero ? 0.4 : 0.46, 24),
       new THREE.MeshBasicMaterial({ color: marker.ring, transparent: true, opacity: 0.4, depthWrite: false }),
@@ -1032,12 +1056,17 @@ export class Renderer {
     const hero = isHeroRace(actor.kind);
     const model = actor.root.children[0];
     const equippedBlade = hero && !!model?.getObjectByName("gear-main")?.visible;
-    // Heroes swing real hand weapons; keep a faint trail on the hand, hide the ghost root blade.
+    // Heroes swing real hand weapons; trail rides the active attacking handslot (main / lead arm).
     if (hero && actor.slash && model) {
-      const hand = model.getObjectByName("handslot.r") ?? model.getObjectByName("hand.r");
-      if (hand && actor.slash.parent !== hand) {
-        hand.add(actor.slash);
-        actor.slash.position.set(0, 0.35, 0.02);
+      const mainGear = model.getObjectByName("gear-main");
+      const leadSlot =
+        (mainGear?.parent as THREE.Object3D | undefined) ??
+        model.getObjectByName("handslot.r") ??
+        model.getObjectByName("hand.r");
+      if (leadSlot && actor.slash.parent !== leadSlot) {
+        leadSlot.add(actor.slash);
+        // Weapons seat along local −Y past the fingers — keep the arc on the blade path.
+        actor.slash.position.set(0, -0.42, 0.04);
         actor.slash.rotation.set(-Math.PI / 2, 0, 0);
         actor.slash.scale.setScalar(0.55);
       }
@@ -1248,12 +1277,31 @@ const GEAR: Record<string, { source: string; name: string }> = {
 function markerFor(kind: string): { ring: number; swing: number; melee: boolean } {
   if (kind === "rogue") return { ring: 0xd7dde6, swing: 0xf4f7fb, melee: true };
   if (kind === "mage" || kind === "brute" || kind === "cultist" || kind === "lumen") return { ring: 0xb9a4e8, swing: 0xd8c8ff, melee: false };
-  if (kind === "hound" || kind === "wolf" || kind === "imp") return { ring: 0xd2563a, swing: 0xff8a62, melee: true };
+  if (
+    kind === "hound" ||
+    kind === "skeleton" ||
+    kind === "zombie" ||
+    kind === "zombieF" ||
+    kind === "wolf" ||
+    kind === "wolfF" ||
+    kind === "rat" ||
+    kind === "roofrat" ||
+    kind === "packrat" ||
+    kind === "giantrat" ||
+    kind === "direrat" ||
+    kind === "imp" ||
+    kind === "slayer" ||
+    kind === "assassin" ||
+    kind === "legionnaire" ||
+    kind === "archdemon"
+  )
+    return { ring: 0xd2563a, swing: 0xff8a62, melee: true };
   if (kind === "archer" || kind === "wisp" || kind === "flicker") return { ring: 0x7eb6d6, swing: 0xb7e4ff, melee: false };
   if (kind === "sentinel" || kind === "gargoyle" || kind === "hillock") return { ring: 0xd7b56a, swing: 0xffe0a0, melee: true };
   if (kind === "slime" || kind === "sprig") return { ring: 0x6ecf7a, swing: 0xa8ef9a, melee: true };
   if (kind === "spider" || kind === "lurker") return { ring: 0x8a6a9a, swing: 0xc8a0e0, melee: true };
-  if (kind === "whelp") return { ring: 0xff6a2a, swing: 0xffa060, melee: true };
+  if (kind === "whelp" || kind === "wyvern" || kind === "drake" || kind === "dragon" || kind === "wyrm")
+    return { ring: 0xff6a2a, swing: 0xffa060, melee: true };
   return { ring: 0xe7c39a, swing: 0xffe2b0, melee: true };
 }
 

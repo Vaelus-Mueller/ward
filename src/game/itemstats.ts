@@ -18,7 +18,7 @@ const GEM_WEAPON: Record<GemKind, Affix> = {
 
 const GEM_HELM: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 8, label: "Ruby: +8 life" },
-  sapphire: { key: "energy", value: 6, label: "Sapphire: +6 energy" },
+  sapphire: { key: "spirit", value: 2, label: "Sapphire: +2 Spirit" },
   topaz: { key: "goldFind", value: 0.04, label: "Topaz: +4% gold find" },
   emerald: { key: "agility", value: 2, label: "Emerald: +2 Agility" },
   diamond: { key: "armor", value: 4, label: "Diamond: +4 armor" },
@@ -28,7 +28,7 @@ const GEM_HELM: Record<GemKind, Affix> = {
 
 const GEM_ARMOR: Record<GemKind, Affix> = {
   ruby: { key: "life", value: 12, label: "Ruby: +12 life" },
-  sapphire: { key: "energy", value: 8, label: "Sapphire: +8 energy" },
+  sapphire: { key: "spirit", value: 3, label: "Sapphire: +3 Spirit" },
   topaz: { key: "goldFind", value: 0.05, label: "Topaz: +5% gold find" },
   emerald: { key: "agility", value: 3, label: "Emerald: +3 Agility" },
   diamond: { key: "armor", value: 6, label: "Diamond: +6 armor" },
@@ -86,7 +86,6 @@ export function rollSocketCount(rng: () => number, rarity: Rarity, cap: number):
 function roundAffix(key: string, value: number): number {
   if (
     key === "crit" ||
-    key === "energyRegen" ||
     key === "lifeRegen" ||
     key === "goldFind" ||
     key === "meleeMult" ||
@@ -95,7 +94,6 @@ function roundAffix(key: string, value: number): number {
     key === "damageReduction" ||
     key === "moveSpeed" ||
     key === "bleedChance" ||
-    key === "cdr" ||
     key === "attackSpeed"
   ) {
     return Math.round(value * 100) / 100;
@@ -115,8 +113,6 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Wisdom`;
     case "life":
       return `+${value} Life`;
-    case "energy":
-      return `+${value} Mana`;
     case "armor":
       return `+${value} Armor`;
     case "damage":
@@ -125,8 +121,6 @@ function affixLabel(key: string, value: number): string {
       return `+${value} Attack Rating`;
     case "crit":
       return `+${Math.round(value * 100)}% Critical Chance`;
-    case "energyRegen":
-      return `+${value.toFixed(2)} Mana Regeneration`;
     case "lifeRegen":
       return `+${value.toFixed(2)} Life Regeneration`;
     case "goldFind":
@@ -145,8 +139,6 @@ function affixLabel(key: string, value: number): string {
       return `${value} thorns`;
     case "bleedChance":
       return `${Math.round(value * 100)}% bleed chance`;
-    case "cdr":
-      return `${Math.round(value * 100)}% cooldown reduction`;
     case "attackSpeed":
       return `${Math.round(value * 100)}% attack speed`;
     case "burn":

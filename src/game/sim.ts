@@ -15,8 +15,16 @@ import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
 import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import {
+  addBankEnergy,
+  bankReady,
+  emptySkillBanks,
+  skillChargeProfile,
+  spendBank,
+  type SkillBank,
+} from "./skillCharge";
 import { MONSTER_ARCH, damageTakenMul, monsterAttackPair, monsterOf } from "./monsters";
-import { raceCdr, raceDamageTakenMul } from "./races";
+import { raceDamageTakenMul } from "./races";
 import {
   DESPAWN,
   LEASH,
@@ -25,6 +33,7 @@ import {
   levelToughness,
   packKinds,
   placeAt,
+  pathBoundsAt,
   roadStart,
   worldPacks,
   type PackSpot,
@@ -72,6 +81,8 @@ export interface Shot {
   life: number;
   damage: number;
   fromPlayer: boolean;
+  /** Basic weapon/focus shots charge skill banks; skill shots do not. */
+  basic: boolean;
   color: string;
   hit: number[];
   pierce: boolean;
@@ -148,9 +159,11 @@ interface PlayerBody {
   y: number;
   facing: number;
   hp: number;
+  /** Legacy sheet/save field; skills charge per-slot banks instead. */
   energy: number;
   attackCd: number;
-  skillCd: [number, number, number];
+  /** Per hotbar slot: energy toward next charge + stored charges. */
+  skillBanks: [SkillBank, SkillBank, SkillBank];
   channel: { slot: number; t: number; total: number; healFrac: number; restoreMana: boolean } | null;
   portal: { t: number; total: number } | null;
   auras: [boolean, boolean, boolean];
@@ -286,7 +299,7 @@ export class Sim {
       hp: 1,
       energy: 1,
       attackCd: 0,
-      skillCd: [0, 0, 0],
+      skillBanks: emptySkillBanks(),
       channel: null,
       portal: null,
       auras: [false, false, false],
@@ -514,13 +527,12 @@ export class Sim {
     p.swing = Math.max(0, p.swing - dt);
     p.iFrame = Math.max(0, p.iFrame - dt);
     p.stun = Math.max(0, p.stun - dt);
-    for (let i = 0; i < 3; i++) p.skillCd[i] = Math.max(0, p.skillCd[i]! - dt);
     p.buffs = p.buffs.filter((buff) => {
       buff.t -= dt;
       return buff.t > 0;
     });
     p.hp = Math.min(this.derived.life, p.hp + this.derived.lifeRegen * dt);
-    p.energy = Math.min(this.derived.energy, p.energy + this.derived.energyRegen * dt);
+    // Skills do not regenerate on a timer — only basic attacks fill skill banks.
     for (const enemy of this.enemies) enemy.flash = Math.max(0, enemy.flash - dt);
   }
 
@@ -613,14 +625,14 @@ export class Sim {
       p.swingTotal = 0.32;
       p.swing = 0.32;
       const damage = this.rollSpell(1) + lightning;
-      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark");
+      this.fire(p.facing, 0, 1, damage, "#c9b6ff", burn, false, range, "spark", "bleed", true);
       this.burst("arcane", "#c9b6ff", 0.7);
     } else if (ranged) {
       p.swingTotal = 0.36;
       p.swing = 0.36;
       const damage = this.rollWeapon() + lightning;
       const color = style === "thrown" ? "#d8c4a0" : "#f0e2c4";
-      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow");
+      this.fire(p.facing, 0, 1, damage, color, burn, false, range, style === "thrown" ? "knife" : "arrow", "bleed", true);
       this.burst("slash", color, 0.7);
     }
   }
@@ -637,7 +649,7 @@ export class Sim {
     const reach = this.derived.weaponRange + 48;
     if (Math.hypot(enemy.x - p.x, enemy.y - p.y) > reach) return;
     p.facing = Math.atan2(enemy.y - p.y, enemy.x - p.x);
-    this.hitEnemy(enemy, pending.damage, false, pending.burn, result, 0, pending.frost, pending.frostDur, 0, "bleed");
+    this.hitEnemy(enemy, pending.damage, false, pending.burn, result, 0, pending.frost, pending.frostDur, 0, "bleed", true);
   }
 
   private trySkill(index: 0 | 1 | 2, result: TickResult): void {
@@ -646,32 +658,28 @@ export class Sim {
     const rank = this.character.skillRanks[id] ?? 0;
     const spec = scaledActive(id, rank, this.character.skillRanks);
     if (!spec) return;
+    const profile = skillChargeProfile(id, rank, this.character.skillRanks, this.derived, this.mods, this.character);
+    if (!profile) return;
+    const bank = this.player.skillBanks[index]!;
     if (spec.kind === "aura") {
-      this.player.auras[index] = !this.player.auras[index];
-      if (this.player.auras[index] && this.player.energy <= 1) {
-        this.player.auras[index] = false;
-        this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
+      if (!this.player.auras[index] && bank.energy <= 0) {
+        this.float(this.player.x, this.player.y - 28, "No charge", "#9ebed0");
         return;
       }
+      this.player.auras[index] = !this.player.auras[index];
       this.recompute();
       this.burst("ward", spec.color, 1.1);
       return;
     }
-    if (this.player.skillCd[index] > 0) return;
-    if (this.player.energy < spec.energyCost) {
-      this.float(this.player.x, this.player.y - 28, "No energy", "#9ebed0");
+    if (!spendBank(bank, profile)) {
+      this.float(this.player.x, this.player.y - 28, "No charge", "#9ebed0");
       return;
     }
-    this.player.energy -= spec.energyCost;
-    // Racial cdr may be negative (golem), so allow a modest slow band below zero.
-    const cdr = clamp(this.mods.cdr + gearNumber(this.character, "cdr") + raceCdr(this.character.race), -0.35, 0.4);
-    this.player.skillCd[index] = spec.cooldown * (1 - cdr);
     this.breakChannel();
     this.player.swingTotal = Math.max(0.28, Math.min(0.55, spec.cooldown * 0.08 + 0.28));
     this.player.swing = this.player.swingTotal;
     this.castFx(spec);
     if (spec.kind === "channel") {
-      this.breakChannel();
       this.player.channel = {
         slot: index,
         t: spec.channelTime,
@@ -787,6 +795,7 @@ export class Sim {
     speed: number,
     style: Shot["style"],
     pair: DamagePair = "bleed",
+    basic = false,
   ): void {
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -801,6 +810,7 @@ export class Sim {
         life: 1.15,
         damage,
         fromPlayer: true,
+        basic,
         color,
         hit: [],
         pierce: count === 1 && speed >= 400,
@@ -818,7 +828,9 @@ export class Sim {
     const rate = channel.healFrac / channel.total;
     this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * rate * dt);
     if (channel.restoreMana) {
-      this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.18 * dt);
+      // Litany feeds every slotted skill bank a little while channelling.
+      const gain = this.derived.energyOnHit * 0.35 * dt;
+      for (let i = 0; i < 3; i++) this.feedSkillBank(i as 0 | 1 | 2, gain);
     }
     channel.t -= dt;
     if (channel.t <= 0) this.player.channel = null;
@@ -864,26 +876,37 @@ export class Sim {
   }
 
   private tickAuras(dt: number): void {
-    let drain = 0;
+    let faded = false;
     for (let i = 0; i < 3; i++) {
       if (!this.player.auras[i]) continue;
       const id = this.character.slotted[i];
       if (!id) {
         this.player.auras[i] = false;
+        faded = true;
         continue;
       }
-      const spec = scaledActive(id, this.character.skillRanks[id] ?? 0, this.character.skillRanks);
+      const rank = this.character.skillRanks[id] ?? 0;
+      const spec = scaledActive(id, rank, this.character.skillRanks);
       if (!spec || spec.kind !== "aura") {
         this.player.auras[i] = false;
+        faded = true;
         continue;
       }
-      drain += spec.energyPerSec;
+      const profile = skillChargeProfile(id, rank, this.character.skillRanks, this.derived, this.mods, this.character);
+      if (!profile) {
+        this.player.auras[i] = false;
+        faded = true;
+        continue;
+      }
+      const bank = this.player.skillBanks[i]!;
+      bank.energy = Math.max(0, bank.energy - spec.energyPerSec * dt);
+      if (bank.energy <= 0) {
+        bank.energy = 0;
+        this.player.auras[i] = false;
+        faded = true;
+      }
     }
-    if (drain <= 0) return;
-    this.player.energy -= drain * dt;
-    if (this.player.energy <= 0) {
-      this.player.energy = 0;
-      this.player.auras = [false, false, false];
+    if (faded) {
       this.recompute();
       this.float(this.player.x, this.player.y - 24, "Aura fades", "#9ebed0");
     }
@@ -954,6 +977,7 @@ export class Sim {
           life: 1.4,
           damage: enemy.damage,
           fromPlayer: false,
+          basic: false,
           color: "#e7c39a",
           hit: [],
           pierce: false,
@@ -977,6 +1001,7 @@ export class Sim {
           life: 1.3,
           damage: enemy.damage,
           fromPlayer: false,
+          basic: false,
           color: enemy.kind === "wisp" ? "#ffb060" : "#a894e6",
           hit: [],
           pierce: false,
@@ -1008,7 +1033,7 @@ export class Sim {
       for (const enemy of this.enemies) {
         if (shot.hit.includes(enemy.id)) continue;
         if (Math.hypot(shot.x - enemy.x, shot.y - enemy.y) <= enemy.radius + shot.radius) {
-          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair);
+          this.hitEnemy(enemy, shot.damage, shot.bleed, shot.burn, result, 0, 0, 0, 0, shot.pair, shot.basic);
           shot.hit.push(enemy.id);
           if (!shot.pierce) shot.life = 0;
           break;
@@ -1090,6 +1115,7 @@ export class Sim {
     slowDur = 0,
     critAdd = 0,
     pair: DamagePair = "bleed",
+    fromBasic = false,
   ): void {
     if (this.rng() > hitChance(this.derived.attackRating, enemy.defense)) {
       this.float(enemy.x, enemy.y - 18, "miss", "#b7b1a8");
@@ -1130,15 +1156,22 @@ export class Sim {
       enemy.telegraph = 0;
     }
     if (slow > 0) enemy.slow = Math.max(enemy.slow, slowDur);
-    this.hasteFromHit();
+    if (fromBasic) this.chargeSkillsFromBasicHit();
   }
 
-  private hasteFromHit(): void {
-    for (let i = 0; i < 3; i++) {
-      if (this.player.skillCd[i]! > 0) this.player.skillCd[i] = Math.max(0, this.player.skillCd[i]! - 0.16);
-    }
-    // Basic and skill hits charge skill energy.
-    this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energyOnHit);
+  private feedSkillBank(index: 0 | 1 | 2, amount: number): void {
+    const id = this.character.slotted[index];
+    if (!id || amount <= 0) return;
+    const rank = this.character.skillRanks[id] ?? 0;
+    const profile = skillChargeProfile(id, rank, this.character.skillRanks, this.derived, this.mods, this.character);
+    if (!profile) return;
+    addBankEnergy(this.player.skillBanks[index]!, profile, amount);
+  }
+
+  /** Only normal (basic) attacks fill skill charge banks. */
+  private chargeSkillsFromBasicHit(): void {
+    const gain = this.derived.energyOnHit;
+    for (let i = 0; i < 3; i++) this.feedSkillBank(i as 0 | 1 | 2, gain);
   }
 
   private resolveDeaths(result: TickResult): void {
@@ -1168,6 +1201,7 @@ export class Sim {
         this.recompute();
         this.player.hp = Math.min(this.derived.life, this.player.hp + this.derived.life * 0.28 * ranks);
         this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.28 * ranks);
+        for (let i = 0; i < 3; i++) this.feedSkillBank(i as 0 | 1 | 2, this.derived.energyOnHit * 4 * ranks);
         if (gain.paragons > 0) {
           const skills = Math.floor(this.character.paragon / 5) - Math.floor((this.character.paragon - gain.paragons) / 5);
           const skillLine = skills > 0 ? `  ·  +${skills} skill point${skills > 1 ? "s" : ""}` : "";
@@ -1314,6 +1348,22 @@ export class Sim {
     });
   }
 
+  /** Soft combat focus for UI: explicit aim, pending melee hit, or nearest foe while swinging. */
+  focusEnemy(): Enemy | null {
+    const byId = (id: number | null | undefined): Enemy | null => {
+      if (id == null) return null;
+      return this.enemies.find((entry) => entry.id === id) ?? null;
+    };
+    const aimed = byId(this.player.aimId);
+    if (aimed) return aimed;
+    const pending = byId(this.player.pendingMelee?.enemyId);
+    if (pending) return pending;
+    if (this.player.swing > 0 || this.player.attackCd > 0) {
+      return this.nearestEnemy(this.derived.weaponRange * 1.2, true);
+    }
+    return null;
+  }
+
   private nearestEnemy(range: number, preferFront: boolean): Enemy | null {
     let best: Enemy | null = null;
     let bestScore = range;
@@ -1374,8 +1424,10 @@ export class Sim {
 
   private clampBodies(): void {
     const box = (body: { x: number; y: number; radius?: number }) => {
-      const pad = (body.radius ?? 18) + 8;
-      body.x = clamp(body.x, ARENA.margin + pad * 0, ARENA.width - ARENA.margin);
+      const pad = (body.radius ?? 18) + 6;
+      const lane = pathBoundsAt(body.y);
+      // Outer corridor walls are solid — same plane as the placed border props.
+      body.x = clamp(body.x, lane.minX + pad, lane.maxX - pad);
       body.y = clamp(body.y, ARENA.margin, ARENA.height - ARENA.margin);
     };
     box(this.player);

@@ -204,8 +204,8 @@ export const RACES: RaceDef[] = [
   }),
   race({
     id: "lizard",
-    name: "Lizard",
-    blurb: "Scaled swamp-blood. Cold eyes, a patient gut, skin like boiled leather.",
+    name: "Lacerta",
+    blurb: "Scaled swamp-blood. Cold eyes, a patient gut, digitigrade stride and a living caudal tail.",
     attrs: { strength: 0.04, agility: 0.03, stamina: 0.05, luck: -0.02, spirit: -0.03 },
     innateArmor: 8,
     lifeRegenPct: 0.01,
@@ -234,6 +234,11 @@ export function raceById(id: string | null | undefined): RaceDef {
 
 export function isRaceId(value: unknown): value is RaceId {
   return typeof value === "string" && RACE_IDS.includes(value as RaceId);
+}
+
+/** Minotaur and golem are unisex — no male/female mesh or create-screen choice. */
+export function raceHasGender(id: string | null | undefined): boolean {
+  return id !== "minotaur" && id !== "golem";
 }
 
 export function raceName(id: string | null | undefined): string {
