@@ -1,0 +1,15 @@
+---
+description: Ward ships on Google Play for Android — keep release decisions Play-ready
+alwaysApply: true
+---
+
+# Google Play destination
+
+Ward is intended for **publication on Google Play (Android)**. Treat that as a product constraint in every relevant change:
+
+1. Prefer Capacitor/Android paths that stay Play-compliant (permissions, privacy, target SDK, 64-bit, app bundles when releasing).
+2. Store listing assets belong under Drive `store/icons/` and `store/listing/`; keep icons and screenshots Play-policy safe.
+3. When building for distribution, prefer **release** artifacts (`bundleRelease` / signed AAB when available) over debug APKs for upload; still copy outputs to `G:\My Drive\Ward\releases\apk\` (or `releases/archive/` for older builds).
+4. Avoid features that block Play review without an explicit user decision (background location, deceptive ads, IP/scraped assets, closed third-party content).
+5. Keep `applicationId` / package naming and versionCode/versionName coherent with Play Console uploads.
+6. Call out Play implications briefly when a change affects permissions, networking, billing, content rating, or store assets.
