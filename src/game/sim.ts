@@ -464,15 +464,7 @@ export class Sim {
     for (const edge of [0, 1, 2] as const) {
       if (intent.skills[edge]) this.trySkill(edge, result);
     }
-    const stick = Math.hypot(intent.moveX, intent.moveY);
-    const handsBusy = intent.skills.some(Boolean);
-    const idle =
-      stick <= 0.18 &&
-      this.player.dest === null &&
-      this.player.aimId === null &&
-      !intent.attack &&
-      !handsBusy;
-    if (idle || intent.attack || this.player.aimId !== null) this.tryBasicAttack(result, idle);
+    if (intent.attack) this.tryBasicAttack(result, true);
     this.tickChannel(dt);
     this.tickPortal(dt, result);
     this.tickAuras(dt);

@@ -6,40 +6,81 @@ namespace Ward.UI
 {
     public class TitleView : MonoBehaviour
     {
-        [SerializeField] Text slotMeta;
-        [SerializeField] Button continueButton;
-        [SerializeField] Button newButton;
-        [SerializeField] Button deleteButton;
+        [SerializeField] Text[] names;
+        [SerializeField] Text[] metas;
+        [SerializeField] RawImage[] portraits;
+        [SerializeField] Text[] empties;
+        [SerializeField] Text[] playLabels;
+        [SerializeField] Button[] deleteButtons;
+        [SerializeField] RacePreviewPresenter[] previews;
 
-        void OnEnable() => Refresh();
+        void OnEnable()
+        {
+            Refresh();
+        }
+
+        void OnDisable()
+        {
+            if (previews == null) return;
+            foreach (var preview in previews)
+                preview?.SetLive(false);
+        }
 
         public void Refresh()
         {
-            var save = SaveService.Read();
-            var occupied = save?.character != null;
-            if (slotMeta != null)
+            var count = names != null ? names.Length : 0;
+            for (var i = 0; i < count; i++)
             {
-                slotMeta.text = occupied
-                    ? $"{save.character.name} · {RaceRules.DisplayName(save.character.race)} · L{save.character.level}"
-                    : "No exile yet";
+                var save = SaveService.Read(i);
+                var occupied = save?.character != null;
+                if (names[i] != null) names[i].text = occupied ? save.character.name : "Empty";
+                if (metas[i] != null)
+                {
+                    metas[i].text = occupied
+                        ? $"{RaceRules.DisplayName(save.character.race)} · Level {save.character.level}"
+                        : "No exile yet";
+                }
+                if (playLabels != null && i < playLabels.Length && playLabels[i] != null)
+                    playLabels[i].text = occupied ? "Continue" : "New";
+                if (deleteButtons != null && i < deleteButtons.Length && deleteButtons[i] != null)
+                    deleteButtons[i].interactable = occupied;
+                if (empties != null && i < empties.Length && empties[i] != null)
+                    empties[i].gameObject.SetActive(!occupied);
+                var preview = previews != null && i < previews.Length ? previews[i] : null;
+                if (preview != null)
+                {
+                    if (occupied)
+                    {
+                        preview.Show(save.character.race, save.character.gender);
+                        preview.SetLive(true);
+                    }
+                    else
+                    {
+                        preview.Clear();
+                        preview.SetLive(false);
+                    }
+                }
+                if (portraits != null && i < portraits.Length && portraits[i] != null)
+                {
+                    portraits[i].texture = preview != null ? preview.Texture : null;
+                    portraits[i].enabled = occupied && preview != null;
+                }
             }
-            if (continueButton != null) continueButton.interactable = occupied;
-            if (deleteButton != null) deleteButton.interactable = occupied;
-            if (newButton != null) newButton.interactable = true;
         }
 
-        public void OnContinue()
+        public void Play(int slot)
         {
-            var save = SaveService.Read();
-            if (save?.character == null) return;
-            App.AppFlow.Instance?.StartRun(save.character, save);
+            SaveService.Select(slot);
+            var save = SaveService.Read(slot);
+            if (save?.character != null)
+                App.AppFlow.Instance?.StartRun(save.character, save);
+            else
+                App.AppFlow.Instance?.ShowCreate();
         }
 
-        public void OnNew() => App.AppFlow.Instance?.ShowCreate();
-
-        public void OnDelete()
+        public void Delete(int slot)
         {
-            SaveService.Clear();
+            SaveService.Clear(slot);
             Refresh();
         }
     }

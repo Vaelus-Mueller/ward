@@ -40,56 +40,69 @@ namespace Ward.App
             var town = canvas.gameObject.AddComponent<TownView>();
 
             var splash = Panel(canvas.transform, "Splash", new Color(0.05f, 0.04f, 0.06f, 1f));
-            AddLabel(splash.transform, "Ward", 64, new Vector2(0, 40));
-            AddLabel(splash.transform, "Native Unity path", 28, new Vector2(0, -30));
+            var brand = AddLabel(splash.transform, "Ward", 72, new Vector2(0, 36));
+            brand.fontSize = 72;
+            brand.rectTransform.sizeDelta = new Vector2(900, 120);
+            var tag = AddLabel(splash.transform, "Gate of the ruined ward", 28, new Vector2(0, -48));
+            tag.rectTransform.sizeDelta = new Vector2(900, 48);
 
-            var title = Panel(canvas.transform, "Title", new Color(0.08f, 0.07f, 0.09f, 0.96f));
-            AddLabel(title.transform, "Ward", 56, new Vector2(0, 160));
-            var slotMeta = AddLabel(title.transform, "No exile yet", 24, new Vector2(0, 60));
+            var title = Panel(canvas.transform, "Title", new Color(0.07f, 0.06f, 0.08f, 1f));
             var titleView = title.AddComponent<TitleView>();
-            WireTitle(titleView, slotMeta, title.transform);
+            WireTitle(titleView, title.transform);
 
-            var create = Panel(canvas.transform, "Create", new Color(0.08f, 0.07f, 0.09f, 0.96f));
+            var create = Panel(canvas.transform, "Create", new Color(0.07f, 0.06f, 0.08f, 1f));
             var createView = create.AddComponent<CreateView>();
             var previewHost = new GameObject("RacePreview");
-            previewHost.transform.position = new Vector3(4.6f, 0f, -2.2f);
+            previewHost.transform.position = new Vector3(0f, -40f, 0f);
             var preview = previewHost.AddComponent<RacePreviewPresenter>();
+            preview.Configure(512, 640);
             WireCreate(createView, create.transform, preview);
+
+            title.SetActive(false);
+            create.SetActive(false);
 
             var hudGo = Panel(canvas.transform, "HUD", new Color(0, 0, 0, 0));
             hudGo.GetComponent<Image>().raycastTarget = false;
-            var identity = AddLabel(hudGo.transform, "Exile", 22, new Vector2(-280, 300), TextAnchor.UpperLeft);
-            var place = AddLabel(hudGo.transform, "Threshold", 18, new Vector2(-280, 270), TextAnchor.UpperLeft);
-            var hp = AddLabel(hudGo.transform, "50 / 50", 22, new Vector2(-280, -280), TextAnchor.LowerLeft);
-            var gold = AddLabel(hudGo.transform, "0", 22, new Vector2(280, 300), TextAnchor.UpperRight);
+            var identity = PlaceLabel(hudGo.transform, "Exile", 22, new Vector2(0f, 1f), new Vector2(20f, -12f), new Vector2(420f, 32f));
+            identity.alignment = TextAnchor.MiddleLeft;
+            var place = PlaceLabel(hudGo.transform, "Threshold", 16, new Vector2(0f, 1f), new Vector2(20f, -44f), new Vector2(420f, 24f));
+            place.alignment = TextAnchor.MiddleLeft;
+            var hp = PlaceLabel(hudGo.transform, "50 / 50", 22, new Vector2(0f, 0f), new Vector2(20f, 188f), new Vector2(220f, 32f));
+            hp.alignment = TextAnchor.MiddleLeft;
+            var gold = PlaceLabel(hudGo.transform, "0", 22, new Vector2(1f, 1f), new Vector2(-16f, -12f), new Vector2(180f, 32f));
+            gold.alignment = TextAnchor.MiddleRight;
             var dead = Panel(hudGo.transform, "Dead", new Color(0.1f, 0.05f, 0.05f, 0.85f));
             dead.SetActive(false);
             AddLabel(dead.transform, "You fall", 40, Vector2.zero);
             var retry = AddButton(dead.transform, "Retry", new Vector2(0, -80), () => session.Retry());
             WireHud(hud, identity, place, hp, gold, dead, player, session);
-            AddButton(hudGo.transform, "Attack", new Vector2(280, -220), () => player.TryAttack(), TextAnchor.LowerRight);
             var skillWheel = hudGo.AddComponent<SkillWheelView>();
-            var s0 = AddLabel(hudGo.transform, "Cleave", 18, new Vector2(-80, -280), TextAnchor.LowerCenter);
-            var s1 = AddLabel(hudGo.transform, "Shadow", 18, new Vector2(40, -280), TextAnchor.LowerCenter);
-            var s2 = AddLabel(hudGo.transform, "Pulse", 18, new Vector2(160, -280), TextAnchor.LowerCenter);
+            var s1 = PlaceButton(hudGo.transform, "S1", new Vector2(1f, 0f), new Vector2(-148f, 156f), new Vector2(84f, 64f), () => player.TryCastSkill(0));
+            var s2 = PlaceButton(hudGo.transform, "S2", new Vector2(1f, 0f), new Vector2(-148f, 84f), new Vector2(84f, 64f), () => player.TryCastSkill(1));
+            var s3 = PlaceButton(hudGo.transform, "S3", new Vector2(1f, 0f), new Vector2(-148f, 16f), new Vector2(84f, 64f), () => player.TryCastSkill(2));
             typeof(SkillWheelView).GetField("slotLabels", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.SetValue(skillWheel, new[] { s0, s1, s2 });
-            AddButton(hudGo.transform, "S1", new Vector2(-80, -220), () => player.TryCastSkill(0), TextAnchor.LowerCenter);
-            AddButton(hudGo.transform, "S2", new Vector2(40, -220), () => player.TryCastSkill(1), TextAnchor.LowerCenter);
-            AddButton(hudGo.transform, "S3", new Vector2(160, -220), () => player.TryCastSkill(2), TextAnchor.LowerCenter);
-            AddButton(hudGo.transform, "Sheet", new Vector2(280, 220), () => flow.OpenSheet(), TextAnchor.UpperRight);
-            AddButton(hudGo.transform, "Town", new Vector2(280, 160), () => flow.OpenTown(), TextAnchor.UpperRight);
-            AddButton(hudGo.transform, "Save", new Vector2(280, 100), () =>
+                ?.SetValue(skillWheel, new[]
+                {
+                    s1.GetComponentInChildren<Text>(),
+                    s2.GetComponentInChildren<Text>(),
+                    s3.GetComponentInChildren<Text>()
+                });
+            PlaceButton(hudGo.transform, "Attack", new Vector2(1f, 0f), new Vector2(-16f, 16f), new Vector2(116f, 116f), () => player.TryAttack());
+            PlaceButton(hudGo.transform, "Sheet", new Vector2(1f, 1f), new Vector2(-16f, -56f), new Vector2(140f, 44f), () => flow.OpenSheet());
+            PlaceButton(hudGo.transform, "Town", new Vector2(1f, 1f), new Vector2(-16f, -108f), new Vector2(140f, 44f), () => flow.OpenTown());
+            PlaceButton(hudGo.transform, "Save", new Vector2(1f, 1f), new Vector2(-16f, -160f), new Vector2(140f, 44f), () =>
             {
                 SaveService.Write(session.ToSave());
                 flow.ShowTitle();
-            }, TextAnchor.UpperRight);
+            });
 
             var stick = new GameObject("Stick", typeof(RectTransform), typeof(Image));
             stick.transform.SetParent(hudGo.transform, false);
             var stickRt = stick.GetComponent<RectTransform>();
-            stickRt.anchorMin = stickRt.anchorMax = new Vector2(0.15f, 0.18f);
-            stickRt.sizeDelta = new Vector2(160, 160);
+            stickRt.anchorMin = stickRt.anchorMax = new Vector2(0f, 0f);
+            stickRt.pivot = new Vector2(0f, 0f);
+            stickRt.anchoredPosition = new Vector2(24f, 24f);
+            stickRt.sizeDelta = new Vector2(150f, 150f);
             stick.GetComponent<Image>().color = new Color(1, 1, 1, 0.12f);
             var knob = new GameObject("Knob", typeof(RectTransform), typeof(Image));
             knob.transform.SetParent(stick.transform, false);
@@ -125,6 +138,10 @@ namespace Ward.App
             AddButton(townGo.transform, "Rest", new Vector2(80, -230), () => town.Rest());
             AddButton(townGo.transform, "Close", new Vector2(0, -300), () => flow.CloseTown());
 
+            hudGo.SetActive(false);
+            splash.SetActive(true);
+            splash.transform.SetAsLastSibling();
+
             typeof(AppFlow).GetField("splashPanel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, splash);
             typeof(AppFlow).GetField("titlePanel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, title);
             typeof(AppFlow).GetField("createPanel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, create);
@@ -151,6 +168,7 @@ namespace Ward.App
             cam.transform.LookAt(new Vector3(0f, 0.8f, 0f));
             cam.backgroundColor = new Color(0.18f, 0.16f, 0.15f);
             cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.cullingMask &= ~(1 << RacePreviewPresenter.Layer);
             typeof(AppFlow).GetField("mainCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, cam);
             typeof(AppFlow).GetField("cameraRig", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, cam.transform);
 
@@ -236,6 +254,7 @@ namespace Ward.App
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.matchWidthOrHeight = 0.5f;
             return canvas;
         }
 
@@ -301,25 +320,87 @@ namespace Ward.App
             return btn;
         }
 
-        static void WireTitle(TitleView view, Text slotMeta, Transform root)
+        static void WireTitle(TitleView view, Transform root)
         {
-            typeof(TitleView).GetField("slotMeta", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(view, slotMeta);
-            var cont = AddButton(root, "Continue", new Vector2(0, -20), view.OnContinue);
-            var neu = AddButton(root, "New Exile", new Vector2(0, -100), view.OnNew);
-            var del = AddButton(root, "Delete", new Vector2(0, -180), view.OnDelete);
-            typeof(TitleView).GetField("continueButton", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(view, cont);
-            typeof(TitleView).GetField("newButton", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(view, neu);
-            typeof(TitleView).GetField("deleteButton", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(view, del);
+            var heading = PlaceLabel(root, "Ward", 48, new Vector2(0.5f, 1f), new Vector2(0f, -18f), new Vector2(700f, 64f));
+            heading.alignment = TextAnchor.MiddleCenter;
+            var names = new Text[3];
+            var metas = new Text[3];
+            var portraits = new RawImage[3];
+            var empties = new Text[3];
+            var playLabels = new Text[3];
+            var deletes = new Button[3];
+            var previews = new RacePreviewPresenter[3];
+            for (var i = 0; i < 3; i++)
+            {
+                var slot = i;
+                var card = new GameObject("Slot" + i, typeof(RectTransform), typeof(Image));
+                card.transform.SetParent(root, false);
+                var rt = card.GetComponent<RectTransform>();
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(400f, 520f);
+                rt.anchoredPosition = new Vector2((i - 1) * 440f, -16f);
+                card.GetComponent<Image>().color = new Color(0.14f, 0.11f, 0.12f, 0.96f);
+
+                var host = new GameObject("SlotPreview" + i);
+                host.transform.position = new Vector3((i - 1) * 6f, -24f, 0f);
+                var preview = host.AddComponent<RacePreviewPresenter>();
+                preview.Configure(256, 320);
+                previews[i] = preview;
+
+                var frame = new GameObject("Portrait", typeof(RectTransform), typeof(RawImage));
+                frame.transform.SetParent(card.transform, false);
+                var frt = frame.GetComponent<RectTransform>();
+                frt.anchorMin = frt.anchorMax = new Vector2(0.5f, 1f);
+                frt.pivot = new Vector2(0.5f, 1f);
+                frt.anchoredPosition = new Vector2(0f, -16f);
+                frt.sizeDelta = new Vector2(240f, 280f);
+                var raw = frame.GetComponent<RawImage>();
+                raw.texture = preview.Texture;
+                raw.color = Color.white;
+                raw.enabled = false;
+                portraits[i] = raw;
+
+                var empty = PlaceLabel(card.transform, "Empty", 22, new Vector2(0.5f, 1f), new Vector2(0f, -130f), new Vector2(220f, 40f));
+                empty.alignment = TextAnchor.MiddleCenter;
+                empties[i] = empty;
+
+                names[i] = PlaceLabel(card.transform, "Empty", 24, new Vector2(0.5f, 0f), new Vector2(0f, 148f), new Vector2(360f, 36f));
+                names[i].alignment = TextAnchor.MiddleCenter;
+                metas[i] = PlaceLabel(card.transform, "No exile yet", 16, new Vector2(0.5f, 0f), new Vector2(0f, 112f), new Vector2(360f, 28f));
+                metas[i].alignment = TextAnchor.MiddleCenter;
+                metas[i].color = new Color(0.75f, 0.68f, 0.58f);
+
+                var play = PlaceButton(card.transform, "New", new Vector2(0.5f, 0f), new Vector2(0f, 58f), new Vector2(220f, 48f), () => view.Play(slot));
+                playLabels[i] = play.GetComponentInChildren<Text>();
+                deletes[i] = PlaceButton(card.transform, "Delete", new Vector2(0.5f, 0f), new Vector2(0f, 8f), new Vector2(220f, 42f), () => view.Delete(slot));
+            }
+
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            typeof(TitleView).GetField("names", flags)?.SetValue(view, names);
+            typeof(TitleView).GetField("metas", flags)?.SetValue(view, metas);
+            typeof(TitleView).GetField("portraits", flags)?.SetValue(view, portraits);
+            typeof(TitleView).GetField("empties", flags)?.SetValue(view, empties);
+            typeof(TitleView).GetField("playLabels", flags)?.SetValue(view, playLabels);
+            typeof(TitleView).GetField("deleteButtons", flags)?.SetValue(view, deletes);
+            typeof(TitleView).GetField("previews", flags)?.SetValue(view, previews);
         }
 
         static void WireCreate(CreateView view, Transform root, RacePreviewPresenter preview)
         {
-            AddLabel(root, "Create exile", 40, new Vector2(0, 320));
+            var back = PlaceButton(root, "Back", new Vector2(0f, 1f), new Vector2(24f, -20f), new Vector2(150f, 52f), view.OnBack);
+            back.GetComponent<RectTransform>().pivot = new Vector2(0f, 1f);
+            var heading = PlaceLabel(root, "Create exile", 36, new Vector2(0.5f, 1f), new Vector2(0f, -16f), new Vector2(640f, 56f));
+            heading.alignment = TextAnchor.MiddleCenter;
+
             var nameGo = new GameObject("Name", typeof(RectTransform), typeof(Image), typeof(InputField));
             nameGo.transform.SetParent(root, false);
             var nrt = nameGo.GetComponent<RectTransform>();
-            nrt.sizeDelta = new Vector2(420, 56);
-            nrt.anchoredPosition = new Vector2(0, 250);
+            nrt.anchorMin = nrt.anchorMax = new Vector2(0.5f, 1f);
+            nrt.pivot = new Vector2(0.5f, 1f);
+            nrt.anchoredPosition = new Vector2(0f, -84f);
+            nrt.sizeDelta = new Vector2(460f, 52f);
             nameGo.GetComponent<Image>().color = new Color(0.15f, 0.12f, 0.14f);
             var input = nameGo.GetComponent<InputField>();
             var placeholder = AddLabel(nameGo.transform, "Name", 22, Vector2.zero);
@@ -329,21 +410,40 @@ namespace Ward.App
             input.placeholder = placeholder;
             input.text = "Exile";
 
-            var raceName = AddLabel(root, "Human", 28, new Vector2(0, 160));
-            var raceIndex = AddLabel(root, "1 / 10", 18, new Vector2(0, 120));
-            var blurb = AddLabel(root, "", 20, new Vector2(0, 70));
-            blurb.rectTransform.sizeDelta = new Vector2(700, 80);
             var genderRow = new GameObject("Gender", typeof(RectTransform));
             genderRow.transform.SetParent(root, false);
-            genderRow.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, 200);
-            var male = AddButton(genderRow.transform, "Male", new Vector2(-100, 0), view.OnMale);
-            var female = AddButton(genderRow.transform, "Female", new Vector2(100, 0), view.OnFemale);
-            var unisex = AddLabel(root, "Unisex form", 20, new Vector2(0, 200));
+            var grt = genderRow.GetComponent<RectTransform>();
+            grt.anchorMin = grt.anchorMax = new Vector2(0.5f, 1f);
+            grt.pivot = new Vector2(0.5f, 1f);
+            grt.anchoredPosition = new Vector2(0f, -148f);
+            grt.sizeDelta = new Vector2(460f, 52f);
+            var male = PlaceButton(genderRow.transform, "Male", new Vector2(0.5f, 0.5f), new Vector2(-110f, 0f), new Vector2(180f, 48f), view.OnMale);
+            var female = PlaceButton(genderRow.transform, "Female", new Vector2(0.5f, 0.5f), new Vector2(110f, 0f), new Vector2(180f, 48f), view.OnFemale);
+            var unisex = PlaceLabel(root, "Unisex form", 22, new Vector2(0.5f, 1f), new Vector2(0f, -156f), new Vector2(400f, 40f));
+            unisex.alignment = TextAnchor.MiddleCenter;
             unisex.gameObject.SetActive(false);
-            AddButton(root, "‹", new Vector2(-300, 0), view.OnPrevRace);
-            AddButton(root, "›", new Vector2(300, 0), view.OnNextRace);
-            AddButton(root, "Enter the gate", new Vector2(0, -280), view.OnEnter);
-            AddButton(root, "Back", new Vector2(0, -360), view.OnBack);
+
+            var frame = new GameObject("RacePortrait", typeof(RectTransform), typeof(RawImage));
+            frame.transform.SetParent(root, false);
+            var frt = frame.GetComponent<RectTransform>();
+            frt.anchorMin = frt.anchorMax = new Vector2(0.5f, 0.5f);
+            frt.pivot = new Vector2(0.5f, 0.5f);
+            frt.anchoredPosition = new Vector2(0f, 8f);
+            frt.sizeDelta = new Vector2(300f, 380f);
+            var portrait = frame.GetComponent<RawImage>();
+            portrait.texture = preview.Texture;
+            portrait.color = Color.white;
+
+            PlaceButton(root, "‹", new Vector2(0.5f, 0.5f), new Vector2(-230f, 8f), new Vector2(72f, 72f), view.OnPrevRace);
+            PlaceButton(root, "›", new Vector2(0.5f, 0.5f), new Vector2(230f, 8f), new Vector2(72f, 72f), view.OnNextRace);
+
+            var raceName = PlaceLabel(root, "Human", 26, new Vector2(0.5f, 0f), new Vector2(0f, 156f), new Vector2(640f, 36f));
+            raceName.alignment = TextAnchor.MiddleCenter;
+            var raceIndex = PlaceLabel(root, "1 / 10", 16, new Vector2(0.5f, 0f), new Vector2(0f, 128f), new Vector2(200f, 24f));
+            raceIndex.alignment = TextAnchor.MiddleCenter;
+            var blurb = PlaceLabel(root, "", 18, new Vector2(0.5f, 0f), new Vector2(0f, 86f), new Vector2(760f, 36f));
+            blurb.alignment = TextAnchor.MiddleCenter;
+            PlaceButton(root, "Enter the gate", new Vector2(0.5f, 0f), new Vector2(0f, 18f), new Vector2(280f, 56f), view.OnEnter);
 
             var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
             typeof(CreateView).GetField("nameField", flags)?.SetValue(view, input);
@@ -355,6 +455,29 @@ namespace Ward.App
             typeof(CreateView).GetField("genderRow", flags)?.SetValue(view, genderRow);
             typeof(CreateView).GetField("unisexLabel", flags)?.SetValue(view, unisex);
             typeof(CreateView).GetField("preview", flags)?.SetValue(view, preview);
+            typeof(CreateView).GetField("portrait", flags)?.SetValue(view, portrait);
+        }
+
+        static Text PlaceLabel(Transform parent, string text, int size, Vector2 anchor, Vector2 pos, Vector2 sizeDelta)
+        {
+            var label = AddLabel(parent, text, size, pos);
+            var rt = label.rectTransform;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = anchor;
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = sizeDelta;
+            return label;
+        }
+
+        static Button PlaceButton(Transform parent, string label, Vector2 anchor, Vector2 pos, Vector2 size, UnityEngine.Events.UnityAction action)
+        {
+            var button = AddButton(parent, label, pos, action);
+            var rt = button.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = anchor;
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            return button;
         }
 
         static void WireHud(HudView hud, Text identity, Text place, Text hp, Text gold, GameObject dead, PlayerController player, RunSession session)

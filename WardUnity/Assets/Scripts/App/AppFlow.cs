@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Ward.Game;
 using Ward.UI;
@@ -24,6 +25,8 @@ namespace Ward.App
         [SerializeField] Camera mainCamera;
         [SerializeField] Transform cameraRig;
 
+        static readonly Dictionary<Renderer, float> ViewFade = new();
+
         void Awake()
         {
             Instance = this;
@@ -44,7 +47,7 @@ namespace Ward.App
         void ShowSplashThenTitle()
         {
             SetOnly(splashPanel);
-            Invoke(nameof(ShowTitle), 1.2f);
+            Invoke(nameof(ShowTitle), 2.6f);
         }
 
         public void ShowTitle()
@@ -100,9 +103,37 @@ namespace Ward.App
             if (cam == null) return;
             var target = t + WorldData.CameraOffset;
             cam.position = Vector3.Lerp(cam.position, target, 1f - Mathf.Exp(-6f * Time.deltaTime));
-            cam.LookAt(t + Vector3.up * 1.1f);
+            var focus = t + Vector3.up * 1.1f;
+            cam.LookAt(focus);
+            FadeBlockers(cam.GetComponent<Camera>() ?? Camera.main, focus);
             if (Time.frameCount % 120 == 0 && runSession != null && !runSession.Dead)
                 SaveService.Write(runSession.ToSave());
+        }
+
+        static void FadeBlockers(Camera cam, Vector3 focus)
+        {
+            if (cam == null) return;
+            var level = GameObject.Find("BoxLevel");
+            if (level == null) return;
+            var origin = cam.transform.position;
+            var toFocus = focus - origin;
+            var reach = toFocus.magnitude;
+            if (reach < 0.1f) return;
+            var ray = new Ray(origin, toFocus / reach);
+            foreach (var renderer in level.GetComponentsInChildren<Renderer>())
+            {
+                if (renderer.gameObject.name.StartsWith("floor")) continue;
+                var blocks = renderer.bounds.Contains(origin);
+                if (!blocks && renderer.bounds.IntersectRay(ray, out var hit) && hit > 0.05f && hit < reach - 0.35f)
+                    blocks = true;
+                ViewFade.TryGetValue(renderer, out var current);
+                var next = Mathf.MoveTowards(current, blocks ? 1f : 0f, Time.deltaTime * 3.5f);
+                ViewFade[renderer] = next;
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                block.SetFloat("_Fade", next);
+                renderer.SetPropertyBlock(block);
+            }
         }
 
         void SetOnly(GameObject active)

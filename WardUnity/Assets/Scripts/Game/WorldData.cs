@@ -23,7 +23,7 @@ namespace Ward.Game
         public const float ArenaHalfZ = 5.3f;
         public const float RoadHalf = ArenaHalfX;
         public const float SpawnRadius = 7f;
-        public static readonly Vector3 CameraOffset = new(0f, 8f, -9f);
+        public static readonly Vector3 CameraOffset = new(0f, 11f, -6.5f);
 
         public static Vector2 RoadStart => new(0f, -3.2f);
 

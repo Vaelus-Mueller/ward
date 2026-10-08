@@ -7,7 +7,8 @@ namespace Ward.Game
 {
     /// <summary>
     /// Dungeon props come from imported OBJ tiles. Characters and monsters are the
-    /// original Ward meshes, baked to vertex-colored text so each part keeps its color.
+    /// original Ward meshes, loaded by key when a screen needs that body. The heavy
+    /// set stays out of the opening splash the way Oniro keeps its data pack separate.
     /// </summary>
     public static class WardModels
     {

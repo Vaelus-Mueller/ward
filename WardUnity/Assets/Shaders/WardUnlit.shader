@@ -4,6 +4,7 @@ Shader "Ward/Unlit"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Color ("Color", Color) = (1,1,1,1)
+        _Fade ("Fade", Range(0,1)) = 0
     }
     SubShader
     {
@@ -20,6 +21,7 @@ Shader "Ward/Unlit"
             sampler2D _MainTex;
             float4 _MainTex_ST;
             fixed4 _Color;
+            float _Fade;
 
             struct appdata
             {
@@ -43,6 +45,8 @@ Shader "Ward/Unlit"
 
             fixed4 frag(v2f i) : SV_Target
             {
+                float dither = frac(sin(dot(i.pos.xy, float2(12.9898, 78.233))) * 43758.5453);
+                clip((1.0 - _Fade) - dither);
                 return tex2D(_MainTex, i.uv) * _Color;
             }
             ENDCG

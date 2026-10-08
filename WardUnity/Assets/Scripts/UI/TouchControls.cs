@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using Ward.Game;
 
 namespace Ward.UI
@@ -23,7 +22,7 @@ namespace Ward.UI
 #if UNITY_EDITOR || UNITY_STANDALONE
             var k = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             if (k.sqrMagnitude > 0.01f) _stick = Vector2.ClampMagnitude(k, 1f);
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
+            if (Input.GetKeyDown(KeyCode.Space))
                 player?.TryAttack();
 #endif
             if (Input.touchCount > 0)
@@ -52,10 +51,6 @@ namespace Ward.UI
                             _stick = local / stickRadius;
                             if (stickKnob != null) stickKnob.anchoredPosition = local;
                         }
-                    }
-                    else if (t.phase == TouchPhase.Began && t.position.x >= Screen.width * 0.55f)
-                    {
-                        player?.TryAttack();
                     }
                 }
             }

@@ -15,6 +15,7 @@ namespace Ward.UI
         [SerializeField] GameObject genderRow;
         [SerializeField] Text unisexLabel;
         [SerializeField] RacePreviewPresenter preview;
+        [SerializeField] RawImage portrait;
 
         RaceId _race = RaceId.Human;
         Gender _gender = Gender.Male;
@@ -24,7 +25,13 @@ namespace Ward.UI
             RaceId.Insectoid, RaceId.Minotaur, RaceId.Golem, RaceId.Lizard, RaceId.Undead
         };
 
-        void OnEnable() => Paint();
+        void OnEnable()
+        {
+            preview?.SetLive(true);
+            Paint();
+        }
+
+        void OnDisable() => preview?.SetLive(false);
 
         public void OnPrevRace()
         {
@@ -67,6 +74,11 @@ namespace Ward.UI
                 femaleButton.interactable = gendered;
             }
             preview?.Show(_race, _gender);
+            if (portrait != null && preview != null)
+            {
+                portrait.texture = preview.Texture;
+                portrait.enabled = true;
+            }
         }
 
         public void OnEnter()
