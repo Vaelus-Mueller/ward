@@ -89,28 +89,28 @@ const LOOK: Record<RaceId, RaceLook> = {
     foot: { w: 0.16, d: 0.26, h: 0.08 },
   },
   insectoid: {
-    // Blueprint: olive chitin, bright plate ridges, long digitigrade reach.
+    // Humanoid chitin body. The second arm pair reuses the same arm mesh.
     skin: 0x4e6636,
     cloth: 0x1a2412,
     accent: 0x8eb84a,
     skinKind: "chitin",
     emissive: 0x2a4018,
     emit: 0.1,
-    torso: { w: 0.34, d: 0.3, h: 0.54 },
-    head: { r: 0.145 },
-    limb: { arm: 0.5, leg: 0.62, thick: 0.055 },
-    foot: { w: 0.12, d: 0.3, h: 0.055 },
+    torso: { w: 0.36, d: 0.24, h: 0.52 },
+    head: { r: 0.15 },
+    limb: { arm: 0.48, leg: 0.56, thick: 0.07 },
+    foot: { w: 0.12, d: 0.2, h: 0.07 },
   },
   minotaur: {
-    // Blueprint: broad bovine thorax, digitigrade hocks, horned juggernaut.
+    // Large humanoid. Horns stay; helmets are not worn over them.
     skin: 0x6a4828,
     cloth: 0x2a1c12,
     accent: 0xc4a878,
     skinKind: "fur",
-    torso: { w: 0.56, d: 0.4, h: 0.64 },
-    head: { r: 0.22 },
-    limb: { arm: 0.54, leg: 0.68, thick: 0.12 },
-    foot: { w: 0.18, d: 0.32, h: 0.1 },
+    torso: { w: 0.52, d: 0.32, h: 0.62 },
+    head: { r: 0.2 },
+    limb: { arm: 0.52, leg: 0.64, thick: 0.11 },
+    foot: { w: 0.16, d: 0.24, h: 0.09 },
   },
   golem: {
     // Blueprint: interlocking stone blocks, recessed head, heavy impact fists.
@@ -250,7 +250,9 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
     race === "dwarf" ||
     race === "hobbit" ||
     race === "undead" ||
-    race === "lizard";
+    race === "lizard" ||
+    race === "insectoid" ||
+    race === "minotaur";
   const wideHips = sex === "female" && bipedKit;
   const pelvis = part(
     "Hips",
@@ -283,8 +285,8 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
   const body = part("Body", box(look.torso.w, look.torso.h, look.torso.d), fleshy ? skin : cloth);
   chest.add(body);
 
-  if (race === "insectoid") buildInsectoidThorax(chest, hips, look, skin, accent);
-  if (race === "minotaur") buildMinotaurThorax(chest, hips, look, skin, accent, cloth);
+  if (race === "insectoid") buildInsectoidThorax(chest, look, skin, accent);
+  if (race === "minotaur") buildHumanThorax(chest, hips, look, skin, accent, cloth, "male");
   if (race === "golem") buildGolemThorax(chest, hips, look, skin, accent);
   if (race === "human") buildHumanThorax(chest, hips, look, skin, accent, cloth, sex);
   if (race === "elf") buildElfThorax(chest, hips, look, skin, accent, cloth, sex);
@@ -294,17 +296,7 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
   if (race === "undead") buildUndeadThorax(chest, hips, look, skin, accent, cloth, sex);
   if (race === "lizard") buildLizardThorax(chest, hips, look, skin, accent, cloth, sex);
 
-  if (race === "insectoid") {
-    for (let i = 0; i < 2; i++) {
-      const ring = part(`NeckSeg${i}`, cylinder(0.045 + i * 0.008, 0.055 + i * 0.006, 0.055, 8), i === 0 ? accent : skin);
-      ring.position.y = look.torso.h * 0.5 + 0.04 + i * 0.05;
-      chest.add(ring);
-    }
-  } else if (race === "minotaur") {
-    const neck = part("Neck", cylinder(0.1, 0.14, 0.16, 10), skin);
-    neck.position.y = look.torso.h * 0.5 + 0.08;
-    chest.add(neck);
-  } else if (race === "golem") {
+  if (race === "golem") {
     // Recessed head sits in the shoulder shelf — short stone collar only.
     const collar = part("Neck", box(0.22, 0.08, 0.2), accent);
     collar.position.y = look.torso.h * 0.48;
@@ -325,8 +317,9 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
     neck.position.y = look.torso.h * 0.5 + 0.1;
     chest.add(neck);
   } else {
-    const neck = part("Neck", cylinder(0.05, 0.06, race === "human" ? 0.12 : 0.1, 8), skin);
-    neck.position.y = look.torso.h * 0.5 + (race === "human" ? 0.08 : 0.06);
+    const thick = race === "minotaur";
+    const neck = part("Neck", cylinder(thick ? 0.08 : 0.05, thick ? 0.1 : 0.06, thick ? 0.14 : race === "human" ? 0.12 : 0.1, 8), skin);
+    neck.position.y = look.torso.h * 0.5 + (thick || race === "human" ? 0.08 : 0.06);
     chest.add(neck);
   }
 
@@ -368,20 +361,17 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
   }
   addRaceFeatures(root, head, chest, hips, race, look, skin, cloth, accent);
 
-  if (race === "insectoid") {
-    // Primary (upper) + secondary (lower thoracic) manipulators — keep handslot names for gear.
-    addInsectoidArm(chest, "ArmLeft", -look.torso.w * 0.58, look.limb.arm, look.limb.thick, skin, accent, "", 0.2, 0.02);
-    addInsectoidArm(chest, "ArmRight", look.torso.w * 0.58, look.limb.arm, look.limb.thick, skin, accent, "", 0.2, 0.02);
-    const lowerX = look.torso.w * 0.72;
-    addInsectoidArm(chest, "ArmLeft2", -lowerX, look.limb.arm * 0.88, look.limb.thick * 0.86, skin, accent, "2", -0.2, 0.12);
-    addInsectoidArm(chest, "ArmRight2", lowerX, look.limb.arm * 0.88, look.limb.thick * 0.86, skin, accent, "2", -0.2, 0.12);
-    addInsectoidLeg(hips, "LegLeft", -look.torso.w * 0.26, look.limb.leg, look.limb.thick * 1.05, look.foot, skin, accent);
-    addInsectoidLeg(hips, "LegRight", look.torso.w * 0.26, look.limb.leg, look.limb.thick * 1.05, look.foot, skin, accent);
-  } else if (race === "minotaur") {
-    addMinotaurArm(chest, "ArmLeft", -look.torso.w * 0.58, look.limb.arm, look.limb.thick, skin, accent);
-    addMinotaurArm(chest, "ArmRight", look.torso.w * 0.58, look.limb.arm, look.limb.thick, skin, accent);
-    addMinotaurLeg(hips, "LegLeft", -look.torso.w * 0.3, look.limb.leg, look.limb.thick, look.foot, skin, accent);
-    addMinotaurLeg(hips, "LegRight", look.torso.w * 0.3, look.limb.leg, look.limb.thick, look.foot, skin, accent);
+  if (race === "insectoid" || race === "minotaur") {
+    const stout = race === "minotaur";
+    addHumanoidArm(chest, "ArmLeft", -look.torso.w * 0.55, look.limb.arm, look.limb.thick, skin, accent, false);
+    addHumanoidArm(chest, "ArmRight", look.torso.w * 0.55, look.limb.arm, look.limb.thick, skin, accent, false);
+    if (race === "insectoid") {
+      // Same arm mesh, seated just under the primary pair.
+      addHumanoidArm(chest, "ArmLeft2", -look.torso.w * 0.55, look.limb.arm, look.limb.thick, skin, accent, false, "2", -0.16, 0.05);
+      addHumanoidArm(chest, "ArmRight2", look.torso.w * 0.55, look.limb.arm, look.limb.thick, skin, accent, false, "2", -0.16, 0.05);
+    }
+    addHumanoidLeg(hips, "LegLeft", -look.torso.w * 0.28, look.limb.leg, look.limb.thick, look.foot, skin, cloth, !stout);
+    addHumanoidLeg(hips, "LegRight", look.torso.w * 0.28, look.limb.leg, look.limb.thick, look.foot, skin, cloth, !stout);
   } else if (race === "golem") {
     addGolemArm(chest, "ArmLeft", -look.torso.w * 0.62, look.limb.arm, look.limb.thick, skin, accent);
     addGolemArm(chest, "ArmRight", look.torso.w * 0.62, look.limb.arm, look.limb.thick, skin, accent);
@@ -414,6 +404,13 @@ export function buildHero(race: RaceId, gender: Gender = "male"): THREE.Group {
   if (Math.abs(size - height) > 0.05) root.scale.setScalar(height / Math.max(0.001, size));
   const fitted = new THREE.Box3().setFromObject(root);
   root.position.y -= fitted.min.y;
+  root.userData.fit = {
+    head: look.head.r / 0.155,
+    torso: look.torso.w / 0.38,
+    limb: look.limb.thick / 0.075,
+    leg: look.limb.leg / 0.58,
+    arm: look.limb.arm / 0.48,
+  };
 
   return root;
 }
@@ -457,53 +454,25 @@ function addRaceFeatures(
   void accent;
 }
 
-/** Segmented thorax + trailing gaster from the insectoid fighter blueprint. */
+/** Humanoid torso with a short chitin plate. The abdomen trail is gone. */
 function buildInsectoidThorax(
   chest: THREE.Group,
-  hips: THREE.Group,
   look: RaceLook,
   skin: THREE.Material,
   accent: THREE.Material,
 ): void {
-  const bands = 4;
-  for (let i = 0; i < bands; i++) {
-    const t = i / (bands - 1);
+  for (let i = 0; i < 3; i++) {
     const plate = part(
       `ThoraxPlate${i}`,
-      box(look.torso.w * (1.08 - t * 0.08), look.torso.h * 0.16, look.torso.d * (1.18 - t * 0.06)),
-      i % 2 === 0 ? accent : skin,
-    );
-    plate.position.set(0, look.torso.h * (0.28 - t * 0.52), 0.015);
-    chest.add(plate);
-  }
-  // Modified thoracic mounts where the secondary arms attach.
-  for (const side of [-1, 1]) {
-    const mount = part("ThoraxMount", sphere(0.055, 10, 8), accent);
-    mount.position.set(side * look.torso.w * 0.62, -0.12, 0.06);
-    chest.add(mount);
-    const ridge = part("ThoraxRidge", box(0.04, 0.12, 0.08), accent);
-    ridge.position.set(side * look.torso.w * 0.52, 0.08, look.torso.d * 0.48);
-    chest.add(ridge);
-  }
-  const carapace = part("Carapace", box(look.torso.w * 0.7, 0.1, look.torso.d * 0.55), accent);
-  carapace.position.set(0, look.torso.h * 0.42, -look.torso.d * 0.15);
-  carapace.rotation.x = -0.35;
-  chest.add(carapace);
-
-  const gaster = new THREE.Group();
-  gaster.name = "Abdomen";
-  gaster.position.set(0, -0.08, -look.torso.d * 0.55);
-  hips.add(gaster);
-  for (let i = 0; i < 3; i++) {
-    const seg = part(
-      `Gaster${i}`,
-      sphere(0.14 - i * 0.018, 12, 10),
+      box(look.torso.w * (0.92 - i * 0.06), look.torso.h * 0.14, look.torso.d * 0.35),
       i === 1 ? accent : skin,
     );
-    seg.scale.set(1.15 - i * 0.08, 0.78, 1.25 - i * 0.1);
-    seg.position.set(0, -0.02 - i * 0.04, -0.1 - i * 0.14);
-    gaster.add(seg);
+    plate.position.set(0, look.torso.h * (0.22 - i * 0.18), look.torso.d * 0.42);
+    chest.add(plate);
   }
+  const carapace = part("Carapace", box(look.torso.w * 0.7, 0.08, look.torso.d * 0.4), accent);
+  carapace.position.set(0, look.torso.h * 0.28, -look.torso.d * 0.35);
+  chest.add(carapace);
 }
 
 /** Compound eyes, mandibles, and multi-segment antennae. */
@@ -561,136 +530,6 @@ function buildInsectoidHead(head: THREE.Group, look: RaceLook, skin: THREE.Mater
   }
 }
 
-/** Primary / secondary manipulator with actuator joints and a three-digit claw. */
-function addInsectoidArm(
-  parent: THREE.Object3D,
-  name: string,
-  x: number,
-  length: number,
-  thick: number,
-  skin: THREE.Material,
-  accent: THREE.Material,
-  handSuffix: string,
-  yOffset: number,
-  zOffset: number,
-): void {
-  const group = new THREE.Group();
-  group.name = name;
-  group.position.set(x, 0.16 + yOffset, zOffset);
-  parent.add(group);
-
-  const shoulder = part(`${name}Shoulder`, sphere(thick * 1.55, 10, 8), accent);
-  shoulder.position.y = 0.02;
-  group.add(shoulder);
-
-  const upper = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.42), 6, 10), skin);
-  upper.position.y = -length * 0.28;
-  group.add(upper);
-  const upperPlate = part(`${name}Plate`, box(thick * 2.2, length * 0.28, thick * 1.4), accent);
-  upperPlate.position.set(0, -length * 0.24, thick * 0.6);
-  group.add(upperPlate);
-
-  const elbow = part(`${name}Elbow`, sphere(thick * 1.25, 10, 8), accent);
-  elbow.position.y = -length * 0.52;
-  group.add(elbow);
-
-  const lower = part(`${name}Lower`, capsule(thick * 0.88, Math.max(0.08, length * 0.36), 6, 10), skin);
-  lower.position.y = -length * 0.74;
-  group.add(lower);
-
-  const left = name.startsWith("ArmLeft");
-  const handY = -length * 0.96;
-  const palm = part(left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`, sphere(thick * 1.2, 10, 8), skin);
-  palm.position.y = handY;
-  group.add(palm);
-  for (let i = 0; i < 3; i++) {
-    const claw = part("Claw", cone(thick * 0.35, thick * 1.8, 5), accent);
-    claw.rotation.x = Math.PI;
-    claw.position.set((i - 1) * thick * 1.1, handY - thick * 1.4, thick * (i === 1 ? 0.6 : 0.15));
-    group.add(claw);
-  }
-  const slot = new THREE.Group();
-  slot.name = left ? `handslot.l${handSuffix}` : `handslot.r${handSuffix}`;
-  slot.position.set(0, handY - thick * 0.4, thick * 0.35);
-  group.add(slot);
-}
-
-/** Digitigrade leg: raised heel, forward metatarsal, clawed toes. */
-function addInsectoidLeg(
-  parent: THREE.Object3D,
-  name: string,
-  x: number,
-  length: number,
-  thick: number,
-  foot: { w: number; d: number; h: number },
-  skin: THREE.Material,
-  accent: THREE.Material,
-): void {
-  const group = new THREE.Group();
-  group.name = name;
-  group.position.set(x, 0, 0);
-  parent.add(group);
-
-  const hip = part(`${name}Hip`, sphere(thick * 1.5, 10, 8), accent);
-  group.add(hip);
-
-  const thigh = part(`${name}Upper`, capsule(thick, Math.max(0.08, length * 0.38), 6, 10), skin);
-  thigh.position.set(0, -length * 0.28, 0.02);
-  group.add(thigh);
-
-  const knee = part(`${name}Knee`, sphere(thick * 1.3, 10, 8), accent);
-  knee.position.set(0, -length * 0.5, 0.06);
-  group.add(knee);
-
-  const shin = part(`${name}Lower`, capsule(thick * 0.9, Math.max(0.08, length * 0.32), 6, 10), skin);
-  shin.position.set(0, -length * 0.72, 0.1);
-  group.add(shin);
-
-  const ankle = part(`${name}Ankle`, sphere(thick * 1.05, 8, 6), accent);
-  ankle.position.set(0, -length * 0.9, 0.16);
-  group.add(ankle);
-
-  const metatarsal = part(name === "LegLeft" ? "FootLeft" : "FootRight", box(foot.w * 0.85, foot.h, foot.d * 0.7), skin);
-  metatarsal.position.set(0, -length - foot.h * 0.15, foot.d * 0.35);
-  metatarsal.rotation.x = -0.35;
-  group.add(metatarsal);
-
-  for (let i = 0; i < 3; i++) {
-    const toe = part("ToeClaw", cone(0.02, 0.09, 5), accent);
-    toe.rotation.x = Math.PI / 2;
-    toe.position.set((i - 1) * foot.w * 0.32, -length - foot.h * 0.05, foot.d * 0.72);
-    group.add(toe);
-  }
-}
-
-/** Broad bovine thorax — juggernaut silhouette from the minotaur blueprint. */
-function buildMinotaurThorax(
-  chest: THREE.Group,
-  hips: THREE.Group,
-  look: RaceLook,
-  skin: THREE.Material,
-  accent: THREE.Material,
-  cloth: THREE.Material,
-): void {
-  const pec = part("BovinePecs", box(look.torso.w * 1.08, look.torso.h * 0.42, look.torso.d * 1.12), skin);
-  pec.position.set(0, look.torso.h * 0.12, 0.04);
-  chest.add(pec);
-  for (const side of [-1, 1]) {
-    const deltoid = part("Deltoid", sphere(0.12, 10, 8), skin);
-    deltoid.scale.set(1.15, 0.9, 1.05);
-    deltoid.position.set(side * look.torso.w * 0.55, look.torso.h * 0.28, 0.02);
-    chest.add(deltoid);
-  }
-  const sternum = part("Sternum", box(0.08, look.torso.h * 0.45, 0.06), accent);
-  sternum.position.set(0, 0.04, look.torso.d * 0.55);
-  chest.add(sternum);
-  const belt = part("WaistWrap", box(look.torso.w * 0.95, 0.1, look.torso.d * 1.05), cloth);
-  belt.position.y = -look.torso.h * 0.35;
-  chest.add(belt);
-  const rump = part("Haunch", box(look.torso.w * 0.85, 0.18, look.torso.d * 1.05), skin);
-  rump.position.set(0, 0.02, -0.04);
-  hips.add(rump);
-}
 
 /** Bull head with reinforced upward-curving horns and broad muzzle. */
 function buildMinotaurHead(head: THREE.Group, look: RaceLook, skin: THREE.Material, accent: THREE.Material): void {
@@ -740,90 +579,6 @@ function buildMinotaurHead(head: THREE.Group, look: RaceLook, skin: THREE.Materi
   earR.rotation.set(0.4, 0, -1.1);
   earR.position.set(r * 0.95, r * 0.15, 0);
   head.add(earL, earR);
-}
-
-function addMinotaurArm(
-  parent: THREE.Object3D,
-  name: string,
-  x: number,
-  length: number,
-  thick: number,
-  skin: THREE.Material,
-  accent: THREE.Material,
-): void {
-  const group = new THREE.Group();
-  group.name = name;
-  group.position.set(x, 0.22, 0.02);
-  parent.add(group);
-
-  const shoulder = part(`${name}Shoulder`, sphere(thick * 1.7, 10, 8), skin);
-  group.add(shoulder);
-  const upper = part(`${name}Upper`, capsule(thick * 1.15, Math.max(0.08, length * 0.4), 6, 10), skin);
-  upper.position.y = -length * 0.28;
-  group.add(upper);
-  const elbow = part(`${name}Elbow`, sphere(thick * 1.2, 8, 6), accent);
-  elbow.position.y = -length * 0.52;
-  group.add(elbow);
-  const lower = part(`${name}Lower`, capsule(thick, Math.max(0.08, length * 0.34), 6, 10), skin);
-  lower.position.y = -length * 0.74;
-  group.add(lower);
-
-  const left = name.startsWith("ArmLeft");
-  const handY = -length * 0.96;
-  const palm = part(left ? "hand.l" : "hand.r", sphere(thick * 1.25, 10, 8), skin);
-  palm.position.y = handY;
-  group.add(palm);
-  for (let i = 0; i < 4; i++) {
-    const finger = part("Finger", capsule(thick * 0.28, thick * 0.7, 3, 6), skin);
-    finger.position.set((i - 1.5) * thick * 0.7, handY - thick * 1.35, thick * 0.2);
-    group.add(finger);
-  }
-  const slot = new THREE.Group();
-  slot.name = left ? "handslot.l" : "handslot.r";
-  slot.position.set(0, handY - thick * 0.3, thick * 0.25);
-  group.add(slot);
-}
-
-/** Digitigrade hocks ending in cloven hooves. */
-function addMinotaurLeg(
-  parent: THREE.Object3D,
-  name: string,
-  x: number,
-  length: number,
-  thick: number,
-  foot: { w: number; d: number; h: number },
-  skin: THREE.Material,
-  accent: THREE.Material,
-): void {
-  const group = new THREE.Group();
-  group.name = name;
-  group.position.set(x, 0, 0);
-  parent.add(group);
-
-  const thigh = part(`${name}Upper`, capsule(thick * 1.2, Math.max(0.08, length * 0.36), 6, 10), skin);
-  thigh.position.set(0, -length * 0.26, 0.02);
-  group.add(thigh);
-  const knee = part(`${name}Knee`, sphere(thick * 1.25, 8, 6), accent);
-  knee.position.set(0, -length * 0.48, 0.05);
-  group.add(knee);
-  const shin = part(`${name}Lower`, capsule(thick * 0.95, Math.max(0.08, length * 0.28), 6, 10), skin);
-  shin.position.set(0, -length * 0.68, 0.1);
-  group.add(shin);
-  const hock = part(`${name}Hock`, sphere(thick * 1.05, 8, 6), accent);
-  hock.position.set(0, -length * 0.86, 0.14);
-  group.add(hock);
-  const cannon = part(`${name}Cannon`, capsule(thick * 0.7, Math.max(0.06, length * 0.12), 5, 8), skin);
-  cannon.position.set(0, -length * 0.96, 0.2);
-  group.add(cannon);
-
-  const hoof = part(name === "LegLeft" ? "FootLeft" : "FootRight", box(foot.w, foot.h, foot.d * 0.55), accent);
-  hoof.position.set(0, -length - foot.h * 0.2, foot.d * 0.28);
-  group.add(hoof);
-  for (const side of [-1, 1]) {
-    const cleft = part("HoofCleft", box(foot.w * 0.38, foot.h * 0.9, foot.d * 0.35), accent);
-    cleft.position.set(side * foot.w * 0.28, -length - foot.h * 0.15, foot.d * 0.55);
-    group.add(cleft);
-  }
 }
 
 /** Interlocking stone torso with a glowing runic core. */
@@ -962,10 +717,13 @@ function addHumanoidArm(
   skin: THREE.Material,
   accent: THREE.Material,
   lean: boolean,
+  handSuffix = "",
+  y = 0,
+  z = 0,
 ): void {
   const group = new THREE.Group();
   group.name = name;
-  group.position.set(x, lean ? 0.2 : 0.18, 0);
+  group.position.set(x, (lean ? 0.2 : 0.18) + y, z);
   parent.add(group);
   const shoulder = part(`${name}Shoulder`, sphere(thick * (lean ? 1.25 : 1.45), 10, 8), skin);
   group.add(shoulder);
@@ -980,7 +738,7 @@ function addHumanoidArm(
   group.add(lower);
   const left = name.startsWith("ArmLeft");
   const handY = -length * 0.96;
-  const palm = part(left ? "hand.l" : "hand.r", sphere(thick * 1.15, 10, 8), skin);
+  const palm = part(left ? `hand.l${handSuffix}` : `hand.r${handSuffix}`, sphere(thick * 1.15, 10, 8), skin);
   palm.position.y = handY;
   group.add(palm);
   for (let i = 0; i < 4; i++) {
@@ -989,7 +747,7 @@ function addHumanoidArm(
     group.add(finger);
   }
   const slot = new THREE.Group();
-  slot.name = left ? "handslot.l" : "handslot.r";
+  slot.name = left ? `handslot.l${handSuffix}` : `handslot.r${handSuffix}`;
   slot.position.set(0, handY - thick * 0.25, thick * 0.2);
   group.add(slot);
 }
@@ -1814,20 +1572,18 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
     if (insect) {
       if (name === "ArmLeft2") return { x: -0.35 + breath * 0.25, y: 0.2, z: 0.55 };
       if (name === "ArmRight2") return { x: -0.35 + breath * 0.25, y: -0.2, z: -0.55 };
-      if (name === "ArmLeft") return { x: -0.2 + breath * 0.3, y: 0.08, z: 0.22 };
-      if (name === "ArmRight") return { x: -0.2 + breath * 0.3, y: -0.08, z: -0.22 };
-      if (name === "LegLeft") return { x: -0.12, z: 0.08 };
-      if (name === "LegRight") return { x: 0.1, z: -0.08 };
+      if (name === "ArmLeft") return { x: breath * 0.35, z: 0.08 };
+      if (name === "ArmRight") return { x: breath * 0.35, z: -0.08 };
+      if (name === "LegLeft" || name === "LegRight") return { x: 0, z: 0 };
       if (name === "spine") return { x: 0.06 + breath * 0.12, z: 0 };
       if (name === "chest") return { x: breath * 0.08, z: 0 };
       return { x: breath * 0.1, z: 0 };
     }
     if (bull) {
       // High-STR plant: wide hooves, heavy arms hanging ready.
-      if (name === "ArmLeft") return { x: -0.15 + breath * 0.2, y: 0.1, z: 0.28 };
-      if (name === "ArmRight") return { x: -0.15 + breath * 0.2, y: -0.1, z: -0.28 };
-      if (name === "LegLeft") return { x: -0.08, z: 0.14 };
-      if (name === "LegRight") return { x: 0.1, z: -0.14 };
+      if (name === "ArmLeft") return { x: breath * 0.3, z: 0.08 };
+      if (name === "ArmRight") return { x: breath * 0.3, z: -0.08 };
+      if (name === "LegLeft" || name === "LegRight") return { x: 0, z: 0 };
       if (name === "spine") return { x: 0.08 + breath * 0.1, z: 0 };
       if (name === "chest") return { x: breath * 0.12, z: 0 };
       return { x: breath * 0.08, z: 0 };
@@ -1927,15 +1683,6 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
       if (name === "spine") return { x: 0.1 + Math.sin(t * Math.PI * 4) * 0.04, z: 0 };
       return { x: Math.sin(t * Math.PI * 4) * 0.03, z: 0 };
     }
-    if (bull) {
-      // Powerful digitigrade lope — arms counter heavy stride.
-      if (name === "ArmLeft") return { x: -0.2 + swing * 0.45, z: 0.22 };
-      if (name === "ArmRight") return { x: -0.2 - swing * 0.45, z: -0.22 };
-      if (name === "LegLeft") return { x: -swing * 0.9, z: 0.1 };
-      if (name === "LegRight") return { x: swing * 0.9, z: -0.1 };
-      if (name === "spine") return { x: 0.12 + Math.sin(t * Math.PI * 4) * 0.05, z: 0 };
-      return { x: Math.sin(t * Math.PI * 4) * 0.04, z: 0 };
-    }
     if (lacerta) {
       // Quick digitigrade lope — snappy toes, counter-sway for the tail.
       if (name === "ArmLeft") return { x: -0.15 + swing * 0.5, z: 0.18 };
@@ -1988,10 +1735,10 @@ export function heroAnimationClips(race: RaceId): THREE.AnimationClip[] {
         z: (left ? 1 : -1) * (lower ? 0.7 : 0.35 + wind * 0.45),
       };
     }
-    if (bull || stone) {
-      // Both arms commit — 2H greataxe / warhammer arc.
+    if (stone) {
+      // Both fists commit — warhammer arc. The minotaur uses the humanoid swing.
       const lead = left ? 0.92 : 1;
-      const lift = stone ? 1.25 : 1.5;
+      const lift = 1.25;
       return {
         x: -0.35 - wind * lift * lead,
         y: (left ? -1 : 1) * wind * 0.45 * lead,

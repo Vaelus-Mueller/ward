@@ -24,25 +24,13 @@ export interface LoadProgress {
   label: string;
 }
 
-const FILES: Record<string, string> = {
-  knight: "knight.glb",
-  rogue: "rogue.glb",
-  mage: "mage.glb",
-  human: "races/human.glb",
-  elf: "races/elf.glb",
-  dwarf: "races/dwarf.glb",
-  gnome: "races/gnome.glb",
-  hobbit: "races/hobbit.glb",
-  hound: "hound.glb",
-  sentinel: "sentinel.glb",
-  archer: "archer.glb",
-  brute: "brute.glb",
+/** Scenery only — heroes/monsters are procedural; character GLBs are desktop extras. */
+const SCENERY_FILES: Record<string, string> = {
   floor: "floor.glb",
   wall: "wall.glb",
   "wall-broken": "wall-broken.glb",
   pillar: "pillar.glb",
   column: "column.glb",
-  // Dense KayKit dungeon dressing (CC0)
   chest: "props/chest.glb",
   "chest-gold": "props/chest_gold.glb",
   barrel: "props/barrel_large.glb",
@@ -60,6 +48,24 @@ const FILES: Record<string, string> = {
   "wall-arch": "props/wall_arched.glb",
   doorway: "props/wall_doorway.glb",
 };
+
+/** Optional skinned fallbacks — skipped on phones (VRAM). */
+const CHARACTER_FILES: Record<string, string> = {
+  knight: "knight.glb",
+  rogue: "rogue.glb",
+  mage: "mage.glb",
+  human: "races/human.glb",
+  elf: "races/elf.glb",
+  dwarf: "races/dwarf.glb",
+  gnome: "races/gnome.glb",
+  hobbit: "races/hobbit.glb",
+  hound: "hound.glb",
+  sentinel: "sentinel.glb",
+  archer: "archer.glb",
+  brute: "brute.glb",
+};
+
+const FILES: Record<string, string> = { ...SCENERY_FILES, ...CHARACTER_FILES };
 
 const HEIGHT: Record<string, number> = {
   knight: 1.75,
@@ -175,18 +181,33 @@ export class Renderer {
   private loadHandler: ((info: LoadProgress) => void) | null = null;
   private readonly loadPhase = { models: 0, floors: 0, hdr: 0 };
   private lastProgress: LoadProgress = { ratio: 0, percent: 0, label: "Installing Ward…" };
+  private worldLoad: Promise<void> | null = null;
+  private worldLoaded = false;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.readyPromise = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
     const q = this.quality.current();
+    const phone = isConstrainedGpu();
     this.webgl = new THREE.WebGLRenderer({
       canvas,
-      antialias: q.antialias,
+      antialias: phone ? false : q.antialias,
       alpha: false,
-      powerPreference: "high-performance",
+      powerPreference: phone ? "default" : "high-performance",
       stencil: false,
+      failIfMajorPerformanceCaveat: false,
+    });
+    this.canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      console.warn("[ward] WebGL context lost");
+    });
+    this.canvas.addEventListener("webglcontextrestored", () => {
+      console.warn("[ward] WebGL context restored — reloading world");
+      this.worldLoaded = false;
+      this.worldLoad = null;
+      this.propsBuilt = false;
+      void this.ensureWorldLoaded();
     });
     this.webgl.setClearColor(0x3a342e);
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
@@ -253,7 +274,8 @@ export class Renderer {
     ground.receiveShadow = true;
     this.groundMesh = ground;
     this.scene.add(ground);
-    this.atmosphere = new AtmosphereFx(this.scene, this.webgl, () => this.quality.current());
+    // Mist/shafts allocate GPU buffers — skip on phones; lights + fog carry the mood.
+    if (!phone) this.atmosphere = new AtmosphereFx(this.scene, this.webgl, () => this.quality.current());
     this.floatLayer = document.createElement("div");
     this.floatLayer.id = "float-layer";
     canvas.parentElement?.appendChild(this.floatLayer);
@@ -262,20 +284,38 @@ export class Renderer {
   }
 
   private beginAssetLoads(): void {
-    const boot = async () => {
-      // Phones: textures first (downscaled), then models — parallel decode spikes kill WebGL.
-      if (isConstrainedGpu()) {
-        await this.loadFloors();
-        await this.loadModels();
-        await this.loadHdrEnvironment();
-        return;
-      }
-      await Promise.all([this.loadModels(), this.loadFloors(), this.loadHdrEnvironment()]);
-    };
-    void boot().finally(() => {
+    // Phones: leave VRAM free for the create-screen RacePreview; load the dungeon on enter.
+    if (isConstrainedGpu()) {
+      this.emitProgress(1, "Ready");
+      this.resolveReady();
+      return;
+    }
+    void this.ensureWorldLoaded().finally(() => {
       this.emitProgress(1, "Ready");
       this.resolveReady();
     });
+  }
+
+  /** Load floor textures + scenery (and desktop character GLBs). Safe to call repeatedly. */
+  ensureWorldLoaded(): Promise<void> {
+    if (this.worldLoaded) return Promise.resolve();
+    if (this.worldLoad) return this.worldLoad;
+    this.worldLoad = (async () => {
+      this.emitProgress(0.05, "Loading the ward…");
+      if (isConstrainedGpu()) {
+        await this.loadFloors();
+        if (this.contextAlive()) await this.loadModels(true);
+      } else {
+        await Promise.all([this.loadModels(false), this.loadFloors(), this.loadHdrEnvironment()]);
+      }
+      this.worldLoaded = this.contextAlive();
+      this.emitProgress(1, this.worldLoaded ? "Ready" : "Graphics limited");
+    })();
+    this.worldLoad.catch(() => {
+      this.worldLoaded = false;
+      this.worldLoad = null;
+    });
+    return this.worldLoad;
   }
 
   /** Subscribe to asset load progress (0-1) for the splash UI. */
@@ -709,15 +749,16 @@ export class Renderer {
     }
   }
 
-  private async loadModels(): Promise<void> {
+  private async loadModels(sceneryOnly: boolean): Promise<void> {
     this.bumpPhase("models", 0.02, "Models…");
-    const entries = Object.entries(FILES);
+    const catalog = sceneryOnly ? SCENERY_FILES : FILES;
+    const entries = Object.entries(catalog);
     const total = entries.length;
     let done = 0;
     const manager = new THREE.LoadingManager();
     const loader = new GLTFLoader(manager);
-    // Phones: small concurrency so decode spikes don't kill WebGL beside texture loads.
-    const workers = isConstrainedGpu() ? 2 : 6;
+    // Phones: serial-ish loads so decode spikes don't kill WebGL beside texture loads.
+    const workers = isConstrainedGpu() ? 1 : 6;
     let cursor = 0;
     const run = async () => {
       while (cursor < entries.length) {

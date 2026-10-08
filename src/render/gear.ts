@@ -98,7 +98,8 @@ function attachWeapon(
     holder = buildWeapon(item, offhand);
     holder.name = nodeName;
     holder.userData.itemUid = uid;
-    if (scaleMul !== 1) holder.scale.multiplyScalar(scaleMul);
+    const fit = root.userData.fit as { arm?: number } | undefined;
+    holder.scale.multiplyScalar((scaleMul) * (fit?.arm ?? 1));
     bone.add(holder);
   }
   holder.visible = true;
@@ -173,10 +174,25 @@ function attachArmor(
     if (holder) holder.visible = false;
     return;
   }
+  if (root.name.includes("golem") || (kind === "head" && root.name.includes("minotaur"))) {
+    if (holder) holder.visible = false;
+    return;
+  }
   if (!holder) {
     holder = buildArmor(item, kind);
     holder.name = nodeName;
     holder.userData.itemUid = uid;
+    const fit = root.userData.fit as { head?: number; torso?: number; limb?: number; leg?: number } | undefined;
+    const scale = !fit
+      ? 1
+      : kind === "head"
+        ? fit.head ?? 1
+        : kind === "chest"
+          ? fit.torso ?? 1
+          : kind === "gloves"
+            ? fit.limb ?? 1
+            : fit.leg ?? 1;
+    holder.scale.setScalar(scale);
     bone.add(holder);
   }
   holder.visible = true;

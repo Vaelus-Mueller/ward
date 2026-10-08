@@ -152,7 +152,7 @@
             <button id="create-back" type="button">Back</button>
           </header>
           <label class="create-name">Name<input id="create-name" type="text" inputmode="text" maxlength="24" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" placeholder="Name" /></label>
-          <div class="gender-picker" role="group" aria-label="Choose gender">
+          <div id="gender-picker" class="gender-picker" role="group" aria-label="Choose gender">
             <button id="gender-male" type="button" class="gender-btn on" aria-pressed="true">Male</button>
             <button id="gender-female" type="button" class="gender-btn" aria-pressed="false">Female</button>
             <div id="gender-unisex" class="gender-unisex hidden">Unisex form</div>
@@ -160,6 +160,7 @@
           <div class="race-picker" aria-label="Choose race">
             <button id="race-prev" type="button" class="race-arrow" aria-label="Previous race">‹</button>
             <div class="race-stage">
+              <div id="race-doll" class="hidden" aria-hidden="true"></div>
               <canvas id="race-view" width="320" height="360" aria-hidden="true"></canvas>
               <div class="race-caption">
                 <strong id="race-name">Human</strong>

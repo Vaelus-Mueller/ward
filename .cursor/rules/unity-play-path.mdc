@@ -1,0 +1,13 @@
+---
+description: Unity is Ward's Google Play ship path
+alwaysApply: true
+---
+
+# Unity Play path
+
+Ward's **Google Play / Android ship client** is `WardUnity/` (URP, IL2CPP, ARM64, ASTC). The Capacitor/Three.js tree remains the design reference until Unity parity.
+
+- Prefer native Unity builds (`WardUnity/Tools/ship-android.ps1` or `build-android.ps1` / `build-aab.ps1`) over Capacitor WebView APKs for Play.
+- Keep `applicationId` `com.vaelus.arpg`, target API 36, min 24, versionCode/versionName coherent with Play.
+- Drive APK/AAB pointer: `G:\My Drive\Ward\releases\apk\ward-debug.apk` / `ward-release.aab` (overwrite current; no archive hoarding).
+- Do not commit `Library/`, `Temp/`, `Builds/`, `*.apk`, `*.aab`, or upload keystores under `UserSettings/`.

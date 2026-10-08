@@ -859,7 +859,12 @@ p { line-height: 1.4; }
 .gender-picker.unisex {
   grid-template-columns: 1fr;
 }
-.gender-picker.unisex .gender-btn { display: none; }
+/* Unisex races: no Male/Female controls — only the form note. */
+.gender-picker.unisex .gender-btn {
+  display: none !important;
+  pointer-events: none;
+}
+.gender-btn[hidden] { display: none !important; }
 .gender-btn {
   min-height: 30px;
   font-family: var(--font-display);
@@ -907,6 +912,7 @@ p { line-height: 1.4; }
 }
 .race-arrow:active { border-color: var(--gold); }
 .race-stage {
+  position: relative;
   display: grid;
   gap: 4px;
   justify-items: center;
@@ -919,15 +925,23 @@ p { line-height: 1.4; }
   box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45);
 }
 #race-view {
+  position: relative;
+  z-index: 1;
   width: min(100%, 220px);
   height: min(28vh, 200px);
   display: block;
 }
 #race-doll {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
   width: min(100%, 220px);
   height: min(28vh, 200px);
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 #race-doll svg {
   width: auto;

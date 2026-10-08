@@ -154,13 +154,24 @@ const SILHOUETTES: Record<RaceId, Silhouette> = {
   },
 };
 
-export function raceDollSvg(race: RaceId): string {
+/** ink = parchment character sheet; ember = lit create-screen stage (must read on near-black). */
+export function raceDollSvg(race: RaceId, tone: "ink" | "ember" = "ink"): string {
   const art = SILHOUETTES[race] ?? SILHOUETTES.human;
-  const stroke = art.accent ?? STROKE;
+  const fill = tone === "ember" ? "#9a8060" : FILL;
+  const stroke = tone === "ember" ? (art.accent ? lightenHex(art.accent) : "#f0d4a0") : (art.accent ?? STROKE);
   // Short races are drawn compact — nudge them down so boots still sit near the doll base.
   const shift = race === "gnome" ? 42 : race === "hobbit" ? 30 : race === "dwarf" ? 26 : 0;
   const transform = shift ? ` transform="translate(0 ${shift})"` : "";
   return `<svg class="silhouette" viewBox="0 0 100 220" aria-hidden="true">
-    <g fill="${FILL}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"${transform}>${art.body}</g>
+    <g fill="${fill}" stroke="${stroke}" stroke-width="2.4" stroke-linejoin="round"${transform}>${art.body}</g>
   </svg>`;
+}
+
+function lightenHex(hex: string): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  if (!Number.isFinite(n)) return "#f0d4a0";
+  const r = Math.min(255, ((n >> 16) & 255) + 60);
+  const g = Math.min(255, ((n >> 8) & 255) + 50);
+  const b = Math.min(255, (n & 255) + 40);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }

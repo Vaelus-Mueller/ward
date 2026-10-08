@@ -149,8 +149,7 @@ export class Ui {
     input.removeAttribute("readonly");
     // Focus before WebGL preview work so Android keeps the user-gesture chain.
     this.focusNameField(input);
-    // Second WebGL context next to the main game renderer OOMs Android — use SVG there.
-    if (!isConstrainedGpu()) this.ensureRacePreview();
+    // World assets are deferred on phones — create preview can use WebGL (+ SVG fallback).
     this.paintCreate();
     this.focusNameField(input);
   }
@@ -266,38 +265,45 @@ export class Ui {
     const gendered = raceHasGender(race.id);
     const picker = must("gender-picker");
     picker.classList.toggle("unisex", !gendered);
+    picker.setAttribute("aria-label", gendered ? "Choose gender" : "Unisex form");
     must("gender-unisex").classList.toggle("hidden", gendered);
-    must("gender-male").classList.toggle("on", gendered && this.createGender === "male");
-    must("gender-female").classList.toggle("on", gendered && this.createGender === "female");
-    must("gender-male").setAttribute("aria-pressed", gendered && this.createGender === "male" ? "true" : "false");
-    must("gender-female").setAttribute("aria-pressed", gendered && this.createGender === "female" ? "true" : "false");
-    must("gender-male").toggleAttribute("disabled", !gendered);
-    must("gender-female").toggleAttribute("disabled", !gendered);
+    const male = must("gender-male") as HTMLButtonElement;
+    const female = must("gender-female") as HTMLButtonElement;
+    male.hidden = !gendered;
+    female.hidden = !gendered;
+    male.disabled = !gendered;
+    female.disabled = !gendered;
+    male.classList.toggle("on", gendered && this.createGender === "male");
+    female.classList.toggle("on", gendered && this.createGender === "female");
+    male.setAttribute("aria-pressed", gendered && this.createGender === "male" ? "true" : "false");
+    female.setAttribute("aria-pressed", gendered && this.createGender === "female" ? "true" : "false");
     this.paintRacePreview(race.id, gendered ? this.createGender : "male");
   }
 
-  /** WebGL spin on desktop; SVG silhouette on phones so create never steals the game context. */
+  /**
+   * Prefer a live WebGL hero (world assets are deferred on phones so this is safe).
+   * Ember SVG always paints underneath as a guaranteed readable fallback.
+   */
   private paintRacePreview(race: RaceId, gender: Gender): void {
     const canvas = must("race-view") as HTMLCanvasElement;
-    let doll = document.getElementById("race-doll");
-    if (isConstrainedGpu()) {
-      canvas.classList.add("hidden");
-      if (!doll) {
-        doll = document.createElement("div");
-        doll.id = "race-doll";
-        doll.setAttribute("aria-hidden", "true");
-        canvas.parentElement?.insertBefore(doll, canvas);
-      }
-      doll.classList.remove("hidden");
-      if (doll.dataset.race !== race) {
-        doll.dataset.race = race;
-        doll.innerHTML = raceDollSvg(race);
-      }
-      return;
+    const doll = must("race-doll");
+    const key = `${race}:${gender}`;
+    if (doll.dataset.key !== key) {
+      doll.dataset.key = key;
+      doll.innerHTML = raceDollSvg(race, "ember");
     }
-    doll?.classList.add("hidden");
-    canvas.classList.remove("hidden");
-    this.racePreview?.show(race, gender);
+    doll.classList.remove("hidden");
+    try {
+      this.ensureRacePreview();
+      this.racePreview?.show(race, gender);
+      canvas.classList.remove("hidden");
+      // Live preview is buildHero() (concept meshes). SVG is only a failure fallback.
+      if (this.racePreview) doll.classList.add("hidden");
+    } catch {
+      this.disposeRacePreview();
+      canvas.classList.add("hidden");
+      doll.classList.remove("hidden");
+    }
   }
 
   hideDead(): void {

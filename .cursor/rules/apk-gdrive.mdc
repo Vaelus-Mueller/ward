@@ -1,5 +1,5 @@
 ---
-description: Always copy built APKs to Google Drive releases folder
+description: Copy current APKs to Google Drive; do not hoard archives
 alwaysApply: true
 ---
 
@@ -7,15 +7,15 @@ alwaysApply: true
 
 Whenever you build an Android APK for Ward (`gradlew assembleDebug` / `assembleRelease`, or after `npm run android:sync`):
 
-1. Ensure **`G:\My Drive\Ward\releases\apk\`** and **`releases\archive\`** exist.
+1. Ensure **`G:\My Drive\Ward\releases\apk\`** exists.
 2. **Current build** lives only as:
    - `releases/apk/ward-debug.apk` (or `ward-release.apk`) — overwrite this file
-3. Before overwriting, if an older current APK exists and differs, move it to **`releases/archive/`** as `ward-debug-YYYY-MM-DD.apk` (or with `-HHmm` if that name exists).
-4. Move any other stray APKs in `releases/apk/` (except the current pointer) into `releases/archive/`.
-5. Confirm the current path/size in your reply; say which files were archived.
+3. **Do not archive every old APK.** Older builds in `releases/apk/` or `releases/archive/` may be **deleted** to save space. GitHub commit + push is the durable record of the project; APK binaries are disposable install artifacts.
+4. Optional: keep at most one previous build briefly if useful for a side-by-side install check; otherwise overwrite/delete freely.
+5. Confirm the current path/size in your reply; mention deletes only if you removed files.
 6. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
 7. Keep Drive assets organized by type (see `G:\My Drive\Ward\ASSETS.md`):
-   - `releases/apk/` (current only), `releases/archive/` (older)
+   - `releases/apk/` (current pointer), `releases/archive/` (optional, not required)
    - `store/icons/`, `store/listing/`
    - `art/concept/`, `art/screenshots/`, `art/reference/`
    - `audio/exports/`, `docs/`

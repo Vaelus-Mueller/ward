@@ -5,9 +5,9 @@
 import * as THREE from "three";
 import { isConstrainedGpu } from "./quality";
 
-/** 1 = authored density; phones cut harder, desktop still shaves a little. */
+/** 1 = authored density. Keep phones close to desktop so concept meshes still read. */
 export function meshDensity(): number {
-  return isConstrainedGpu() ? 0.55 : 0.78;
+  return isConstrainedGpu() ? 0.72 : 0.85;
 }
 
 function segs(n: number, min: number): number {

@@ -51,13 +51,15 @@ must("save-slots").addEventListener("click", (event) => {
 });
 
 must("create-enter").addEventListener("click", () => {
-  audio.hit();
-  const choice = ui.createChoice();
-  activeSlot = choice.slot;
-  const name = cleanName(choice.name);
-  box.sim = new Sim(createCharacter(name, choice.race, choice.gender), Date.now() >>> 0 || 1);
-  box.sim.begin();
-  startRun();
+  void (async () => {
+    audio.hit();
+    const choice = ui.createChoice();
+    activeSlot = choice.slot;
+    const name = cleanName(choice.name);
+    box.sim = new Sim(createCharacter(name, choice.race, choice.gender), Date.now() >>> 0 || 1);
+    box.sim.begin();
+    await startRun();
+  })();
 });
 
 must("retry").addEventListener("click", () => {
@@ -252,12 +254,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function startRun(): void {
-  box.started = true;
-  audio.stopOminous(1200);
+async function startRun(): Promise<void> {
+  // Free create-preview WebGL before uploading dungeon textures/models.
   ui.hideTitle();
   must("hud").classList.remove("hidden");
   must("dead").classList.add("hidden");
+  try {
+    await renderer.ensureWorldLoaded();
+  } catch {
+    // Colored floor still draws if a texture upload fails.
+  }
+  box.started = true;
+  audio.stopOminous(1200);
   last = performance.now();
   persist();
 }
@@ -266,10 +274,12 @@ function playSlot(index: number): void {
   activeSlot = index;
   const existing = readSlots(localStorage)[index]?.save;
   if (existing) {
-    box.sim = new Sim(existing.character, 1);
-    box.sim.applySnapshot(existing);
-    box.sim.begin();
-    startRun();
+    void (async () => {
+      box.sim = new Sim(existing.character, 1);
+      box.sim.applySnapshot(existing);
+      box.sim.begin();
+      await startRun();
+    })();
     return;
   }
   ui.openCreate(index, "Exile");

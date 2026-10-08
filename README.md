@@ -16,7 +16,9 @@ The ward is now a 3D dark-fantasy dungeon. Models are Kay Lousberg's KayKit pack
 
 Ward does not include Oniro's art, models, or writing. The interface is the original stone-and-ember layout: life and mana, three skill slots, the stick, and the skill wheel.
 
-Play it on this computer with `npm run dev`. A phone build is a debug APK after `npm run android:sync` and a Gradle debug build.
+**Google Play ship path is Unity** (`WardUnity/`: URP, IL2CPP, ARM64). This Capacitor / Three.js tree stays as the design reference until the Unity client reaches parity.
+
+Play the web prototype with `npm run dev`. Legacy Capacitor debug APKs still build via `npm run android:sync` + Gradle. Prefer `WardUnity/Tools/build-android.ps1` for native Play installs.
 
 Install Node.js 22 or newer, then from this folder:
 
