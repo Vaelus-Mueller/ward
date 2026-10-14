@@ -14,7 +14,7 @@ Bulwark, Shade, and Rite are the three spokes of the skill wheel. At level 2 you
 
 The ward is now a 3D dark-fantasy dungeon. Models are Kay Lousberg's KayKit packs (CC0): a knight, rogue, and mage for the exile, and skeletons for the things that walk the ward. Floor, walls, and columns are from the same dungeon pack. See `public/models/CREDITS.txt`.
 
-Ward does not include Oniro's art, models, or writing. The interface is the original stone-and-ember layout: life and mana, three skill slots, the stick, and the skill wheel.
+Ward does not include Oniro's art, models, or writing. The combat HUD follows Oniro's layout: a level badge and health bar, the place name, a joystick, and skills fanned around the attack button. Frames use Ward's own dungeon textures as placeholders.
 
 **Google Play ship path is Unity** (`WardUnity/`: URP, IL2CPP, ARM64). This Capacitor / Three.js tree stays as the design reference until the Unity client reaches parity.
 

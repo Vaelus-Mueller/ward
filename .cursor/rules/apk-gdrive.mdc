@@ -7,19 +7,18 @@ alwaysApply: true
 
 Whenever you build an Android APK for Ward (`gradlew assembleDebug` / `assembleRelease`, or after `npm run android:sync`):
 
-1. Ensure **`G:\My Drive\Ward\releases\apk\`** exists.
-2. **Current build** lives only as:
-   - `releases/apk/ward-debug.apk` (or `ward-release.apk`) — overwrite this file
-3. **Do not archive every old APK.** Older builds in `releases/apk/` or `releases/archive/` may be **deleted** to save space. GitHub commit + push is the durable record of the project; APK binaries are disposable install artifacts.
+1. The Ward Drive root is `G:\My Drive\Ward\`. It holds the current APK, the `game` folder, and `Ward Model Prompts`.
+2. **Current build** lives only as `G:\My Drive\Ward\ward-debug.apk` — overwrite this file.
+3. **Do not archive every old APK at the root.** Older builds belong in `G:\My Drive\Ward\game\archive\` and may be deleted to save space. GitHub commit + push is the durable record of the project; APK binaries are disposable install artifacts.
 4. Optional: keep at most one previous build briefly if useful for a side-by-side install check; otherwise overwrite/delete freely.
 5. Confirm the current path/size in your reply; mention deletes only if you removed files.
 6. Do **not** `git add` APKs (`*.apk` is gitignored); Drive file sync is enough.
-7. Keep Drive assets organized by type (see `G:\My Drive\Ward\ASSETS.md`):
-   - `releases/apk/` (current pointer), `releases/archive/` (optional, not required)
+7. Keep Drive assets organized by type inside `G:\My Drive\Ward\game\` (see `game\ASSETS.md`):
+   - `archive/` — old APKs and unused asset snapshots
    - `store/icons/`, `store/listing/`
    - `art/concept/`, `art/screenshots/`, `art/reference/`
    - `audio/exports/`, `docs/`
-   Do not rearrange git source trees (`src/`, `public/`, `android/`).
+   The git mirror lives in `game\`. Do not move `src/`, `public/`, or `android/` back to the Ward root.
 
 Source path after a successful debug build:
 

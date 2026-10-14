@@ -153,47 +153,98 @@ p { line-height: 1.4; }
 }
 #hud button, #joy { pointer-events: auto; }
 
-#topbar {
+#vitals {
   position: absolute;
-  top: calc(6px + var(--safe-t));
-  left: calc(8px + var(--safe-l));
-  right: calc(8px + var(--safe-r));
+  top: calc(10px + var(--safe-t));
+  left: calc(10px + var(--safe-l));
   display: flex;
-  gap: 8px;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: nowrap;
-  padding: 5px 8px;
-  background:
-    linear-gradient(180deg, rgba(22, 16, 24, 0.94), rgba(8, 6, 10, 0.82));
-  border: 1px solid rgba(110, 90, 62, 0.65);
-  box-shadow:
-    inset 0 1px 0 rgba(201, 165, 106, 0.12),
-    0 10px 28px rgba(0, 0, 0, 0.5);
+  gap: 8px;
+  z-index: 3;
 }
-.identity-block { min-width: 0; flex: 0 1 200px; }
+#level-badge {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: #f3e6d0;
+  text-shadow: 0 1px 2px #000;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(20, 8, 8, 0.2), rgba(8, 4, 6, 0.72)),
+    url("/textures/pbr/wall_diff_1k.jpg") center / cover;
+  border: 2px solid #5a4030;
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 4px 10px rgba(0, 0, 0, 0.45);
+}
+.vital-stack { min-width: 0; }
 #identity {
   font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  letter-spacing: 0.06em;
   color: var(--gold);
+  margin-bottom: 6px;
+}
+#corner-meta {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  right: calc(10px + var(--safe-r));
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 #wave-label {
-  color: var(--muted);
+  max-width: min(42vw, 220px);
+  padding: 4px 8px;
+  color: #e8d7c4;
   font-size: 11px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   font-family: var(--font-display);
+  text-align: right;
+  background:
+    linear-gradient(180deg, rgba(12, 8, 10, 0.55), rgba(8, 4, 6, 0.72)),
+    url("/textures/pbr/dungeon_diff_1k.jpg") center / cover;
+  border: 1px solid rgba(90, 64, 48, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
 }
+#btn-menu {
+  width: 42px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 8px;
+  background:
+    linear-gradient(180deg, rgba(16, 10, 12, 0.55), rgba(8, 4, 6, 0.8)),
+    url("/textures/pbr/wall_diff_1k.jpg") center / cover;
+  border: 1px solid #6a5040;
+}
+#top-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 148px;
+  padding: 8px;
+  background:
+    linear-gradient(180deg, rgba(12, 8, 10, 0.88), rgba(6, 4, 6, 0.92)),
+    url("/textures/pbr/dungeon_diff_1k.jpg") center / cover;
+  border: 1px solid rgba(90, 64, 48, 0.85);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+#top-actions.hidden { display: none; }
+#top-actions button { min-height: 32px; font-size: 10px; }
 .xp {
-  margin-top: 5px;
+  margin-top: 4px;
   height: 3px;
-  width: 132px;
+  width: min(240px, 46vw);
   background: #1a1218;
-  border: 1px solid rgba(110, 90, 62, 0.4);
+  border: 1px solid rgba(90, 64, 48, 0.55);
 }
 #xp-fill {
   height: 100%;
@@ -202,22 +253,14 @@ p { line-height: 1.4; }
   box-shadow: 0 0 8px rgba(224, 192, 120, 0.45);
   transition: width 220ms ease;
 }
-#top-actions { display: flex; flex-wrap: nowrap; gap: 5px; justify-content: flex-end; }
-#top-actions button {
-  pointer-events: auto;
-  min-height: 28px;
-  padding: 0 7px;
-  font-size: 9px;
-  white-space: nowrap;
-}
 #gold {
+  margin-top: 2px;
   color: var(--gold);
   font-family: var(--font-display);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  min-width: 44px;
-  text-align: right;
-  flex: none;
   letter-spacing: 0.06em;
+  text-shadow: 0 1px 2px #000;
 }
 
 /* Combat focus plate — display only; never captures taps over the playfield. */
@@ -346,114 +389,133 @@ p { line-height: 1.4; }
   transition: width 80ms linear;
 }
 
-#globes {
-  position: absolute;
-  left: calc(14px + var(--safe-l));
-  bottom: calc(118px + var(--safe-b));
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.globe {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+.hp-bar {
   position: relative;
   overflow: hidden;
-  display: grid;
-  place-items: center;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: min(240px, 46vw);
+  height: 22px;
+  padding: 0 8px;
   background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.16), transparent 32%),
-    #120a10;
-  border: 2px solid var(--brass);
+    linear-gradient(180deg, rgba(12, 4, 6, 0.45), rgba(8, 2, 4, 0.72)),
+    url("/textures/pbr/dungeon_diff_1k.jpg") center / cover;
+  border: 2px solid #4a2820;
   box-shadow:
-    inset 0 0 14px rgba(0, 0, 0, 0.7),
-    0 0 0 3px #1a1218,
-    0 0 16px rgba(90, 28, 36, 0.25);
+    inset 0 0 0 1px rgba(0, 0, 0, 0.65),
+    0 3px 8px rgba(0, 0, 0, 0.4);
 }
-.globe::before {
+.hp-bar::before {
   content: "";
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: calc(var(--fill, 1) * 100%);
-  background: var(--liquid);
-  transition: height 180ms ease;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--fill, 1) * 100%);
+  background: linear-gradient(180deg, #e07058, #8a1c22 55%, #4a1014);
+  box-shadow: inset 0 1px 0 rgba(255, 210, 180, 0.35);
+  transition: width 180ms ease;
 }
-.globe.life { --liquid: linear-gradient(#c44848, #4a1018); }
-.globe.mana { --liquid: linear-gradient(#6a9ab8, #182838); }
-.globe span, .globe small { position: relative; z-index: 1; font-family: var(--font-display); }
-.globe span { display: block; font-size: 11px; }
-.globe small { display: block; color: #eadfce; font-size: 9px; opacity: 0.85; }
+.hp-bar span, .hp-bar small {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  text-shadow: 0 1px 2px #000;
+}
+.hp-bar span { font-size: 11px; }
+.hp-bar small { font-size: 10px; color: #f3e6d0; }
+.hp-bar small::before { content: "/ "; }
 
 #joy {
   position: absolute;
   left: calc(14px + var(--safe-l));
   bottom: calc(10px + var(--safe-b));
-  width: 96px;
-  height: 96px;
+  width: 108px;
+  height: 108px;
   border-radius: 50%;
   touch-action: none;
-  background: radial-gradient(circle, rgba(42, 24, 32, 0.55), rgba(6, 4, 8, 0.4) 72%);
-  border: 2px solid rgba(201, 165, 106, 0.75);
-  box-shadow: inset 0 0 0 5px rgba(0, 0, 0, 0.28), 0 6px 16px rgba(0, 0, 0, 0.4);
+  background:
+    radial-gradient(circle, rgba(8, 4, 6, 0.25) 38%, rgba(8, 4, 6, 0.72) 70%),
+    url("/textures/pbr/hell_diff_1k.jpg") center / cover;
+  border: 2px solid rgba(120, 90, 70, 0.85);
+  box-shadow:
+    inset 0 0 0 10px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 220, 180, 0.15),
+    0 6px 16px rgba(0, 0, 0, 0.4);
 }
+#joy::before,
+#joy::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(232, 210, 180, 0.35);
+  pointer-events: none;
+}
+#joy::before { width: 70%; height: 1px; transform: translate(-50%, -50%); }
+#joy::after { width: 1px; height: 70%; transform: translate(-50%, -50%); }
 #joy-knob {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 35% 28%, #f0c090, #a04830 55%, #3a1810);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 12px rgba(180, 60, 40, 0.25);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 230, 200, 0.35), transparent 42%),
+    url("/textures/pbr/wall_diff_1k.jpg") center / cover;
+  border: 2px solid #c4a070;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 #actions {
   position: absolute;
-  right: calc(12px + var(--safe-r));
-  bottom: calc(10px + var(--safe-b));
-  display: grid;
-  grid-template-columns: 56px 76px;
-  grid-template-rows: 56px 56px 56px;
-  gap: 10px;
-  align-items: center;
-  justify-items: center;
-  padding: 8px 2px 2px 2px;
+  right: calc(8px + var(--safe-r));
+  bottom: calc(8px + var(--safe-b));
+  width: 196px;
+  height: 196px;
 }
-#skill-0 { grid-column: 1; grid-row: 1; }
-#skill-1 { grid-column: 1; grid-row: 2; }
-#skill-2 { grid-column: 1; grid-row: 3; }
-#loot { grid-column: 2; grid-row: 1; }
+#skill-0, #skill-1, #skill-2, #loot, #attack {
+  position: absolute;
+  margin: 0;
+}
+#skill-1 { right: 4px; bottom: 118px; }
+#skill-0 { right: 78px; bottom: 132px; }
+#skill-2 { right: 92px; bottom: 64px; }
+#loot { right: 128px; bottom: 8px; }
 #attack, .skill, #loot {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   padding: 4px;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1.15;
   border-radius: 50%;
   letter-spacing: 0.04em;
   background:
-    radial-gradient(circle at 50% 32%, rgba(255, 210, 160, 0.18), transparent 48%),
-    linear-gradient(#2a1e28, #0c0a10);
-  border: 2px solid var(--brass);
+    radial-gradient(circle at 50% 32%, rgba(255, 180, 120, 0.28), rgba(8, 4, 6, 0.55) 58%),
+    url("/textures/pbr/wall_diff_1k.jpg") center / cover;
+  border: 2px solid #8a5a40;
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.4);
 }
 #attack {
-  grid-column: 2;
-  grid-row: 2 / span 2;
-  align-self: center;
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  border-color: var(--ember);
+  right: 0;
+  bottom: 18px;
+  width: 78px;
+  height: 78px;
+  border-color: #e07048;
   background:
-    radial-gradient(circle at 50% 35%, rgba(255, 120, 80, 0.4), transparent 52%),
-    linear-gradient(#5a2418, #12080c);
-  box-shadow: 0 0 20px rgba(180, 48, 40, 0.4);
+    radial-gradient(circle at 50% 40%, rgba(255, 140, 80, 0.45), rgba(40, 10, 8, 0.55) 58%),
+    url("/textures/pbr/hell_diff_1k.jpg") center / cover;
+  box-shadow:
+    inset 0 0 0 3px rgba(0, 0, 0, 0.4),
+    0 0 16px rgba(180, 48, 32, 0.45);
 }
 .skill {
-  position: relative;
   overflow: visible;
   border-radius: 50%;
   z-index: 1;

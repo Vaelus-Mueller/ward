@@ -24,8 +24,7 @@ namespace Ward.UI
         {
             if (player == null || player.Character == null) return;
             var c = player.Character;
-            if (identity != null)
-                identity.text = $"{c.name} · {RaceRules.DisplayName(c.race)} · L{c.level}";
+            if (identity != null) identity.text = c.level.ToString();
             if (place != null && session != null) place.text = session.PlaceLabel;
             if (hpText != null) hpText.text = $"{Mathf.CeilToInt(player.Hp)} / {c.MaxLife}";
             if (goldText != null) goldText.text = $"{c.gold}";

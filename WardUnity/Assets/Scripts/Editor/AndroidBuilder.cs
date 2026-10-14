@@ -8,8 +8,8 @@ namespace Ward.EditorTools
 {
     public static class AndroidBuilder
     {
-        const string DriveApk = @"G:\My Drive\Ward\releases\apk\ward-debug.apk";
-        const string DriveAab = @"G:\My Drive\Ward\releases\apk\ward-release.aab";
+        const string DriveApk = @"G:\My Drive\Ward\ward-debug.apk";
+        const string DriveAab = @"G:\My Drive\Ward\game\releases\apk\ward-release.aab";
         const string KeystoreRel = "UserSettings/ward-upload.keystore";
 
         [MenuItem("Ward/Build Android APK (Debug)")]

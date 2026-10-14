@@ -63,23 +63,47 @@ namespace Ward.App
 
             var hudGo = Panel(canvas.transform, "HUD", new Color(0, 0, 0, 0));
             hudGo.GetComponent<Image>().raycastTarget = false;
-            var identity = PlaceLabel(hudGo.transform, "Exile", 22, new Vector2(0f, 1f), new Vector2(20f, -12f), new Vector2(420f, 32f));
-            identity.alignment = TextAnchor.MiddleLeft;
-            var place = PlaceLabel(hudGo.transform, "Threshold", 16, new Vector2(0f, 1f), new Vector2(20f, -44f), new Vector2(420f, 24f));
-            place.alignment = TextAnchor.MiddleLeft;
-            var hp = PlaceLabel(hudGo.transform, "50 / 50", 22, new Vector2(0f, 0f), new Vector2(20f, 188f), new Vector2(220f, 32f));
-            hp.alignment = TextAnchor.MiddleLeft;
-            var gold = PlaceLabel(hudGo.transform, "0", 22, new Vector2(1f, 1f), new Vector2(-16f, -12f), new Vector2(180f, 32f));
-            gold.alignment = TextAnchor.MiddleRight;
+            var badgeFrame = new GameObject("LevelBadge", typeof(RectTransform), typeof(Image));
+            badgeFrame.transform.SetParent(hudGo.transform, false);
+            var badgeRt = badgeFrame.GetComponent<RectTransform>();
+            badgeRt.anchorMin = badgeRt.anchorMax = new Vector2(0f, 1f);
+            badgeRt.pivot = new Vector2(0f, 1f);
+            badgeRt.anchoredPosition = new Vector2(16f, -12f);
+            badgeRt.sizeDelta = new Vector2(54f, 54f);
+            badgeFrame.GetComponent<Image>().color = new Color(0.16f, 0.1f, 0.09f, 0.92f);
+            var identity = PlaceLabel(badgeFrame.transform, "1", 22, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(54f, 54f));
+            identity.alignment = TextAnchor.MiddleCenter;
+
+            var hpFrame = new GameObject("HpBar", typeof(RectTransform), typeof(Image));
+            hpFrame.transform.SetParent(hudGo.transform, false);
+            var hpRt = hpFrame.GetComponent<RectTransform>();
+            hpRt.anchorMin = hpRt.anchorMax = new Vector2(0f, 1f);
+            hpRt.pivot = new Vector2(0f, 1f);
+            hpRt.anchoredPosition = new Vector2(78f, -22f);
+            hpRt.sizeDelta = new Vector2(320f, 28f);
+            hpFrame.GetComponent<Image>().color = new Color(0.28f, 0.08f, 0.08f, 0.9f);
+            var hp = PlaceLabel(hpFrame.transform, "50 / 50", 16, new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(300f, 28f));
+            hp.alignment = TextAnchor.MiddleRight;
+            hp.color = new Color(0.98f, 0.9f, 0.82f);
+
+            var gold = PlaceLabel(hudGo.transform, "0", 16, new Vector2(0f, 1f), new Vector2(80f, -54f), new Vector2(180f, 24f));
+            gold.alignment = TextAnchor.MiddleLeft;
+            gold.color = new Color(0.88f, 0.75f, 0.42f);
+
+            var place = PlaceLabel(hudGo.transform, "Threshold", 16, new Vector2(1f, 1f), new Vector2(-16f, -12f), new Vector2(360f, 28f));
+            place.alignment = TextAnchor.MiddleRight;
+
             var dead = Panel(hudGo.transform, "Dead", new Color(0.1f, 0.05f, 0.05f, 0.85f));
             dead.SetActive(false);
             AddLabel(dead.transform, "You fall", 40, Vector2.zero);
-            var retry = AddButton(dead.transform, "Retry", new Vector2(0, -80), () => session.Retry());
+            AddButton(dead.transform, "Retry", new Vector2(0, -80), () => session.Retry());
             WireHud(hud, identity, place, hp, gold, dead, player, session);
             var skillWheel = hudGo.AddComponent<SkillWheelView>();
-            var s1 = PlaceButton(hudGo.transform, "S1", new Vector2(1f, 0f), new Vector2(-148f, 156f), new Vector2(84f, 64f), () => player.TryCastSkill(0));
-            var s2 = PlaceButton(hudGo.transform, "S2", new Vector2(1f, 0f), new Vector2(-148f, 84f), new Vector2(84f, 64f), () => player.TryCastSkill(1));
-            var s3 = PlaceButton(hudGo.transform, "S3", new Vector2(1f, 0f), new Vector2(-148f, 16f), new Vector2(84f, 64f), () => player.TryCastSkill(2));
+            var s1 = PlaceButton(hudGo.transform, "S1", new Vector2(1f, 0f), new Vector2(-118f, 188f), new Vector2(72f, 72f), () => player.TryCastSkill(0));
+            var s2 = PlaceButton(hudGo.transform, "S2", new Vector2(1f, 0f), new Vector2(-24f, 168f), new Vector2(72f, 72f), () => player.TryCastSkill(1));
+            var s3 = PlaceButton(hudGo.transform, "S3", new Vector2(1f, 0f), new Vector2(-132f, 96f), new Vector2(72f, 72f), () => player.TryCastSkill(2));
+            foreach (var slot in new[] { s1, s2, s3 })
+                slot.GetComponent<Image>().color = new Color(0.22f, 0.12f, 0.1f, 0.92f);
             typeof(SkillWheelView).GetField("slotLabels", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 ?.SetValue(skillWheel, new[]
                 {
@@ -87,10 +111,11 @@ namespace Ward.App
                     s2.GetComponentInChildren<Text>(),
                     s3.GetComponentInChildren<Text>()
                 });
-            PlaceButton(hudGo.transform, "Attack", new Vector2(1f, 0f), new Vector2(-16f, 16f), new Vector2(116f, 116f), () => player.TryAttack());
-            PlaceButton(hudGo.transform, "Sheet", new Vector2(1f, 1f), new Vector2(-16f, -56f), new Vector2(140f, 44f), () => flow.OpenSheet());
-            PlaceButton(hudGo.transform, "Town", new Vector2(1f, 1f), new Vector2(-16f, -108f), new Vector2(140f, 44f), () => flow.OpenTown());
-            PlaceButton(hudGo.transform, "Save", new Vector2(1f, 1f), new Vector2(-16f, -160f), new Vector2(140f, 44f), () =>
+            var attack = PlaceButton(hudGo.transform, "Attack", new Vector2(1f, 0f), new Vector2(-18f, 22f), new Vector2(108f, 108f), () => player.TryAttack());
+            attack.GetComponent<Image>().color = new Color(0.45f, 0.16f, 0.1f, 0.95f);
+            PlaceButton(hudGo.transform, "Sheet", new Vector2(1f, 1f), new Vector2(-16f, -48f), new Vector2(120f, 36f), () => flow.OpenSheet());
+            PlaceButton(hudGo.transform, "Town", new Vector2(1f, 1f), new Vector2(-16f, -90f), new Vector2(120f, 36f), () => flow.OpenTown());
+            PlaceButton(hudGo.transform, "Save", new Vector2(1f, 1f), new Vector2(-16f, -132f), new Vector2(120f, 36f), () =>
             {
                 SaveService.Write(session.ToSave());
                 flow.ShowTitle();

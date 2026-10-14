@@ -24,7 +24,7 @@ powershell -File Tools/ship-android.ps1
 
 Also: `Tools/build-android.ps1` (APK only), `Tools/build-aab.ps1` (AAB only).
 
-Outputs: `Builds/ward-debug.apk`, `Builds/ward-release.aab`, copied to `G:\My Drive\Ward\releases\apk\`.
+Outputs: `Builds/ward-debug.apk`, `Builds/ward-release.aab`. The current APK is copied to `G:\My Drive\Ward\ward-debug.apk`. The AAB is copied to `G:\My Drive\Ward\game\releases\apk\ward-release.aab`.
 
 ## Release AAB (Play)
 
@@ -34,6 +34,6 @@ Menu **Ward → Build Android AAB (Release signed)** or:
 powershell -File Tools/build-aab.ps1
 ```
 
-Creates `UserSettings/ward-upload.keystore` on first run (gitignored), signs the AAB, writes `Builds/ward-release.aab`, and copies to `G:\My Drive\Ward\releases\apk\ward-release.aab`. Prefer Play App Signing for store uploads; keep this keystore as the upload key.
+Creates `UserSettings/ward-upload.keystore` on first run (gitignored), signs the AAB, writes `Builds/ward-release.aab`, and copies to `G:\My Drive\Ward\game\releases\apk\ward-release.aab`. Prefer Play App Signing for store uploads; keep this keystore as the upload key.
 
 `applicationId`: `com.vaelus.arpg` · `versionName` 0.1.0 · `targetSdk` 36 · `minSdk` 26 (this Unity editor rejects API 24) · **ARM64 IL2CPP** · ASTC textures.

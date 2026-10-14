@@ -334,6 +334,7 @@ export class Ui {
     const c = sim.character;
     const derived = sim.derived;
     const rank = c.paragon > 0 ? `L${c.level}  P${c.paragon}` : `L${c.level}`;
+    text("level-badge", `${c.level}`);
     text("identity", `${c.name}  ·  ${raceName(c.race)}  ·  ${classTitle(c)}  ·  ${rank}`);
     text("wave-label", sim.placeLabel);
     text("gold", `${c.gold}`);
@@ -439,12 +440,32 @@ export class Ui {
       this.hide("pack");
     });
     must("close-privacy").addEventListener("click", () => this.hide("privacy"));
-    must("btn-character").addEventListener("click", () => this.openSheet());
-    must("btn-tree").addEventListener("click", () => this.openTree());
+    const menu = must("top-actions");
+    const menuButton = must("btn-menu");
+    const closeMenu = () => {
+      menu.classList.add("hidden");
+      menuButton.setAttribute("aria-expanded", "false");
+    };
+    menuButton.addEventListener("click", () => {
+      const open = menu.classList.toggle("hidden") === false;
+      menuButton.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    must("btn-character").addEventListener("click", () => {
+      closeMenu();
+      this.openSheet();
+    });
+    must("btn-tree").addEventListener("click", () => {
+      closeMenu();
+      this.openTree();
+    });
     must("btn-pack").addEventListener("click", () => {
+      closeMenu();
       this.show("pack");
     });
-    must("btn-town").addEventListener("click", () => this.requestTown());
+    must("btn-town").addEventListener("click", () => {
+      closeMenu();
+      this.requestTown();
+    });
     must("close-town").addEventListener("click", () => this.leaveTown());
     must("pack-tab-gear").addEventListener("click", () => {
       this.packTab = "gear";

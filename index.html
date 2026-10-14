@@ -31,21 +31,29 @@
       </section>
 
       <div id="hud" class="hidden">
-        <header id="topbar">
-          <div class="identity-block">
-            <div id="identity">Unbound</div>
-            <div id="wave-label">Wave 1</div>
+        <div id="vitals">
+          <div id="level-badge" aria-label="Level">1</div>
+          <div class="vital-stack">
+            <div id="life-globe" class="hp-bar" style="--fill: 1">
+              <span id="hp-text">50</span>
+              <small id="hp-max">50</small>
+            </div>
             <div class="xp" aria-hidden="true"><div id="xp-fill"></div></div>
+            <div id="gold">0</div>
           </div>
-          <div id="top-actions">
+        </div>
+        <div id="corner-meta">
+          <div id="wave-label">Wave 1</div>
+          <button id="btn-menu" type="button" aria-expanded="false" aria-controls="top-actions">Menu</button>
+          <div id="top-actions" class="hidden">
+            <div id="identity">Unbound</div>
             <button id="btn-character" type="button">Character</button>
             <button id="btn-tree" type="button">Skills</button>
             <button id="btn-pack" type="button">Pack</button>
             <button id="btn-town" type="button">Town</button>
             <button id="btn-mute" type="button">Sound</button>
           </div>
-          <div id="gold">0</div>
-        </header>
+        </div>
         <div id="target-frame" class="hidden" aria-live="polite">
           <div class="target-meta">
             <span id="target-name">—</span>
@@ -58,12 +66,6 @@
         <div id="portal-cast" class="hidden" aria-live="polite">
           <span>Opening portal</span>
           <div class="portal-bar"><i id="portal-fill"></i></div>
-        </div>
-        <div id="globes">
-          <div id="life-globe" class="globe life" style="--fill: 1">
-            <span id="hp-text">50</span>
-            <small id="hp-max">50</small>
-          </div>
         </div>
         <div id="joy" aria-label="Move"><div id="joy-knob"></div></div>
         <div id="actions">

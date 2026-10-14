@@ -72,6 +72,8 @@ must("btn-mute").addEventListener("click", () => {
   audio.toggle();
   localStorage.setItem("vaelus-mute", audio.muted ? "1" : "0");
   paintMute();
+  must("top-actions").classList.add("hidden");
+  must("btn-menu").setAttribute("aria-expanded", "false");
 });
 
 must("banner").addEventListener("click", () => {

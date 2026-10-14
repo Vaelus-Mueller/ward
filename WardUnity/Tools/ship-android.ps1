@@ -64,7 +64,7 @@ function Invoke-UnityMethod([string]$method, [string]$logName) {
 
 if (-not $SkipApk) {
   Invoke-UnityMethod "Ward.EditorTools.AndroidBuilder.BuildDebugApk" "android-build.log"
-  $drive = "G:\My Drive\Ward\releases\apk\ward-debug.apk"
+  $drive = "G:\My Drive\Ward\ward-debug.apk"
   if (Test-Path $drive) {
     $size = [math]::Round((Get-Item $drive).Length / 1MB, 1)
     Write-Host "Drive APK: $drive ($size MB)"
@@ -73,7 +73,7 @@ if (-not $SkipApk) {
 
 if (-not $SkipAab) {
   Invoke-UnityMethod "Ward.EditorTools.AndroidBuilder.BuildReleaseAab" "android-aab-build.log"
-  $driveAab = "G:\My Drive\Ward\releases\apk\ward-release.aab"
+  $driveAab = "G:\My Drive\Ward\game\releases\apk\ward-release.aab"
   if (Test-Path $driveAab) {
     $size = [math]::Round((Get-Item $driveAab).Length / 1MB, 1)
     Write-Host "Drive AAB: $driveAab ($size MB)"
