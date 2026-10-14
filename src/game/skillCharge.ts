@@ -1,6 +1,5 @@
 import { clamp, type Character, type Derived, type Mods } from "./types";
 import { gearNumber } from "./formulas";
-import { raceCdr } from "./races";
 import { scaledActive } from "./skills";
 
 /** Per-slot skill energy bank. Actives store charges; channels/auras use energy alone. */
@@ -48,7 +47,7 @@ export function skillChargeProfile(
     spec.scaling === "spell"
       ? 1 + derived.spirit * 0.014
       : 1 + derived.strength * 0.011 + derived.agility * 0.004;
-  const raceEase = 1 + clamp(raceCdr(character.race), -0.35, 0.4) * 0.45;
+  const raceEase = 1 + clamp(mods.cdr, -0.35, 0.4) * 0.45;
   const rankEase = 1 + 0.04 * Math.max(0, rank - 1);
   const weight = 10 + spec.energyCost * 2.4 + spec.cooldown * 2.8;
   const pool = Math.max(8, Math.round(weight / Math.max(0.55, attrScale * raceEase * rankEase)));
@@ -56,7 +55,8 @@ export function skillChargeProfile(
   let maxCharges = 0;
   if (!continuous) {
     maxCharges = clamp(Math.round(4.6 - spec.cooldown / 3.2), 1, 4);
-    maxCharges = clamp(maxCharges + Math.round(mods.chargeMax + gearNumber(character, "chargeMax")), 1, 6);
+    const chargePct = 1 + mods.chargeMax;
+    maxCharges = clamp(Math.round(maxCharges * chargePct + gearNumber(character, "chargeMax")), 1, 6);
   }
 
   return {

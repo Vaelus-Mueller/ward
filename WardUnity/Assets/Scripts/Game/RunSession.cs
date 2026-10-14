@@ -81,12 +81,20 @@ namespace Ward.Game
         void MaybeLevel()
         {
             var c = player.Character;
-            while (c.xp >= 40 + c.level * 20 && c.level < 60)
+            while (c.level < 100 && c.xp >= 40 + c.level * 20)
             {
                 c.xp -= 40 + c.level * 20;
                 c.level += 1;
-                c.unspentStats += 5;
+                c.unspentStats += 4;
                 c.unspentSkills += 1;
+                if (c.level % 10 == 0 && c.level <= 50) c.unspentClass += 1;
+                player.HealFull();
+            }
+            while (c.level >= 100 && c.xp >= 40 + (100 + c.paragon) * 20)
+            {
+                c.xp -= 40 + (100 + c.paragon) * 20;
+                c.paragon += 1;
+                c.unspentStats += 2;
                 player.HealFull();
             }
         }
@@ -100,15 +108,20 @@ namespace Ward.Game
                 if (!alive.Contains(id)) _cleared.Add(id);
         }
 
-        public void OnPlayerDied() => Dead = true;
+        public void OnPlayerDied() => RespawnAtCurrentLevel();
 
-        public void Retry()
+        public void Retry() => RespawnAtCurrentLevel();
+
+        void RespawnAtCurrentLevel()
         {
             Dead = false;
+            if (player == null || player.Character == null) return;
+            var pos = new Vector2(player.transform.position.x, player.transform.position.z);
+            var level = WorldData.LevelAt(pos, _packs);
+            var spawn = WorldData.SpawnForLevel(level, _packs);
             player.Character.gold = Mathf.Max(0, player.Character.gold - player.Character.gold / 6);
-            player.HealFull();
-            var start = WorldData.RoadStart;
-            player.transform.position = new Vector3(start.x, 0f, start.y);
+            player.Warp(new Vector3(spawn.x, 0f, spawn.y));
+            PlaceLabel = WorldData.PlaceAt(spawn, _packs);
         }
 
         public SaveSlot ToSave()

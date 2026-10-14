@@ -557,6 +557,16 @@ function blankItem(partial: Omit<Item, "ethereal" | "uniqueId" | "bornLevel" | "
   };
 }
 
+/**
+ * Full respec consumable. Not dropped, stocked, or usable yet.
+ * Hook a drop or a Play Billing purchase to this id when retrains should exist.
+ */
+export const RETRAIN_TOKEN = {
+  id: "retrain-token",
+  name: "Seal of Revision",
+  blurb: "Returns every spent attribute, skill, and keystone point.",
+} as const;
+
 export function starterBlade(uid = "starter-blade"): Item {
   const base = WEAPONS[0]!;
   return blankItem({

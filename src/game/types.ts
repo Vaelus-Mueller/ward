@@ -2,14 +2,14 @@ export const ARENA = { width: 3600, height: 60000, margin: 160 };
 export const BASE_ATTR = 10;
 /** Starting life at level 1 with innate stamina (before racial % and gear). */
 export const BASE_LIFE = 50;
-export const STAT_POINTS_PER_LEVEL = 5;
+export const STAT_POINTS_PER_LEVEL = 4;
+export const PARAGON_STAT_POINTS = 2;
 export const SKILL_POINTS_PER_LEVEL = 1;
-export const CLASS_POINT_LEVELS = [25, 50] as const;
-export const PARAGON_STAT_POINTS = 1;
-export const PARAGON_SKILL_EVERY = 5;
+/** One keystone point at each of these levels. The fifth, at 50, is the last. */
+export const CLASS_POINT_LEVELS = [10, 20, 30, 40, 50] as const;
 export const MAX_LEVEL = 100;
 
-/** Class points earned from character level (one at 25, another at 50). */
+/** Keystone points earned from character level. Five total, none after 50. */
 export function classPointsForLevel(level: number): number {
   let total = 0;
   for (const gate of CLASS_POINT_LEVELS) {
@@ -17,7 +17,6 @@ export function classPointsForLevel(level: number): number {
   }
   return total;
 }
-export const PARAGON_CAP = 200;
 export const INVENTORY_CAP = 16;
 export const GEM_QUALITIES = 20;
 
@@ -300,6 +299,7 @@ export interface Character {
   spent: Record<Attr, number>;
   unspentStats: number;
   unspentSkills: number;
+  /** Keystone points. Also spendable on racial nodes when skill points are gone. */
   unspentClass: number;
   skillRanks: Record<string, number>;
   slotted: [string | null, string | null, string | null];
@@ -308,18 +308,21 @@ export interface Character {
   gems: GemStack[];
   materials: MaterialStack[];
   salvageMarks: Rarity[];
-  retrains: number;
   paragon: number;
 }
 
 export interface Mods {
   life: number;
+  lifePct: number;
   energy: number;
   energyMax: number;
   energyOnHit: number;
+  /** Fraction added to charge capacity (0.02 = +2%). */
   chargeMax: number;
   armor: number;
   armorPct: number;
+  /** Added to 1 when scaling armor printed on gear. −0.85 leaves 15%. */
+  gearArmorPct: number;
   meleeMult: number;
   spellMult: number;
   attackSpeed: number;
@@ -327,9 +330,15 @@ export interface Mods {
   crit: number;
   evasion: number;
   attackRating: number;
+  attackRatingPct: number;
   thorns: number;
   lifeRegen: number;
+  /** Fraction added to computed life regen (0.1 = +10%). */
+  lifeRegenPct: number;
   energyRegen: number;
+  energyRegenPct: number;
+  /** Fraction of damage dealt healed on hit. */
+  lifeSteal: number;
   cdr: number;
   damageReduction: number;
   bleedChance: number;
@@ -377,12 +386,14 @@ export interface Derived {
 export function emptyMods(): Mods {
   return {
     life: 0,
+    lifePct: 0,
     energy: 0,
     energyMax: 0,
     energyOnHit: 0,
     chargeMax: 0,
     armor: 0,
     armorPct: 0,
+    gearArmorPct: 0,
     meleeMult: 0,
     spellMult: 0,
     attackSpeed: 0,
@@ -390,9 +401,13 @@ export function emptyMods(): Mods {
     crit: 0,
     evasion: 0,
     attackRating: 0,
+    attackRatingPct: 0,
     thorns: 0,
     lifeRegen: 0,
+    lifeRegenPct: 0,
     energyRegen: 0,
+    energyRegenPct: 0,
+    lifeSteal: 0,
     cdr: 0,
     damageReduction: 0,
     bleedChance: 0,

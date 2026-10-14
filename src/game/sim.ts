@@ -2,7 +2,9 @@ import { grantXp } from "./character";
 import { HERO_ATTACK_DUR, HERO_ATTACK_IMPACT } from "../render/heroes";
 import {
   ARENA,
+  PARAGON_STAT_POINTS,
   STAT_POINTS_PER_LEVEL,
+  classPointsForLevel,
   clamp,
   emptyMods,
   type Character,
@@ -14,7 +16,7 @@ import {
 import { derive, gearNumber, hitChance, mitigate, rollRange } from "./formulas";
 import { rollGem, rollItem, starterBlade, tryAddItem } from "./items";
 import { mulberry32 } from "./rng";
-import { ACTIVES, passiveContribution, scaledActive, skillById, type ActiveSpec } from "./skills";
+import { ACTIVES, passiveContribution, scaledActive, skillById, skillTakenMul, type ActiveSpec } from "./skills";
 import {
   addBankEnergy,
   bankReady,
@@ -24,7 +26,6 @@ import {
   type SkillBank,
 } from "./skillCharge";
 import { MONSTER_ARCH, damageTakenMul, monsterAttackPair, monsterOf } from "./monsters";
-import { raceDamageTakenMul } from "./races";
 import {
   DESPAWN,
   LEASH,
@@ -32,6 +33,7 @@ import {
   SPAWN_IN,
   levelToughness,
   packKinds,
+  levelSpawn,
   placeAt,
   pathBoundsAt,
   roadStart,
@@ -358,23 +360,31 @@ export class Sim {
   }
 
   retry(): void {
+    this.respawnAtLevel(this.wave);
+    this.enemies = [];
+    this.spawned.clear();
+    this.refreshPacks();
+  }
+
+  private respawnAtLevel(level: number): void {
     const loss = Math.floor(this.character.gold * 0.15);
     this.character.gold -= loss;
     this.player.channel = null;
     this.player.portal = null;
     this.player.buffs = [];
     this.player.shield = 0;
-    this.player.iFrame = 0;
+    this.player.iFrame = 0.6;
     this.player.stun = 0;
-    this.shots = [];
+    this.shots = this.shots.filter((shot) => shot.fromPlayer);
     this.recompute();
     this.player.hp = this.derived.life;
     this.player.energy = this.derived.energy;
+    const spawn = levelSpawn(level);
+    this.player.x = spawn.x;
+    this.player.y = spawn.y;
     this.phase = "play";
-    this.enemies = [];
-    this.spawned.clear();
-    this.refreshPacks();
-    if (loss > 0) this.float(this.player.x, this.player.y - 30, `-${loss} gold`, "#e7c39a");
+    this.trackPlace();
+    if (loss > 0) this.float(spawn.x, spawn.y - 30, `-${loss} gold`, "#e7c39a");
   }
 
   toSnapshot(): Snapshot {
@@ -477,9 +487,7 @@ export class Sim {
     this.collectGold();
     if (this.player.stun > 0) this.breakChannel();
     if (this.player.hp <= 0) {
-      this.player.hp = 0;
-      this.phase = "dead";
-      result.died = true;
+      this.respawnAtLevel(placeAt(this.player.x, this.player.y).level);
     }
     this.refreshPacks();
     this.trackPlace();
@@ -1062,7 +1070,7 @@ export class Sim {
     }
     const maxHit = crit; // enemy damage is flat; a crit is their max-damage critical
     const pair = blow.pair ?? (attacker ? monsterAttackPair(attacker.kind) : "bleed");
-    damage *= raceDamageTakenMul(this.character.race, pair);
+    damage *= skillTakenMul(this.character.skillRanks, pair);
     damage = mitigate(damage, this.derived.armor, sourceLevel, this.derived.damageReduction);
     if (this.player.shield > 0) {
       const absorbed = Math.min(this.player.shield, damage);
@@ -1195,11 +1203,12 @@ export class Sim {
         this.player.energy = Math.min(this.derived.energy, this.player.energy + this.derived.energy * 0.28 * ranks);
         for (let i = 0; i < 3; i++) this.feedSkillBank(i as 0 | 1 | 2, this.derived.energyOnHit * 4 * ranks);
         if (gain.paragons > 0) {
-          const skills = Math.floor(this.character.paragon / 5) - Math.floor((this.character.paragon - gain.paragons) / 5);
-          const skillLine = skills > 0 ? `  ·  +${skills} skill point${skills > 1 ? "s" : ""}` : "";
-          this.banner = `Paragon ${this.character.paragon}  ·  +${gain.paragons} attribute point${gain.paragons > 1 ? "s" : ""}${skillLine}`;
+          this.banner = `Paragon ${this.character.paragon}  ·  +${PARAGON_STAT_POINTS * gain.paragons} attribute points`;
         } else {
-          this.banner = `Level ${this.character.level}  ·  +${STAT_POINTS_PER_LEVEL * gain.levels} attribute points  ·  +${gain.levels} skill point${gain.levels > 1 ? "s" : ""}`;
+          const keys =
+            classPointsForLevel(this.character.level) - classPointsForLevel(this.character.level - gain.levels);
+          const keyLine = keys > 0 ? `  ·  +${keys} keystone point${keys > 1 ? "s" : ""}` : "";
+          this.banner = `Level ${this.character.level}  ·  +${STAT_POINTS_PER_LEVEL * gain.levels} attribute points  ·  +${gain.levels} skill point${gain.levels > 1 ? "s" : ""}${keyLine}`;
         }
         if (levelBefore <= 20 && this.character.level > 20 && gain.paragons === 0) {
           this.banner = `Level ${this.character.level}  ·  The stones split. Magma takes the ward.`;

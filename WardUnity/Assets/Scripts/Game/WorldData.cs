@@ -86,6 +86,39 @@ namespace Ward.Game
             }
         }
 
+        public static int LevelAt(Vector2 pos, List<PackSpot> packs)
+        {
+            if (packs == null || packs.Count == 0) return 1;
+            PackSpot best = packs[0];
+            var bestD = float.MaxValue;
+            foreach (var p in packs)
+            {
+                var d = Vector2.Distance(pos, p.position);
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = p;
+                }
+            }
+            return best.level;
+        }
+
+        /// South of that level's first pack. Level 1 uses the road entrance.
+        public static Vector2 SpawnForLevel(int level, List<PackSpot> packs)
+        {
+            if (level <= 1 || packs == null) return RoadStart;
+            PackSpot first = null;
+            foreach (var p in packs)
+            {
+                if (p.level != level) continue;
+                if (first == null || p.position.y < first.position.y)
+                    first = p;
+            }
+            if (first == null) return RoadStart;
+            var z = Mathf.Max(-ArenaHalfZ + 0.8f, first.position.y - 2.4f);
+            return new Vector2(first.position.x, z);
+        }
+
         public static string PlaceAt(Vector2 pos, List<PackSpot> packs)
         {
             if (packs == null || packs.Count == 0) return "Threshold";

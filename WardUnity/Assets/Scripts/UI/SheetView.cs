@@ -17,10 +17,11 @@ namespace Ward.UI
             if (player?.Character == null || body == null) return;
             var c = player.Character;
             body.text =
-                $"{c.name}\n{RaceRules.DisplayName(c.race)}  L{c.level}\n" +
+                $"{c.name}\n{RaceRules.DisplayName(c.race)}  L{c.level}" +
+                (c.paragon > 0 ? $"  Paragon {c.paragon}" : "") + "\n" +
                 $"STR {c.strength}  AGI {c.agility}  STA {c.stamina}\n" +
                 $"LUK {c.luck}  SPI {c.spirit}\n" +
-                $"Unspent stats {c.unspentStats}  skills {c.unspentSkills}\n\n" +
+                $"Unspent stats {c.unspentStats}  skills {c.unspentSkills}  keystones {c.unspentClass}\n\n" +
                 "Skills:\n";
             foreach (var s in SkillCatalog.All)
                 body.text += $"· {s.name} ({s.sector}) — {s.blurb}\n";

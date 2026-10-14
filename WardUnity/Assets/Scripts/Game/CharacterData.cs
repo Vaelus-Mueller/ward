@@ -10,10 +10,12 @@ namespace Ward.Game
         public RaceId race = RaceId.Human;
         public Gender gender = Gender.Male;
         public int level = 1;
+        public int paragon;
         public int xp;
         public int gold;
         public int unspentStats;
         public int unspentSkills;
+        public int unspentClass;
         public int strength;
         public int agility;
         public int stamina;

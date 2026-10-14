@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { canSpendSkill, createCharacter, grantXp, retrain, slotSkill, spendSkill, spendStat } from "./character";
+import { canSpendSkill, createCharacter, grantXp, refundBuild, slotSkill, spendSkill, spendStat } from "./character";
 import { attributes, derive, hitChance, mitigate, xpToNext } from "./formulas";
 import { liveItem, rollSocketCount, socketCap } from "./itemstats";
-import { addMaterial, equipItem, isSignatureAffix, materialCount, rollGem, rolledAffixAmount, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
+import { addMaterial, equipItem, isSignatureAffix, materialCount, RETRAIN_TOKEN, rollGem, rolledAffixAmount, rollItem, salvageCount, salvageItem, socketGem, starterBlade, tryAddItem, uniqueRoster, upgradeItem } from "./items";
 import { RACES, raceAttrs } from "./races";
 import { clearSlot, deserialize, nameSlot, readSlots, serialize, writeSave, writeSlot } from "./save";
-import { ACTIVES, PASSIVE_PER_RANK, SECTORS, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
+import { ACTIVES, PASSIVE_PER_RANK, RACIAL_SKILLS, SECTORS, SKILL_DPS_TARGET, SKILL_SYNERGIES, activeBaseDps, scaledActive, skillById, SKILLS, synergyPower } from "./skills";
 import { emptyIntent, makeEnemy, Sim } from "./sim";
 import { mainPathMinutes, toughnessFor, walkSeconds, worldPacks } from "./world";
-import { BASE_ATTR, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
-import { raceGearArmorMul, raceInnateArmor, raceWeaponSlots } from "./races";
+import { BASE_ATTR, PARAGON_STAT_POINTS, STAT_POINTS_PER_LEVEL, type Attr } from "./types";
+import { raceWeaponSlots } from "./races";
 import {
   RESIST_FLOOR,
   WEAK_CEILING,
@@ -35,7 +35,7 @@ function memoryStorage(): Storage {
 }
 
 describe("levels and attributes", () => {
-  it("grants five attribute points and one skill point per level", () => {
+  it("grants four attribute points and one skill point per level", () => {
     const hero = createCharacter();
     expect(hero.unspentStats).toBe(0);
     expect(hero.unspentSkills).toBe(0);
@@ -47,28 +47,23 @@ describe("levels and attributes", () => {
     expect(hero.unspentSkills).toBe(1);
   });
 
-  it("stops at level 100, then gives one attribute point per paragon and a skill point every five", () => {
+  it("stops at level 100, then gains paragon levels and two attribute points with no skill points", () => {
     const hero = createCharacter();
     hero.level = 100;
     const first = grantXp(hero, xpToNext(100));
     expect(first.levels).toBe(0);
     expect(first.paragons).toBe(1);
     expect(hero.paragon).toBe(1);
-    expect(hero.unspentStats).toBe(1);
+    expect(hero.unspentStats).toBe(PARAGON_STAT_POINTS);
     expect(hero.unspentSkills).toBe(0);
-    hero.paragon = 4;
+    hero.paragon = 40;
     hero.unspentStats = 0;
     hero.xp = 0;
-    const fifth = grantXp(hero, xpToNext(104));
-    expect(fifth.paragons).toBe(1);
-    expect(hero.paragon).toBe(5);
-    expect(hero.unspentStats).toBe(1);
-    expect(hero.unspentSkills).toBe(1);
-    hero.paragon = 200;
-    hero.xp = 0;
-    const stopped = grantXp(hero, 1_000_000);
-    expect(stopped.paragons).toBe(0);
-    expect(hero.paragon).toBe(200);
+    const later = grantXp(hero, xpToNext(140));
+    expect(later.paragons).toBe(1);
+    expect(hero.paragon).toBe(41);
+    expect(hero.unspentStats).toBe(PARAGON_STAT_POINTS);
+    expect(hero.unspentSkills).toBe(0);
   });
 
   it("turns stamina into life and strength into melee damage", () => {
@@ -129,13 +124,13 @@ describe("levels and attributes", () => {
     }
   });
 
-  it("places a single-rank class seal on ring 3 of each cone", () => {
-    const seals = SKILLS.filter((skill) => skill.classPoint);
+  it("places a single-rank seal on ring 3 of each cone, paid with skill points", () => {
+    const seals = SKILLS.filter((skill) => skill.ring === 3);
     expect(seals.length).toBe(7);
     for (const skill of seals) {
-      expect(skill.ring).toBe(3);
       expect(skill.maxRank).toBe(1);
       expect(skill.kind).toBe("passive");
+      expect(skill.classPoint).toBe(false);
     }
   });
 
@@ -179,7 +174,52 @@ describe("levels and attributes", () => {
   });
 });
 
+describe("racial ring", () => {
+  it("gives every race a keystone, a following ring, and a race skill", () => {
+    const races = [...new Set(RACIAL_SKILLS.map((skill) => skill.race))];
+    expect(races).toHaveLength(10);
+    for (const race of races) {
+      const nodes = RACIAL_SKILLS.filter((skill) => skill.race === race);
+      const key = nodes.find((skill) => skill.kind === "key");
+      const skill = nodes.find((skill) => skill.kind === "active");
+      expect(key, String(race)).toBeTruthy();
+      expect(skill, String(race)).toBeTruthy();
+      expect(skill!.ring).toBeGreaterThan(key!.ring);
+      expect(skill!.requires).toContain(key!.id);
+      const outer = nodes.filter((node) => node.ring > key!.ring && node.kind === "passive");
+      expect(outer.length).toBeGreaterThan(0);
+      for (const node of outer) expect(node.requires).toContain(key!.id);
+    }
+  });
+
+  it("spends keystone points on racial nodes and skill points on generic passives", () => {
+    const hero = createCharacter("Exile", "human");
+    hero.unspentSkills = 5;
+    expect(canSpendSkill(hero, "race-human-stock").ok).toBe(false);
+    hero.unspentClass = 1;
+    expect(spendSkill(hero, "race-human-stock")).toBe(true);
+    expect(hero.unspentClass).toBe(0);
+    expect(hero.unspentSkills).toBe(5);
+    expect(spendSkill(hero, "iron-oath")).toBe(true);
+    expect(hero.unspentSkills).toBe(4);
+    for (const skill of RACIAL_SKILLS) expect(skill.maxRank).toBe(1);
+    for (const skill of SKILLS) if (skill.kind === "key") expect(skill.maxRank).toBe(1);
+  });
+});
+
 describe("skill wheel", () => {
+  it("keeps skill bonuses in percentages, not flat life, armor, or rating", () => {
+    const flat = ["life", "armor", "attackRating", "lifeRegen", "thorns", "energy", "energyOnHit", "energyRegen"] as const;
+    const check = (id: string, mods: Partial<Record<(typeof flat)[number], number>> | undefined) => {
+      if (!mods) return;
+      for (const key of flat) expect(mods[key] ?? 0, id).toBe(0);
+    };
+    for (const skill of [...SKILLS, ...RACIAL_SKILLS]) {
+      check(skill.id, PASSIVE_PER_RANK[skill.id]);
+      check(skill.id, ACTIVES[skill.id]?.aura);
+    }
+  });
+
   it("keeps every node wired to a real effect", () => {
     const ids = SKILLS.map((skill) => skill.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -191,9 +231,15 @@ describe("skill wheel", () => {
       const active = ACTIVES[skill.id];
       expect(passive || active, skill.id).toBeTruthy();
     }
+    for (const skill of RACIAL_SKILLS) {
+      expect(PASSIVE_PER_RANK[skill.id] || ACTIVES[skill.id], skill.id).toBeTruthy();
+      for (const req of [...skill.requires, ...skill.requiresAny]) {
+        expect(skillById(req)?.radius).toBeLessThan(skill.radius);
+      }
+    }
   });
 
-  it("opens the inner path with no level gates and spends class points on ring-3 seals", () => {
+  it("opens the inner path with skill points and spends keystone points on keystones", () => {
     const hero = createCharacter();
     hero.unspentSkills = 3;
     expect(canSpendSkill(hero, "iron-oath").ok).toBe(true);
@@ -201,12 +247,15 @@ describe("skill wheel", () => {
     expect(spendSkill(hero, "braced-guard")).toBe(true);
     expect(slotSkill(hero, "iron-oath", 0)).toMatch(/always on/i);
 
-    expect(canSpendSkill(hero, "oathbound").ok).toBe(false);
-    hero.unspentClass = 1;
     expect(spendSkill(hero, "oathbound")).toBe(true);
-    expect(hero.unspentClass).toBe(0);
+    expect(hero.unspentSkills).toBe(0);
     hero.unspentSkills = 2;
+    expect(canSpendSkill(hero, "bastion").ok).toBe(false);
+    hero.unspentClass = 1;
     expect(spendSkill(hero, "bastion")).toBe(true);
+    expect(hero.unspentClass).toBe(0);
+    expect(hero.skillRanks.bastion).toBe(1);
+    expect(spendSkill(hero, "bastion")).toBe(false);
     expect(spendSkill(hero, "citadel")).toBe(true);
 
     const fresh = createCharacter();
@@ -216,35 +265,47 @@ describe("skill wheel", () => {
     expect(canSpendSkill(fresh, "bastion").ok).toBe(false);
   });
 
-  it("grants class points at levels 25 and 50", () => {
+  it("grants five keystone points and stops after level 50", () => {
     const hero = createCharacter();
-    hero.level = 24;
+    hero.level = 9;
     hero.xp = 0;
-    expect(grantXp(hero, xpToNext(24)).levels).toBe(1);
-    expect(hero.level).toBe(25);
+    expect(grantXp(hero, xpToNext(9)).levels).toBe(1);
+    expect(hero.level).toBe(10);
     expect(hero.unspentClass).toBe(1);
     hero.level = 49;
     hero.xp = 0;
-    hero.unspentClass = 1;
+    hero.unspentClass = 4;
     expect(grantXp(hero, xpToNext(49)).levels).toBe(1);
     expect(hero.level).toBe(50);
-    expect(hero.unspentClass).toBe(2);
+    expect(hero.unspentClass).toBe(5);
+    hero.level = 59;
+    hero.xp = 0;
+    hero.unspentClass = 5;
+    expect(grantXp(hero, xpToNext(59)).levels).toBe(1);
+    expect(hero.level).toBe(60);
+    expect(hero.unspentClass).toBe(5);
   });
 
-  it("refunds the build on retrain and keeps the first one free", () => {
+  it("keeps the respec seal out of the world until it is added", () => {
+    expect(RETRAIN_TOKEN.id).toBe("retrain-token");
+    for (let i = 0; i < 40; i++) {
+      const item = rollItem(() => i / 40, 8, `drop-${i}`, 30);
+      expect(item.uniqueId).not.toBe(RETRAIN_TOKEN.id);
+      expect(item.name).not.toBe(RETRAIN_TOKEN.name);
+    }
     const hero = createCharacter();
     hero.level = 3;
-    hero.unspentStats = 10;
-    hero.unspentSkills = 2;
+    hero.gold = 500;
+    hero.unspentStats = 4;
+    hero.unspentSkills = 1;
     spendStat(hero, "spirit");
     spendSkill(hero, "first-rite");
-    expect(retrain(hero)).toBe(true);
+    refundBuild(hero);
     expect(hero.spent.spirit).toBe(0);
     expect(hero.skillRanks["first-rite"]).toBeUndefined();
-    expect(hero.unspentStats).toBe(10);
+    expect(hero.unspentStats).toBe(8);
     expect(hero.unspentSkills).toBe(2);
-    expect(hero.unspentClass).toBe(0);
-    expect(hero.gold).toBe(0);
+    expect(hero.gold).toBe(500);
   });
 });
 
@@ -534,15 +595,19 @@ describe("the ward", () => {
     expect(rolledAffixAmount("life", 14, 2)).toBe(28);
   });
 
-  it("swings on its own when standing in weapon range", () => {
+  it("swings only while the attack button is held", () => {
     const sim = new Sim(createCharacter(), 1);
     sim.begin();
     const hound = makeEnemy("hound", 1, sim.player.x + 36, sim.player.y, 50);
     sim.enemies = [hound];
     const before = hound.hp;
+    for (let i = 0; i < 40; i++) sim.update(emptyIntent(), 0.1);
+    expect(hound.hp).toBe(before);
+    const intent = emptyIntent();
+    intent.attack = true;
     let marked = false;
     for (let i = 0; i < 40; i++) {
-      sim.update(emptyIntent(), 0.1);
+      sim.update(intent, 0.1);
       if (sim.bursts.some((burst) => burst.kind === "slash")) marked = true;
     }
     expect(sim.killedTotal > 0 || hound.hp < before).toBe(true);
@@ -646,7 +711,7 @@ describe("the ward", () => {
 
   it("caps ranked skills at 20 and keeps the per-rank scaling", () => {
     for (const skill of SKILLS) {
-      if (skill.kind === "capstone" || skill.classPoint) expect(skill.maxRank).toBe(1);
+      if (skill.kind === "capstone" || skill.kind === "key" || skill.ring === 3) expect(skill.maxRank).toBe(1);
       else expect(skill.maxRank).toBe(20);
     }
     const base = ACTIVES["heavy-blow"]!.mult;
@@ -849,13 +914,11 @@ describe("the ward", () => {
     expect(sim.player.skillBanks[0]!.charges).toBe(mid.charges);
   });
 
-  it("lets insectoids wield four weapons with innate armor and thin gear plating", () => {
+  it("lets insectoids wield four weapons, and chitin thins gear plating once learned", () => {
     expect(raceWeaponSlots("insectoid")).toBe(4);
-    expect(raceInnateArmor("insectoid")).toBeGreaterThan(20);
-    expect(raceGearArmorMul("insectoid")).toBeCloseTo(0.15);
     const bug = createCharacter("Chitin", "insectoid");
     const bare = derive(bug).armor;
-    expect(bare).toBeGreaterThan(derive(createCharacter()).armor);
+    expect(bare).toBeCloseTo(derive(createCharacter()).armor, 0);
     const plate = starterBlade("shell");
     plate.slot = "chest";
     plate.armorType = "plate";
@@ -864,7 +927,13 @@ describe("the ward", () => {
     plate.armor = 100;
     plate.affixes = [];
     bug.equipment.chest = plate;
-    expect(derive(bug).armor).toBeCloseTo(bare + 15, 0);
+    const plated = derive(bug).armor;
+    expect(plated).toBeCloseTo(bare + 100, 0);
+    bug.skillRanks["race-insectoid-chitin"] = 1;
+    const sim = new Sim(bug, 1);
+    sim.recompute();
+    expect(sim.derived.armor).toBeLessThan(plated);
+    expect(sim.derived.armor).toBeCloseTo((bare + 15) * 1.08, 0);
     const a = starterBlade("a");
     const b = starterBlade("b");
     const c = starterBlade("c");

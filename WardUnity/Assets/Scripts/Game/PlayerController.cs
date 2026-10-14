@@ -80,6 +80,15 @@ namespace Ward.Game
 
         public void HealFull() => Hp = Character != null ? Character.MaxLife : 50f;
 
+        public void Warp(Vector3 pos)
+        {
+            _vel = Vector3.zero;
+            if (_cc != null) _cc.enabled = false;
+            transform.position = pos;
+            if (_cc != null) _cc.enabled = true;
+            HealFull();
+        }
+
         public void SetHp(float value)
         {
             var max = Character != null ? Character.MaxLife : 50f;

@@ -227,7 +227,7 @@
               </div>
               <p class="points">Points <strong id="unspent-stats">0</strong> · Skills <strong id="unspent-skills">0</strong></p>
               <p id="sheet-gear" class="muted">Fists and empty cloth.</p>
-              <button id="retrain" type="button">Retrain (free)</button>
+              <p id="retrain-note" class="muted">Seal of Revision — not available yet.</p>
             </aside>
             <div class="ledger-cols">
               <section>
@@ -331,6 +331,7 @@
           <div class="tree-tools">
             <div class="filters">
               <button id="filter-all" type="button" data-filter="all">All paths</button>
+              <button id="filter-race" type="button" data-filter="race">Race</button>
               <button type="button" data-filter="bleed">Bleed</button>
               <button type="button" data-filter="holy">Holy</button>
               <button type="button" data-filter="air">Air</button>
@@ -351,6 +352,7 @@
             </div>
             <div id="tree-card">
               <h3 id="tree-name">Choose a node</h3>
+              <p id="tree-type"></p>
               <p id="tree-blurb"></p>
               <p id="tree-next"></p>
               <p id="tree-reason" class="muted"></p>

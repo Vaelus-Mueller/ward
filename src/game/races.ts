@@ -126,103 +126,73 @@ export const RACES: RaceDef[] = [
     name: "Human",
     blurb: "A ward exile of average stock. Steady hands and a stubborn frame.",
     attrs: { strength: 0.03, agility: -0.02, stamina: 0.03, luck: 0.03, spirit: -0.02 },
-    extras: { bonuses: ["+4% gold find", "+4% magic find"] },
-    passive: "Adaptability — fortune favors the common blood: slight gold and magic find.",
+    passive: "Adaptability is a keystone on your racial ring. Fortune is learned, not given.",
   }),
   race({
     id: "elf",
     name: "Elf",
     blurb: "Long of limb and sharp of eye. The ward’s cold air suits them.",
     attrs: { strength: -0.04, agility: 0.07, stamina: -0.05, luck: 0, spirit: 0.05 },
-    moveSpeed: 0.04,
-    damageTaken: { air: 0.9, bleed: 1.1 },
-    passive: "Windkin — light step and a kinship with air; steel bites deeper into slight frames.",
+    passive: "Windkin sits on your racial ring. Air and a light step are learned there.",
   }),
   race({
     id: "dwarf",
     name: "Dwarf",
     blurb: "Broad and deep-rooted. They take a blow better than they chase it.",
     attrs: { strength: 0.06, agility: -0.05, stamina: 0.07, luck: -0.02, spirit: -0.03 },
-    innateArmor: 6,
-    moveSpeed: -0.04,
-    damageTaken: { poison: 0.85, fire: 0.92 },
-    passive: "Stone Resilience — dwarven hide shrugs poison and heat; short legs slow the chase.",
+    passive: "Stone Resilience sits on your racial ring, poison and heat included.",
   }),
   race({
     id: "gnome",
     name: "Gnome",
     blurb: "Small scholars with clever fingers and little patience for axes.",
     attrs: { strength: -0.05, agility: 0.04, stamina: -0.04, luck: 0.02, spirit: 0.07 },
-    extras: { bonuses: ["+8% energy regen"] },
-    damageTaken: { air: 0.92, bleed: 1.08 },
-    passive: "Tinker Mind — quick wit feeds the ward-spark; soft bodies fear open steel.",
+    passive: "Tinker Mind sits on your racial ring. The spark is learned, not innate.",
   }),
   race({
     id: "hobbit",
     name: "Hobbit",
     blurb: "Quiet feet and a hardy gut. Soft voices, hard to keep down.",
     attrs: { strength: -0.05, agility: 0.05, stamina: 0.05, luck: 0.05, spirit: -0.03 },
-    evasion: 0.03,
-    damageTaken: { poison: 0.92 },
-    passive: "Lucky Footing — hard to pin down, harder to poison. Halfling luck holds.",
+    passive: "Lucky Footing sits on your racial ring.",
   }),
   race({
     id: "insectoid",
     name: "Insectoid",
     blurb: "Chitin and clicks. Four blade-arms, a carapace grown from within.",
     attrs: { strength: 0.04, agility: 0.07, stamina: -0.02, luck: -0.04, spirit: -0.05 },
-    innateArmor: 28,
-    gearArmorMul: 0.15,
     weaponSlots: 4,
-    damageTaken: { poison: 0.85, bleed: 0.9, fire: 1.12 },
     extras: { penalties: ["Cannot wield two-handers", "Main hand 75% / off-arms 25% weapon damage"] },
-    passive:
-      "Four Arms — four one-hand weapons only. Chitin shrugs venom and cuts; flame cracks the shell. Gear armor barely thickens it, but enchantments still bind.",
+    passive: "Chitin is a racial node. Four arms stay. The shell's resists are learned.",
   }),
   race({
     id: "minotaur",
     name: "Minotaur",
     blurb: "Horn and muscle. A charge that shakes stone, a mind that does not.",
     attrs: { strength: 0.09, agility: -0.07, stamina: 0.04, luck: -0.02, spirit: -0.05 },
-    lifePct: 0.04,
-    damageTaken: { bleed: 0.92, air: 1.1 },
     extras: { bonuses: ["Bull Grip: dual two-hand melee (off-hand 50% weapon damage)"] },
-    passive:
-      "Bull Grip — two-handed melee in each hand, or a two-hander with shield/blade. Thick hide; slow to turn into the wind.",
+    passive: "Bull Grip still holds two heavy weapons. Hide and wind are on the racial ring.",
   }),
   race({
     id: "golem",
     name: "Golem",
     blurb: "Bound clay and ward-stone. Hard to break, slower to think or turn.",
     attrs: { strength: 0.05, agility: -0.06, stamina: 0.03, luck: -0.03, spirit: -0.06 },
-    lifePct: 0.06,
-    armorPct: 0.1,
-    cdr: -0.12,
-    damageTaken: { bleed: 0.85, poison: 0.85, water: 1.12 },
-    passive:
-      "Living Stone — +10% armor and sturdier life, but skills wake slowly in clay. Construct flesh resists cuts and venom; water unbinds the seal.",
+    passive: "Living Stone is a racial node. Clay, water, and slow skills are learned there.",
   }),
   race({
     id: "lizard",
     name: "Lacerta",
     blurb: "Scaled swamp-blood. Cold eyes, a patient gut, digitigrade stride and a living caudal tail.",
     attrs: { strength: 0.04, agility: 0.03, stamina: 0.05, luck: -0.02, spirit: -0.03 },
-    innateArmor: 8,
-    lifeRegenPct: 0.01,
-    damageTaken: { poison: 0.9, water: 1.1 },
-    passive:
-      "Cold Blood — regenerate 1% of max life each second. Scales turn blades of venom; frost and tide bite the cold-blooded.",
+    passive: "Cold Blood is a racial node. Mending and tide are learned there.",
   }),
   race({
     id: "undead",
     name: "Undead",
     blurb: "A ward-bound corpse that still answers. Hunger where a heart once was.",
     attrs: { strength: 0.04, agility: 0.02, stamina: -0.03, luck: -0.02, spirit: 0.03 },
-    lifeSteal: 0.04,
-    lifeRegenMul: 0.7,
-    damageTaken: { unholy: 0.82, holy: 1.18, bleed: 0.88, poison: 0.88 },
-    passive:
-      "Grave Hunger — siphon 4% of damage dealt as life. Dark slides off dead flesh; sacred light and slow mending do not.",
+    passive: "Grave Hunger is a racial node. The siphon, the dark, and slow mending are learned there.",
   }),
 ];
 
@@ -304,15 +274,15 @@ export function raceDamageTakenMul(id: string | null | undefined, pair: DamagePa
   return clampDamageMul(mul);
 }
 
-/** Human Adaptability find bonuses. */
-export function raceGoldFind(id: string | null | undefined): number {
-  return id === "human" ? 0.04 : 0;
+/** Find and energy used to be free racial passives. They are skill-tree nodes now. */
+export function raceGoldFind(_id: string | null | undefined): number {
+  return 0;
 }
 
-export function raceMagicFind(id: string | null | undefined): number {
-  return id === "human" ? 0.04 : 0;
+export function raceMagicFind(_id: string | null | undefined): number {
+  return 0;
 }
 
-export function raceEnergyRegenMul(id: string | null | undefined): number {
-  return id === "gnome" ? 1.08 : 1;
+export function raceEnergyRegenMul(_id: string | null | undefined): number {
+  return 1;
 }

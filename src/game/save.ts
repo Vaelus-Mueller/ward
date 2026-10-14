@@ -13,7 +13,7 @@ import {
   type SocketGem,
   type WeaponStyle,
 } from "./types";
-import { SKILLS } from "./skills";
+import { allSkillNodes } from "./skills";
 import type { Snapshot } from "./sim";
 
 export const SAVE_KEY = "vaelus-save-v1";
@@ -46,6 +46,7 @@ export function deserialize(raw: string): SaveFile | null {
     data.character.race = isRaceId(data.character.race) ? data.character.race : "human";
     data.character.gender = data.character.gender === "female" ? "female" : "male";
     if (!Number.isFinite(data.character.paragon)) data.character.paragon = 0;
+    delete (data.character as { retrains?: number }).retrains;
     if (!Number.isFinite(data.wave) || !Number.isFinite(data.hp)) return null;
     return data;
   } catch {
@@ -183,8 +184,8 @@ function migrateAttributes(character: Character): void {
 function migrateClassPoints(character: Character): void {
   const earned = classPointsForLevel(character.level);
   let spent = 0;
-  for (const skill of SKILLS) {
-    if (skill.classPoint) spent += character.skillRanks[skill.id] ?? 0;
+  for (const skill of allSkillNodes()) {
+    if (skill.kind === "key" || skill.racial) spent += character.skillRanks[skill.id] ?? 0;
   }
   if (!Number.isFinite(character.unspentClass)) {
     character.unspentClass = Math.max(0, earned - spent);

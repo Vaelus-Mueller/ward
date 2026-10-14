@@ -1,8 +1,8 @@
-import { classTitle, refundStat, retrain, retrainCost, slotSkill, spendSkill, spendStat, canSpendSkill } from "./game/character";
+import { classTitle, refundStat, slotSkill, spendSkill, spendStat, canSpendSkill, spendPool } from "./game/character";
 import { derive, requirementText, xpGoal } from "./game/formulas";
-import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
+import { canUpgrade, equipItem, gemStackName, itemSummary, materialCount, materialFor, RETRAIN_TOKEN, salvageCount, salvageItem, salvageMarked, socketGem, unequipItem, upgradeBill, upgradeItem } from "./game/items";
 import { liveItem } from "./game/itemstats";
-import { ACTIVES, describeSkill, SECTORS, SKILLS, scaledActive, skillById } from "./game/skills";
+import { ACTIVES, describeSkill, SECTORS, skillsForRace, scaledActive, skillById, type SkillNode } from "./game/skills";
 import { bankReady, skillChargeProfile } from "./game/skillCharge";
 import { appendSkillIcon } from "./game/skillIcons";
 import { cleanName, readSlots } from "./game/save";
@@ -11,13 +11,13 @@ import { buyPrice, buyStockItem, gambleBlurb, gambleCost, gambleItem, merchantSt
 import { monsterOf } from "./game/monsters";
 import { levelName } from "./game/world";
 import type { Sim } from "./game/sim";
-import { ATTRS, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, MAX_LEVEL, PARAGON_CAP, RARITIES, RARITY_LABEL, type Attr, type Gender, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
+import { ATTRS, DAMAGE_PAIR_LABEL, GEAR_SLOTS, MATERIAL_LABEL, MATERIAL_ORDER, RARITIES, RARITY_LABEL, type Attr, type Gender, type GemKind, type Item, type SectorId, type SlotName } from "./game/types";
 import { isConstrainedGpu } from "./render/quality";
 import { RacePreview } from "./render/racePreview";
 import { raceDollSvg } from "./ui/dollSilhouette";
 
 export class Ui {
-  treeFilter: SectorId | "all" = "all";
+  treeFilter: SectorId | "all" | "race" = "all";
   selectedId: string | null = null;
   createRace: RaceId = "human";
   createGender: Gender = "male";
@@ -251,7 +251,7 @@ export class Ui {
     passives.innerHTML = "";
     const good = document.createElement("div");
     good.className = "race-good";
-    good.textContent = `Passives: ${race.bonuses.join(" · ")}`;
+    good.textContent = race.bonuses.length ? `Traits: ${race.bonuses.join(" · ")}` : "Traits: none.";
     const bad = document.createElement("div");
     bad.className = "race-bad";
     bad.textContent = `Drawbacks: ${race.penalties.join(" · ")}`;
@@ -339,7 +339,7 @@ export class Ui {
     text("gold", `${c.gold}`);
     const bar = must("xp-fill");
     const goal = xpGoal(c);
-    bar.style.width = `${c.level >= MAX_LEVEL && c.paragon >= PARAGON_CAP ? 100 : Math.min(100, (c.xp / goal) * 100)}%`;
+    bar.style.width = `${Math.min(100, (c.xp / goal) * 100)}%`;
     text("hp-text", sim.player.shield > 0 ? `${Math.ceil(sim.player.hp)}+${Math.ceil(sim.player.shield)}` : `${Math.ceil(sim.player.hp)}`);
     text("hp-max", `${derived.life}`);
     const life = must("life-globe");
@@ -370,11 +370,15 @@ export class Ui {
       const profile = id ? skillChargeProfile(id, rank, c.skillRanks, derived, sim.mods, c) : null;
       const bank = sim.player.skillBanks[i]!;
       const ready = !profile || (spec?.kind === "aura" ? bank.energy > 0 : bankReady(bank, profile));
-      if (label) label.textContent = skill ? skill.name : "Empty";
+      if (label) {
+        label.textContent = skill ? skill.name : "Empty";
+        label.style.color = skill ? SECTORS[skill.sector].color : "";
+      }
+      const typeName = skill ? `${DAMAGE_PAIR_LABEL[skill.sector].primary} · ${DAMAGE_PAIR_LABEL[skill.sector].secondary}` : "";
       button.title = skill
         ? profile?.continuous
-          ? `${skill.name} · ${Math.round(bank.energy)}/${profile.pool} charge${spec?.kind === "aura" ? ` · ${spec.energyPerSec.toFixed(1)}/s` : ""}`
-          : `${skill.name} · ${bank.charges}/${profile?.maxCharges ?? 0} charges`
+          ? `${skill.name} · ${typeName} · ${Math.round(bank.energy)}/${profile.pool} charge${spec?.kind === "aura" ? ` · ${spec.energyPerSec.toFixed(1)}/s` : ""}`
+          : `${skill.name} · ${typeName} · ${bank.charges}/${profile?.maxCharges ?? 0} charges`
         : "Empty";
       button.classList.toggle("on", !!sim.player.auras[i]);
       button.classList.toggle("empty", !skill);
@@ -483,6 +487,13 @@ export class Ui {
         this.treeKey = "";
       });
     }
+    must("filter-race").addEventListener("click", () => {
+      this.treeFilter = "race";
+      this.treeCenter = true;
+      this.fitOnPaint = true;
+      this.confirmSpend = false;
+      this.treeKey = "";
+    });
     must("filter-all").addEventListener("click", () => {
       this.treeFilter = "all";
       this.treeCenter = true;
@@ -494,7 +505,6 @@ export class Ui {
       document.querySelector(`.plus[data-attr="${attr}"]`)?.addEventListener("click", () => this.plus(attr));
       document.querySelector(`.minus[data-attr="${attr}"]`)?.addEventListener("click", () => this.minus(attr));
     }
-    must("retrain").addEventListener("click", () => this.doRetrain());
     must("tree-invest").addEventListener("click", () => this.invest());
     must("tree-confirm-yes").addEventListener("click", () => this.confirmInvest());
     must("tree-cancel-spend").addEventListener("click", () => this.cancelInvest());
@@ -535,18 +545,6 @@ export class Ui {
     if (!refundStat(sim.character, attr)) return;
     this.session[attr] -= 1;
     sim.recompute();
-    this.actions.changed();
-  }
-
-  private doRetrain(): void {
-    const sim = current();
-    const cost = retrainCost(sim.character);
-    if (sim.character.gold < cost) return;
-    if (!retrain(sim.character)) return;
-    this.session = { strength: 0, agility: 0, stamina: 0, luck: 0, spirit: 0 };
-    sim.player.auras = [false, false, false];
-    sim.recompute();
-    this.treeKey = "";
     this.actions.changed();
   }
 
@@ -606,8 +604,7 @@ export class Ui {
     text("sheet-xp", `${Math.floor(c.xp).toLocaleString()} / ${goal.toLocaleString()}`);
     const xpFill = document.getElementById("sheet-xp-fill");
     if (xpFill) {
-      const full = c.level >= MAX_LEVEL && c.paragon >= PARAGON_CAP;
-      xpFill.style.width = `${full ? 100 : Math.min(100, (c.xp / goal) * 100)}%`;
+      xpFill.style.width = `${Math.min(100, (c.xp / goal) * 100)}%`;
     }
     for (const attr of ATTRS) {
       text(`stat-${attr}`, `${Math.round(d[attr])}`);
@@ -642,10 +639,7 @@ export class Ui {
     text("s-ar", `${d.attackRating}`);
     text("s-move", `${Math.round(d.moveSpeed)}`);
     text("s-spell", `${d.spellMin.toFixed(1)}–${d.spellMax.toFixed(1)}`);
-    const cost = retrainCost(c);
-    const button = must("retrain") as HTMLButtonElement;
-    button.textContent = cost === 0 ? "Retrain (free)" : `Retrain (${cost} gold)`;
-    button.disabled = c.gold < cost;
+    text("retrain-note", `${RETRAIN_TOKEN.name} — not available yet.`);
     const gear = GEAR_SLOTS.map((slot) => c.equipment[slot])
       .filter((item) => item)
       .map((item) => item!.name)
@@ -663,12 +657,19 @@ export class Ui {
     const cy = height / 2;
     const reach = 640;
     const filter = this.treeFilter;
-    const visible = SKILLS.filter((skill) => filter === "all" || skill.sector === filter);
+    const mine = skillsForRace(sim.character.race);
+    const visible = mine.filter((skill) => {
+      if (filter === "race") return skill.racial;
+      if (filter === "all") return true;
+      return !skill.racial && skill.sector === filter;
+    });
+    const racialAt = placeRacial(visible.filter((skill) => skill.racial), filter === "race");
     const pos = new Map<string, { x: number; y: number }>();
     this.treePos = pos;
     for (const skill of visible) {
-      const angle = displayAngle(skill.angle, skill.sector, filter);
-      const radius = spreadRadius(skill.radius);
+      const racial = racialAt.get(skill.id);
+      const angle = racial ? racial.angle : displayAngle(skill.angle, skill.sector, filter === "race" ? "all" : filter);
+      const radius = racial ? racial.radius : spreadRadius(skill.radius);
       pos.set(skill.id, {
         x: cx + Math.cos(angle) * radius * reach,
         y: cy + Math.sin(angle) * radius * reach,
@@ -739,7 +740,7 @@ export class Ui {
       const at = pos.get(skill.id)!;
       const color = SECTORS[skill.sector].color;
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      const r = filter === "all" ? 30 : 36;
+      const r = skill.racial && filter === "all" ? 16 : filter === "all" ? 30 : 36;
       circle.setAttribute("cx", String(at.x));
       circle.setAttribute("cy", String(at.y));
       circle.setAttribute("r", String(r));
@@ -775,9 +776,9 @@ export class Ui {
       name.setAttribute("y", String(at.y + r + 18));
       name.setAttribute("text-anchor", "middle");
       name.setAttribute("fill", "#f0e2cf");
-      name.setAttribute("font-size", "13");
+      name.setAttribute("font-size", skill.racial && filter === "all" ? "10" : "13");
       name.style.pointerEvents = "none";
-      name.textContent = skill.name;
+      name.textContent = skill.racial && filter === "all" ? "" : skill.name;
       svg.append(name);
     }
     this.paintCard(sim);
@@ -790,9 +791,9 @@ export class Ui {
       this.treeCenter = false;
       requestAnimationFrame(() => this.centerTree());
     }
-    for (const id of ["filter-all", ...Object.keys(SECTORS)]) {
-      const button = document.querySelector(`[data-filter="${id === "filter-all" ? "all" : id}"]`);
-      button?.classList.toggle("on", (id === "filter-all" ? "all" : id) === filter);
+    for (const id of ["all", "race", ...Object.keys(SECTORS)]) {
+      const button = document.querySelector(`[data-filter="${id}"]`);
+      button?.classList.toggle("on", id === filter);
     }
   }
 
@@ -803,6 +804,9 @@ export class Ui {
     if (!skill) {
       this.confirmSpend = false;
       text("tree-name", "Choose a skill");
+      must("tree-name").style.color = "";
+      text("tree-type", "");
+      must("tree-type").style.color = "";
       text("tree-blurb", "Pinch to zoom, or use the buttons. Tap a circle to read what it does.");
       text("tree-next", "");
       text("tree-reason", "");
@@ -816,8 +820,13 @@ export class Ui {
     const rank = sim.character.skillRanks[skill.id] ?? 0;
     const gate = canSpendSkill(sim.character, skill.id);
     if (!gate.ok) this.confirmSpend = false;
-    const kindLabel = skill.classPoint ? "class" : skill.kind;
+    const kindLabel = skill.kind === "key" ? "keystone" : skill.racial ? "racial" : skill.kind;
+    const typeColor = SECTORS[skill.sector].color;
+    const typeLabel = DAMAGE_PAIR_LABEL[skill.sector];
     text("tree-name", `${skill.name}  ·  ${kindLabel}  ·  ${rank}/${skill.maxRank}`);
+    must("tree-name").style.color = typeColor;
+    text("tree-type", `${typeLabel.primary} · ${typeLabel.secondary}`);
+    must("tree-type").style.color = typeColor;
     text("tree-blurb", describeSkill(skill.id, Math.max(1, rank), sim.character.skillRanks));
     text(
       "tree-next",
@@ -830,10 +839,11 @@ export class Ui {
     text("tree-reason", gate.reason || (rank === 0 ? "Not learned yet." : ""));
     const asking = this.confirmSpend && gate.ok;
     confirm.classList.toggle("hidden", !asking);
+    const pool = spendPool(sim.character, skill);
     if (asking) {
-      if (skill.classPoint) {
+      if (pool === "key") {
         const left = Math.max(0, (sim.character.unspentClass ?? 0) - 1);
-        confirm.textContent = `Spend 1 class point on ${skill.name}? ${left} class point${left === 1 ? "" : "s"} will remain.`;
+        confirm.textContent = `Spend 1 keystone point on ${skill.name}? ${left} keystone point${left === 1 ? "" : "s"} will remain.`;
       } else {
         const left = Math.max(0, sim.character.unspentSkills - 1);
         confirm.textContent = `Spend 1 skill point on ${skill.name}? Rank ${rank} becomes ${rank + 1}. ${pointLabel(left)} will remain.`;
@@ -842,7 +852,7 @@ export class Ui {
     const invest = must("tree-invest") as HTMLButtonElement;
     invest.hidden = asking || rank >= skill.maxRank;
     invest.disabled = !gate.ok;
-    invest.textContent = rank === 0 ? "Learn" : skill.classPoint ? "Spend class point" : "Spend point";
+    invest.textContent = rank === 0 ? "Learn" : pool === "key" ? "Spend keystone point" : "Spend point";
     must("tree-confirm-yes").toggleAttribute("hidden", !asking);
     must("tree-cancel-spend").toggleAttribute("hidden", !asking);
     const canSlot = skill.kind !== "passive" && skill.kind !== "key" && !(skill.kind === "capstone" && !ACTIVES[skill.id]) && rank > 0;
@@ -1675,8 +1685,36 @@ function must(id: string): HTMLElement {
 
 function pointLabel(skills: number, classPoints = 0): string {
   const skillText = `${skills} skill point${skills === 1 ? "" : "s"}`;
-  if (classPoints <= 0) return skillText;
-  return `${skillText} · ${classPoints} class point${classPoints === 1 ? "" : "s"}`;
+  const keyText = `${classPoints} keystone point${classPoints === 1 ? "" : "s"}`;
+  return `${skillText} · ${keyText}`;
+}
+
+function placeRacial(skills: SkillNode[], expanded: boolean): Map<string, { angle: number; radius: number }> {
+  const out = new Map<string, { angle: number; radius: number }>();
+  if (!expanded) {
+    const ordered = [...skills].sort((a, b) => a.ring - b.ring || a.id.localeCompare(b.id));
+    ordered.forEach((skill, index) => {
+      out.set(skill.id, {
+        angle: -Math.PI / 2 + (index / Math.max(1, ordered.length)) * Math.PI * 2,
+        radius: 0.105,
+      });
+    });
+    return out;
+  }
+  const byRing = new Map<number, SkillNode[]>();
+  for (const skill of skills) {
+    const list = byRing.get(skill.ring) ?? [];
+    list.push(skill);
+    byRing.set(skill.ring, list);
+  }
+  for (const list of byRing.values()) {
+    list.sort((a, b) => a.angle - b.angle);
+    list.forEach((skill, index) => {
+      const spread = list.length === 1 ? 0 : (index - (list.length - 1) / 2) * 0.42;
+      out.set(skill.id, { angle: -Math.PI / 2 + spread, radius: spreadRadius(skill.radius) });
+    });
+  }
+  return out;
 }
 
 function clamp(value: number, min: number, max: number): number {

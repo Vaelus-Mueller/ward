@@ -1,20 +1,5 @@
 import { liveItem } from "./itemstats";
-import {
-  raceArmorPct,
-  raceAttrs,
-  raceEnergyRegenMul,
-  raceEvasion,
-  raceGearArmorMul,
-  raceGoldFind,
-  raceInnateArmor,
-  raceLifePct,
-  raceLifeRegenFlat,
-  raceLifeRegenMul,
-  raceLifeRegenPct,
-  raceLifeSteal,
-  raceMagicFind,
-  raceMoveSpeed,
-} from "./races";
+import { raceAttrs } from "./races";
 import {
   ATTRS,
   GEAR_SLOTS,
@@ -31,7 +16,6 @@ import {
   clamp,
   emptyMods,
   MAX_LEVEL,
-  PARAGON_CAP,
 } from "./types";
 
 export function xpToNext(level: number): number {
@@ -40,8 +24,7 @@ export function xpToNext(level: number): number {
 
 export function xpGoal(c: Character): number {
   if (c.level < MAX_LEVEL) return xpToNext(c.level);
-  if (c.paragon < PARAGON_CAP) return xpToNext(MAX_LEVEL + c.paragon);
-  return 1;
+  return xpToNext(MAX_LEVEL + c.paragon);
 }
 
 export function attributes(c: Character): Record<Attr, number> {
@@ -102,11 +85,11 @@ export function gearNumber(c: Character, key: string): number {
   return total;
 }
 
-/** Armor from gear pieces only (not affixes). Subject to racial gear-armor mul. */
+/** Armor printed on gear pieces (not affixes). Racial chitin scales this by a learned percent. */
 export function gearArmorValue(c: Character): number {
   let total = 0;
   for (const item of lived(c)) total += item.armor;
-  return total * raceGearArmorMul(c.race);
+  return total;
 }
 
 export function addMods(into: Mods, extra: Partial<Mods>): void {
@@ -122,7 +105,7 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const style: WeaponStyle = weapon?.style ?? "melee";
   const life = Math.round(
     (BASE_LIFE + (c.level - 1) * 5 + (attr.stamina - BASE_ATTR) + mods.life + gearNumber(c, "life")) *
-      (1 + raceLifePct(c.race)),
+      (1 + mods.lifePct),
   );
   // Spirit feeds energy storage; passives/gear add more.
   const energy = Math.round(
@@ -130,17 +113,14 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   );
   const energyOnHit = Math.max(1, 3 + mods.energyOnHit + gearNumber(c, "energyOnHit") + attr.spirit * 0.02);
   let armor =
-    attr.stamina * 0.25 + raceInnateArmor(c.race) + gearArmorValue(c) + mods.armor + gearNumber(c, "armor");
-  armor *= 1 + mods.armorPct + raceArmorPct(c.race);
+    attr.stamina * 0.25 + gearArmorValue(c) * (1 + mods.gearArmorPct) + mods.armor + gearNumber(c, "armor");
+  armor *= 1 + mods.armorPct;
 
   const attackRating = Math.round(
-    10 + c.level * 2 + attr.agility * 1.5 + mods.attackRating + gearNumber(c, "attackRating"),
+    (10 + c.level * 2 + attr.agility * 1.5 + mods.attackRating + gearNumber(c, "attackRating")) *
+      (1 + mods.attackRatingPct),
   );
-  const evasion = clamp(
-    0.02 + attr.agility * 0.0025 + mods.evasion + gearNumber(c, "evasion") + raceEvasion(c.race),
-    0,
-    0.45,
-  );
+  const evasion = clamp(0.02 + attr.agility * 0.0025 + mods.evasion + gearNumber(c, "evasion"), 0, 0.45);
   const crit = clamp(
     0.02 + attr.agility * 0.001 + attr.luck * 0.0035 + mods.crit + gearNumber(c, "crit"),
     0,
@@ -175,9 +155,7 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
   const speed = weapon?.speed ?? 1;
   const attackPeriod =
     0.58 / speed / (1 + mods.attackSpeed + gearNumber(c, "attackSpeed") + attr.agility * 0.002);
-  const moveSpeed =
-    172 *
-    (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025 + raceMoveSpeed(c.race));
+  const moveSpeed = 172 * (1 + mods.moveSpeed + gearNumber(c, "moveSpeed") + attr.agility * 0.0025);
   const weaponRange =
     (style === "bow"
       ? 300
@@ -189,21 +167,15 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
             ? 230
             : 70) + (weapon?.rangeBonus ?? 0);
 
-  const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012 + raceGoldFind(c.race);
-  const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01 + raceMagicFind(c.race);
+  const goldFind = mods.goldFind + gearNumber(c, "goldFind") + attr.luck * 0.012;
+  const magicFind = mods.magicFind + gearNumber(c, "magicFind") + attr.luck * 0.01;
   const vendorPrice = clamp(mods.vendorPrice + gearNumber(c, "vendorPrice") + attr.luck * 0.008, -0.35, 0.5);
   const vendorQuality = mods.vendorQuality + gearNumber(c, "vendorQuality") + attr.luck * 0.006;
 
-  const baseRegen =
-    c.level +
-    attr.stamina / 10 +
-    mods.lifeRegen +
-    gearNumber(c, "lifeRegen") +
-    raceLifeRegenFlat(c.race) +
-    life * raceLifeRegenPct(c.race);
-  const lifeRegen = baseRegen * raceLifeRegenMul(c.race);
+  const baseRegen = c.level + attr.stamina / 10 + mods.lifeRegen + gearNumber(c, "lifeRegen");
+  const lifeRegen = baseRegen * (1 + mods.lifeRegenPct);
   const energyRegen =
-    (0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen")) * raceEnergyRegenMul(c.race);
+    (0.35 + attr.spirit * 0.04 + mods.energyRegen + gearNumber(c, "energyRegen")) * (1 + mods.energyRegenPct);
 
   return {
     strength: attr.strength,
@@ -235,7 +207,7 @@ export function derive(c: Character, mods: Mods = emptyMods()): Derived {
     magicFind,
     vendorPrice,
     vendorQuality,
-    lifeSteal: clamp(raceLifeSteal(c.race), 0, 0.25),
+    lifeSteal: clamp(mods.lifeSteal, 0, 0.25),
   };
 }
 

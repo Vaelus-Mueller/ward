@@ -1,14 +1,12 @@
 import { equipped, xpToNext } from "./formulas";
-import { ACTIVES, SKILLS, SPEC_LABEL, SECTORS, skillById, type SkillNode } from "./skills";
+import { ACTIVES, SKILLS, SPEC_LABEL, SECTORS, allSkillNodes, skillById, type SkillNode } from "./skills";
 import {
   ATTRS,
   CLASS_POINT_LEVELS,
   classPointsForLevel,
   MAX_LEVEL,
-  PARAGON_CAP,
-  PARAGON_SKILL_EVERY,
-  PARAGON_STAT_POINTS,
   SKILL_POINTS_PER_LEVEL,
+  PARAGON_STAT_POINTS,
   STAT_POINTS_PER_LEVEL,
   type Attr,
   emptyEquipment,
@@ -37,7 +35,6 @@ export function createCharacter(name = "Exile", race: RaceId = "human", gender: 
     gems: [],
     materials: [],
     salvageMarks: ["grey", "white"],
-    retrains: 0,
     paragon: 0,
   };
 }
@@ -51,7 +48,6 @@ export function grantXp(c: Character, amount: number): LevelGain {
   const none = { levels: 0, paragons: 0 };
   if (amount <= 0) return none;
   if (!Number.isFinite(c.paragon)) c.paragon = 0;
-  if (c.level >= MAX_LEVEL && c.paragon >= PARAGON_CAP) return none;
   c.xp += amount;
   let levels = 0;
   let paragons = 0;
@@ -63,14 +59,12 @@ export function grantXp(c: Character, amount: number): LevelGain {
     if ((CLASS_POINT_LEVELS as readonly number[]).includes(c.level)) c.unspentClass += 1;
     levels += 1;
   }
-  while (c.level >= MAX_LEVEL && c.paragon < PARAGON_CAP && c.xp >= xpToNext(MAX_LEVEL + c.paragon)) {
+  while (c.level >= MAX_LEVEL && c.xp >= xpToNext(MAX_LEVEL + c.paragon)) {
     c.xp -= xpToNext(MAX_LEVEL + c.paragon);
     c.paragon += 1;
     c.unspentStats += PARAGON_STAT_POINTS;
-    if (c.paragon % PARAGON_SKILL_EVERY === 0) c.unspentSkills += 1;
     paragons += 1;
   }
-  if (c.level >= MAX_LEVEL && c.paragon >= PARAGON_CAP) c.xp = 0;
   return { levels, paragons };
 }
 
@@ -88,28 +82,20 @@ export function refundStat(c: Character, attr: Attr): boolean {
   return true;
 }
 
-export function retrainCost(c: Character): number {
-  if (c.retrains <= 0) return 0;
-  return 40 * 2 ** (c.retrains - 1);
-}
-
-export function retrain(c: Character): boolean {
-  const cost = retrainCost(c);
-  if (c.gold < cost) return false;
-  c.gold -= cost;
-  c.retrains += 1;
+/** Returns every spent attribute, skill, and keystone point. Nothing calls this until a Seal of Revision is used. */
+export function refundBuild(c: Character): void {
   for (const attr of ATTRS) c.spent[attr] = 0;
   c.unspentStats = (c.level - 1) * STAT_POINTS_PER_LEVEL + c.paragon * PARAGON_STAT_POINTS;
   c.skillRanks = {};
-  c.unspentSkills = (c.level - 1) * SKILL_POINTS_PER_LEVEL + Math.floor(c.paragon / PARAGON_SKILL_EVERY);
+  c.unspentSkills = (c.level - 1) * SKILL_POINTS_PER_LEVEL;
   c.unspentClass = classPointsForLevel(c.level);
   c.slotted = [null, null, null];
-  return true;
 }
 
 export function pointsInSector(c: Character, sector: SectorId): number {
   let total = 0;
   for (const skill of SKILLS) {
+    if (skill.racial) continue;
     if (skill.sector === sector) total += c.skillRanks[skill.id] ?? 0;
   }
   return total;
@@ -123,14 +109,25 @@ export function pointsInSpec(c: Character, spec: string): number {
   return total;
 }
 
+/**
+ * Keystones spend a keystone point to learn. Later ranks, and every non-keystone,
+ * spend a skill point. A keystone point can still fill a racial node or a later
+ * keystone rank when skill points are gone.
+ */
+/** Keystones and racial nodes take a keystone point. Other passives and actives take a skill point. */
+export function spendPool(c: Character, skill: SkillNode): "key" | "general" | null {
+  if (skill.kind === "key" || skill.racial) return (c.unspentClass ?? 0) > 0 ? "key" : null;
+  if (c.unspentSkills > 0) return "general";
+  return null;
+}
+
 export function canSpendSkill(c: Character, id: string): { ok: boolean; reason: string } {
   const skill = skillById(id);
   if (!skill) return { ok: false, reason: "Unknown skill." };
   const rank = c.skillRanks[id] ?? 0;
   if (rank >= skill.maxRank) return { ok: false, reason: "Already at max rank." };
-  if (skill.classPoint) {
-    if ((c.unspentClass ?? 0) <= 0) return { ok: false, reason: "No class points left." };
-  } else if (c.unspentSkills <= 0) {
+  if (!spendPool(c, skill)) {
+    if (skill.kind === "key" || skill.racial) return { ok: false, reason: "No keystone points left." };
     return { ok: false, reason: "No skill points left." };
   }
   for (const req of skill.requires) {
@@ -151,8 +148,9 @@ export function canSpendSkill(c: Character, id: string): { ok: boolean; reason: 
 export function spendSkill(c: Character, id: string): boolean {
   if (!canSpendSkill(c, id).ok) return false;
   const skill = skillById(id)!;
+  const pool = spendPool(c, skill);
   c.skillRanks[id] = (c.skillRanks[id] ?? 0) + 1;
-  if (skill.classPoint) c.unspentClass = Math.max(0, (c.unspentClass ?? 0) - 1);
+  if (pool === "key") c.unspentClass = Math.max(0, (c.unspentClass ?? 0) - 1);
   else c.unspentSkills -= 1;
   return true;
 }
@@ -199,7 +197,7 @@ export function classTitle(c: Character): string {
 }
 
 export function knownActives(c: Character): SkillNode[] {
-  return SKILLS.filter((skill) => {
+  return allSkillNodes().filter((skill) => {
     if ((c.skillRanks[skill.id] ?? 0) <= 0) return false;
     if (skill.kind === "passive" || skill.kind === "key") return false;
     if (skill.kind === "capstone" && !ACTIVES[skill.id]) return false;

@@ -171,10 +171,16 @@ export function worldPacks(): PackSpot[] {
   return cached;
 }
 
-export function roadStart(): { x: number; y: number } {
-  const first = worldPacks().find((pack) => !pack.branch)!;
+/** Entrance of a level: on the road, just south of that level's first pack. */
+export function levelSpawn(level: number): { x: number; y: number } {
+  const first = worldPacks().find((pack) => pack.level === level && !pack.branch);
+  if (!first) return roadStart();
   const y = first.y + 340;
   return { x: roadXAt(y), y };
+}
+
+export function roadStart(): { x: number; y: number } {
+  return levelSpawn(1);
 }
 
 export function roadSpine(): { x: number; fromY: number; toY: number } {
