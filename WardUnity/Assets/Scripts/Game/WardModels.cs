@@ -19,6 +19,9 @@ namespace Ward.Game
             "mon_spider", "mon_slime", "mon_cultist", "mon_gargoyle"
         };
 
+        public static string EnemyKeyAt(int index) =>
+            EnemyKeys[Mathf.Abs(index) % EnemyKeys.Length];
+
         /// <summary>Every authored enemy body under Resources/Models/Actors.</summary>
         public static readonly string[] AllEnemyKeys =
         {

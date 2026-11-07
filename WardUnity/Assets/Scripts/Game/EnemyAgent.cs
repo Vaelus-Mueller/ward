@@ -1,4 +1,5 @@
 using UnityEngine;
+using Ward.Game.Anim;
 
 namespace Ward.Game
 {
@@ -15,8 +16,12 @@ namespace Ward.Game
 
         float _cd;
         Transform _target;
+        ActorRig _rig;
+        CapsuleCollider _hurtbox;
 
-        public void Init(string pack, float life, float dmg, bool isElite, Transform target)
+        public ActorRig Rig => _rig;
+
+        public void Init(string pack, float life, float dmg, bool isElite, Transform target, ActorRig rig = null)
         {
             packId = pack;
             maxHp = life;
@@ -24,16 +29,30 @@ namespace Ward.Game
             damage = dmg;
             elite = isElite;
             _target = target;
-            if (!isElite) return;
-            foreach (var rend in GetComponentsInChildren<Renderer>())
-                rend.material.color = new Color(1f, 0.78f, 0.7f);
+            _rig = rig != null ? rig : GetComponentInChildren<ActorRig>();
+            EnsureHurtbox();
+            if (isElite)
+                _rig?.SetTint(new Color(1f, 0.78f, 0.7f));
+            _rig?.Animator?.SetMoveWeight(0f);
+        }
+
+        void EnsureHurtbox()
+        {
+            _hurtbox = GetComponent<CapsuleCollider>();
+            if (_hurtbox == null) _hurtbox = gameObject.AddComponent<CapsuleCollider>();
+            _hurtbox.height = 1.7f;
+            _hurtbox.radius = 0.4f;
+            _hurtbox.center = new Vector3(0f, 0.85f, 0f);
+            _hurtbox.isTrigger = true;
         }
 
         public bool IsDead => hp <= 0f;
 
         public void TakeDamage(float amount)
         {
+            if (IsDead) return;
             hp -= amount;
+            _rig?.Animator?.PlayHitReact();
             if (hp <= 0f)
             {
                 hp = 0f;
@@ -46,6 +65,9 @@ namespace Ward.Game
 
         void Update()
         {
+            if (_rig != null && !IsDead)
+                _rig.Animator?.SetMoveWeight(AiEnabled && _target != null ? 0.6f : 0f);
+
             if (!AiEnabled || IsDead || _target == null) return;
             _cd = Mathf.Max(0f, _cd - Time.deltaTime);
             var to = _target.position - transform.position;

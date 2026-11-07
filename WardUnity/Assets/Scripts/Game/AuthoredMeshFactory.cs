@@ -1,15 +1,17 @@
 using UnityEngine;
+using Ward.Game.Anim;
 
 namespace Ward.Game
 {
     /// <summary>
-    /// Placeholder authored meshes with LODGroup (M2). Replace with Blender/KayKit exports later;
-    /// keep LOD0/1/2 structure so ASTC-textured assets drop in without code changes.
+    /// Body builders. Combat actors use <see cref="ActorRig"/> (bones-first).
+    /// Static Ward meshes remain available for race preview and future paint.
     /// </summary>
     public static class AuthoredMeshFactory
     {
         public static GameObject BuildRaceProxy(RaceId race, Gender gender, Transform parent = null)
         {
+            // Prefer authored mesh for UI preview; combat uses ActorRig separately.
             var model = WardModels.SpawnActor(WardModels.KeyFor(race, gender), parent);
             if (model != null) return model;
 
@@ -34,30 +36,21 @@ namespace Ward.Game
             return root;
         }
 
+        /// <summary>Combat / gallery body: bone puppet. Mesh paint attaches later via ActorRig.AttachMesh.</summary>
+        public static ActorRig BuildBoneActor(
+            Transform parent,
+            Color tint,
+            float scale = 1f,
+            bool withWeapon = false,
+            SkeletonKind kind = SkeletonKind.Biped) =>
+            ActorRig.Create(parent, "ActorRig", tint, scale, withWeapon, kind);
+
         public static GameObject BuildEnemyProxy(bool elite, Transform parent = null)
         {
+            var tint = elite ? new Color(0.75f, 0.25f, 0.2f) : new Color(0.45f, 0.4f, 0.38f);
             var root = new GameObject(elite ? "EnemyElite" : "Enemy");
             if (parent != null) root.transform.SetParent(parent, false);
-            var lod0 = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            lod0.name = "LOD0";
-            lod0.transform.SetParent(root.transform, false);
-            var tint = elite ? new Color(0.75f, 0.25f, 0.2f) : new Color(0.45f, 0.4f, 0.38f);
-            lod0.GetComponent<Renderer>().material = WardModels.Unlit(tint);
-            var lod1 = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            lod1.name = "LOD1";
-            lod1.transform.SetParent(root.transform, false);
-            lod1.transform.localScale = Vector3.one * 0.9f;
-            lod1.GetComponent<Renderer>().material = WardModels.Unlit(tint);
-            Object.Destroy(lod0.GetComponent<Collider>());
-            Object.Destroy(lod1.GetComponent<Collider>());
-            var group = root.AddComponent<LODGroup>();
-            group.SetLODs(new[]
-            {
-                new LOD(0.35f, new[] { lod0.GetComponent<Renderer>() }),
-                new LOD(0.08f, new[] { lod1.GetComponent<Renderer>() }),
-            });
-            group.RecalculateBounds();
-            if (elite) root.transform.localScale = Vector3.one * 1.35f;
+            ActorRig.Create(root.transform, "ActorRig", tint, elite ? 1.2f : 1f, withWeapon: false, SkeletonKind.Biped);
             return root;
         }
 

@@ -187,13 +187,20 @@ namespace Ward.App
         static void BuildLighting()
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.45f, 0.4f, 0.38f);
+            RenderSettings.ambientLight = new Color(0.32f, 0.28f, 0.26f);
             var lightGo = new GameObject("KeyLight");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.color = new Color(1f, 0.95f, 0.88f);
-            light.intensity = 1.1f;
-            lightGo.transform.rotation = Quaternion.Euler(40f, -30f, 0f);
+            light.color = new Color(1f, 0.92f, 0.82f);
+            light.intensity = 0.85f;
+            lightGo.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+
+            var fillGo = new GameObject("FillLight");
+            var fill = fillGo.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.color = new Color(0.45f, 0.55f, 0.7f);
+            fill.intensity = 0.35f;
+            fillGo.transform.rotation = Quaternion.Euler(25f, 140f, 0f);
         }
 
         static void BuildBox()
@@ -227,19 +234,33 @@ namespace Ward.App
                 Place("wall", root, new Vector3(-wallX, 0f, z), Quaternion.Euler(0f, -90f, 0f), true);
             }
 
+            // Denser pillar / column grid.
             Place("pillar", root, new Vector3(-8f, 0f, -4f), Quaternion.identity, true);
             Place("pillar", root, new Vector3(8f, 0f, -4f), Quaternion.identity, true);
             Place("pillar", root, new Vector3(-8f, 0f, 4f), Quaternion.identity, true);
             Place("pillar", root, new Vector3(8f, 0f, 4f), Quaternion.identity, true);
             Place("pillar", root, new Vector3(-4f, 0f, 0f), Quaternion.identity, true);
             Place("pillar", root, new Vector3(4f, 0f, 0f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(0f, 0f, -6f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(-12f, 0f, -8f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(12f, 0f, 6f), Quaternion.identity, true);
             Place("column", root, new Vector3(-12.8f, 0f, 0f), Quaternion.identity, false);
             Place("column", root, new Vector3(12.8f, 0f, 0f), Quaternion.identity, false);
             Place("column", root, new Vector3(0f, 0f, 8f), Quaternion.identity, false);
+            Place("column", root, new Vector3(-6f, 0f, 9f), Quaternion.Euler(0f, 20f, 0f), false);
+            Place("column", root, new Vector3(6f, 0f, 9f), Quaternion.Euler(0f, -15f, 0f), false);
+
+            // Prop clusters.
             Place("chest", root, new Vector3(-10.4f, 0f, -8.4f), Quaternion.Euler(0f, 25f, 0f), false);
+            Place("chest", root, new Vector3(9.5f, 0f, 8.2f), Quaternion.Euler(0f, -40f, 0f), false);
             Place("barrel", root, new Vector3(10.2f, 0f, -7f), Quaternion.identity, false);
             Place("barrel", root, new Vector3(11.4f, 0f, -9f), Quaternion.Euler(0f, 35f, 0f), false);
             Place("barrel", root, new Vector3(-11f, 0f, 7f), Quaternion.Euler(0f, -20f, 0f), false);
+            Place("barrel", root, new Vector3(-9.8f, 0f, 8.1f), Quaternion.Euler(0f, 50f, 0f), false);
+            Place("barrel", root, new Vector3(5.2f, 0f, -8.5f), Quaternion.Euler(0f, 12f, 0f), false);
+            Place("barrel", root, new Vector3(-5.5f, 0f, -9f), Quaternion.Euler(0f, -55f, 0f), false);
+
+            AmbientFx.Install(root);
         }
 
         static void Place(string key, Transform parent, Vector3 pos, Quaternion rot, bool collide)
@@ -255,8 +276,7 @@ namespace Ward.App
             var go = new GameObject("Player");
             var start = WorldData.RoadStart;
             go.transform.position = new Vector3(start.x, 0f, start.y);
-            var actor = AuthoredMeshFactory.BuildRaceProxy(RaceId.Human, Gender.Male, go.transform);
-            actor.name = "Actor";
+            // Bone puppet is created in PlayerController.Bind when a run starts.
             return go.AddComponent<PlayerController>();
         }
 

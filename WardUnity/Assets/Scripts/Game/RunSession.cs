@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Ward.Game.Anim;
 
 namespace Ward.Game
 {
@@ -59,10 +60,7 @@ namespace Ward.Game
             PlaceLabel = WorldData.PlaceAt(new Vector2(player.transform.position.x, player.transform.position.z), _packs);
         }
 
-        /// <summary>
-        /// One of every authored enemy mesh in a ring, with its elite (same body,
-        /// tinted + scaled) standing outward behind it. AI stays off.
-        /// </summary>
+        /// <summary>One of every enemy key as a bone puppet ring; elite twin outward.</summary>
         public void SpawnEnemyGallery(Transform target)
         {
             if (enemyRoot == null)
@@ -88,19 +86,18 @@ namespace Ward.Game
 
         void SpawnGalleryMob(string key, Vector3 pos, Vector3 faceToward, bool elite, Transform target)
         {
-            var go = WardModels.SpawnActor(key, enemyRoot);
-            if (go == null) return;
+            var go = SpawnBoneEnemy(key, elite, enemyRoot);
             go.name = elite ? $"GalleryElite_{key}" : $"Gallery_{key}";
             go.transform.position = pos;
-            if (elite) go.transform.localScale = Vector3.one * 1.2f;
             var face = faceToward - pos;
             face.y = 0f;
             if (face.sqrMagnitude > 0.01f) go.transform.rotation = Quaternion.LookRotation(face);
-            var agent = go.GetComponent<EnemyAgent>() ?? go.AddComponent<EnemyAgent>();
-            agent.Init("gallery", elite ? 80f : 40f, 0f, elite, target);
+            var agent = go.GetComponent<EnemyAgent>();
+            agent.Init("gallery", elite ? 80f : 40f, 0f, elite, target, go.GetComponentInChildren<ActorRig>());
             _enemies.Add(agent);
         }
 
+        /// <summary>Legacy cone burst (skills). Primary melee uses WeaponMomentum.</summary>
         public void PlayerAttack(Vector3 origin, Vector3 facing, float range, float damage)
         {
             foreach (var e in _enemies)
@@ -110,15 +107,50 @@ namespace Ward.Game
                 to.y = 0f;
                 if (to.magnitude > range) continue;
                 if (Vector3.Dot(facing.normalized, to.normalized) < 0.2f && to.magnitude > 0.8f) continue;
-                e.TakeDamage(damage);
-                if (e.IsDead)
-                {
-                    player.Character.gold += e.elite ? 12 : 4;
-                    player.Character.xp += e.elite ? 18 : 8;
-                    MaybeLevel();
-                }
+                ApplyPlayerHit(e, damage);
             }
             SweepCleared();
+        }
+
+        public void ApplyPlayerHit(EnemyAgent e, float damage)
+        {
+            if (e == null || e.IsDead || Dead) return;
+            e.TakeDamage(damage);
+            if (e.IsDead)
+            {
+                player.Character.gold += e.elite ? 12 : 4;
+                player.Character.xp += e.elite ? 18 : 8;
+                MaybeLevel();
+            }
+            SweepCleared();
+        }
+
+        /// <summary>
+        /// Distance fallback for bone puppets (in case OverlapSphere misses triggers).
+        /// </summary>
+        public void ApplySwingHits(
+            Vector3 mid,
+            float radius,
+            float damage,
+            Vector3 attackerPos,
+            Vector3 attackerFwd,
+            HashSet<int> alreadyHit)
+        {
+            foreach (var e in _enemies)
+            {
+                if (e == null || e.IsDead) continue;
+                var id = e.GetInstanceID();
+                if (alreadyHit.Contains(id)) continue;
+                var toEnemy = e.transform.position - mid;
+                toEnemy.y = 0f;
+                if (toEnemy.magnitude > radius + 0.45f) continue;
+                var to = e.transform.position - attackerPos;
+                to.y = 0f;
+                if (to.sqrMagnitude > 0.01f && Vector3.Dot(attackerFwd, to.normalized) < -0.15f)
+                    continue;
+                alreadyHit.Add(id);
+                ApplyPlayerHit(e, damage);
+            }
         }
 
         void MaybeLevel()
@@ -194,21 +226,62 @@ namespace Ward.Game
             for (var i = 0; i < pack.size; i++)
             {
                 var elite = pack.boss && i == 0;
-                var go = WardModels.SpawnEnemy(i + pack.level, elite, enemyRoot);
-                if (go == null)
-                    go = enemyPrefab != null
-                        ? Instantiate(enemyPrefab, enemyRoot)
-                        : AuthoredMeshFactory.BuildEnemyProxy(elite, enemyRoot);
+                var key = WardModels.EnemyKeyAt(i + pack.level);
+                var go = SpawnBoneEnemy(key, elite, enemyRoot);
                 go.name = $"Enemy_{pack.id}_{i}";
-                go.transform.SetParent(enemyRoot, false);
                 var offset = new Vector3(Random.Range(-1.1f, 1.1f), 0f, Random.Range(-1.1f, 1.1f));
                 go.transform.position = new Vector3(pack.position.x, 0f, pack.position.y) + offset;
-                var agent = go.GetComponent<EnemyAgent>() ?? go.AddComponent<EnemyAgent>();
+                var agent = go.GetComponent<EnemyAgent>();
                 var life = 28f + pack.level * 10f + (elite ? 40f : 0f);
                 var dmg = 4f + pack.level * 1.2f + (elite ? 4f : 0f);
-                agent.Init(pack.id, life, dmg, elite, player.transform);
+                agent.Init(pack.id, life, dmg, elite, player.transform, go.GetComponentInChildren<ActorRig>());
                 _enemies.Add(agent);
             }
+        }
+
+        static GameObject SpawnBoneEnemy(string key, bool elite, Transform parent)
+        {
+            var root = new GameObject(string.IsNullOrEmpty(key) ? "Enemy" : key);
+            if (parent != null) root.transform.SetParent(parent, false);
+            var tint = EnemyTint(key);
+            var scale = EnemyScale(key) * (elite ? 1.2f : 1f);
+            var kind = SkeletonDef.ForEnemyKey(key);
+            ActorRig.Create(root.transform, "ActorRig", tint, scale, withWeapon: false, kind: kind);
+            // Stash mesh for later paint bind; bones-first keeps it hidden.
+            var paint = WardModels.SpawnActor(key, root.transform);
+            if (paint != null)
+            {
+                paint.name = "PaintRef";
+                paint.SetActive(false);
+            }
+            var agent = root.AddComponent<EnemyAgent>();
+            return root;
+        }
+
+        static Color EnemyTint(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return new Color(0.45f, 0.4f, 0.38f);
+            if (key.Contains("wolf")) return new Color(0.35f, 0.32f, 0.3f);
+            if (key.Contains("skeleton") || key.Contains("undead")) return new Color(0.75f, 0.72f, 0.62f);
+            if (key.Contains("zombie")) return new Color(0.4f, 0.5f, 0.35f);
+            if (key.Contains("imp") || key.Contains("archdemon")) return new Color(0.55f, 0.2f, 0.18f);
+            if (key.Contains("spider")) return new Color(0.25f, 0.2f, 0.22f);
+            if (key.Contains("slime")) return new Color(0.35f, 0.65f, 0.35f);
+            if (key.Contains("dragon") || key.Contains("drake") || key.Contains("wyrm") || key.Contains("wyvern"))
+                return new Color(0.45f, 0.35f, 0.55f);
+            if (key.Contains("rat")) return new Color(0.4f, 0.32f, 0.28f);
+            return new Color(0.5f, 0.42f, 0.38f);
+        }
+
+        static float EnemyScale(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return 1f;
+            if (key.Contains("hillock") || key.Contains("dragon") || key.Contains("archdemon")) return 1.35f;
+            if (key.Contains("rat") && !key.Contains("giant")) return 0.55f;
+            if (key.Contains("giantrat")) return 0.85f;
+            if (key.Contains("spider") || key.Contains("slime") || key.Contains("imp")) return 0.75f;
+            if (key.Contains("whelp") || key.Contains("sprig") || key.Contains("flicker") || key.Contains("wisp")) return 0.7f;
+            return 1f;
         }
     }
 }

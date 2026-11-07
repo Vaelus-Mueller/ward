@@ -21,9 +21,25 @@ namespace Ward.UI
                 $"STR {c.strength}  AGI {c.agility}  STA {c.stamina}\n" +
                 $"LUK {c.luck}  SPI {c.spirit}\n" +
                 $"Unspent stats {c.unspentStats}  skills {c.unspentSkills}\n\n" +
-                "Skills:\n";
-            foreach (var s in SkillCatalog.All)
-                body.text += $"· {s.name} ({s.sector}) — {s.blurb}\n";
+                "Assigned skills:\n";
+            var slots = c.skillSlots;
+            var any = false;
+            if (slots != null)
+            {
+                for (var i = 0; i < slots.Length; i++)
+                {
+                    var def = string.IsNullOrEmpty(slots[i]) ? null : SkillCatalog.ById(slots[i]);
+                    if (def == null)
+                    {
+                        body.text += $"· Slot {i + 1}: (empty)\n";
+                        continue;
+                    }
+                    any = true;
+                    body.text += $"· {def.name} ({def.sector}) — {def.blurb}\n";
+                }
+            }
+            if (!any && (slots == null || slots.Length == 0))
+                body.text += "· (none)\n";
         }
 
         public void SpendStamina()
