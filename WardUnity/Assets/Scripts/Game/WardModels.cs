@@ -77,8 +77,21 @@ namespace Ward.Game
             {
                 foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
                 {
-                    var col = mf.gameObject.AddComponent<MeshCollider>();
-                    col.sharedMesh = mf.sharedMesh;
+                    var mesh = mf.sharedMesh;
+                    if (mesh == null) continue;
+                    // Imported OBJs ship as "default". MeshCollider needs Read/Write
+                    // (or a pre-baked triangle mesh); otherwise Unity rejects them.
+                    if (mesh.isReadable)
+                    {
+                        var col = mf.gameObject.AddComponent<MeshCollider>();
+                        col.sharedMesh = mesh;
+                    }
+                    else
+                    {
+                        var box = mf.gameObject.AddComponent<BoxCollider>();
+                        box.center = mesh.bounds.center;
+                        box.size = mesh.bounds.size;
+                    }
                 }
             }
             return go;

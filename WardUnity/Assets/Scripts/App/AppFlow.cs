@@ -41,17 +41,37 @@ namespace Ward.App
 
         void Start()
         {
+            // Splash is already up from bootstrap; keep it until Enter (or a long fallback).
+            if (splashPanel != null && splashPanel.activeSelf)
+            {
+                CancelInvoke(nameof(ShowTitle));
+                Invoke(nameof(ShowTitle), 12f);
+                return;
+            }
             ShowSplashThenTitle();
         }
 
         void ShowSplashThenTitle()
         {
+            if (splashPanel == null)
+            {
+                ShowTitle();
+                return;
+            }
             SetOnly(splashPanel);
-            Invoke(nameof(ShowTitle), 2.6f);
+            CancelInvoke(nameof(ShowTitle));
+            Invoke(nameof(ShowTitle), 12f);
+        }
+
+        public void DismissSplash()
+        {
+            CancelInvoke(nameof(ShowTitle));
+            ShowTitle();
         }
 
         public void ShowTitle()
         {
+            CancelInvoke(nameof(ShowTitle));
             Time.timeScale = 1f;
             SetOnly(titlePanel);
             titlePanel?.GetComponent<TitleView>()?.Refresh();

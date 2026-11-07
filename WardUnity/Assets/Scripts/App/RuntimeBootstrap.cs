@@ -39,27 +39,19 @@ namespace Ward.App
             var sheet = canvas.gameObject.AddComponent<SheetView>();
             var town = canvas.gameObject.AddComponent<TownView>();
 
-            var splash = Panel(canvas.transform, "Splash", new Color(0.05f, 0.04f, 0.06f, 1f));
-            var brand = AddLabel(splash.transform, "Ward", 72, new Vector2(0, 36));
-            brand.fontSize = 72;
-            brand.rectTransform.sizeDelta = new Vector2(900, 120);
-            var tag = AddLabel(splash.transform, "Gate of the ruined ward", 28, new Vector2(0, -48));
-            tag.rectTransform.sizeDelta = new Vector2(900, 48);
-
             var title = Panel(canvas.transform, "Title", new Color(0.07f, 0.06f, 0.08f, 1f));
+            title.SetActive(false);
             var titleView = title.AddComponent<TitleView>();
             WireTitle(titleView, title.transform);
 
             var create = Panel(canvas.transform, "Create", new Color(0.07f, 0.06f, 0.08f, 1f));
+            create.SetActive(false);
             var createView = create.AddComponent<CreateView>();
             var previewHost = new GameObject("RacePreview");
             previewHost.transform.position = new Vector3(0f, -40f, 0f);
             var preview = previewHost.AddComponent<RacePreviewPresenter>();
             preview.Configure(512, 640);
             WireCreate(createView, create.transform, preview);
-
-            title.SetActive(false);
-            create.SetActive(false);
 
             var hudGo = Panel(canvas.transform, "HUD", new Color(0, 0, 0, 0));
             hudGo.GetComponent<Image>().raycastTarget = false;
@@ -164,6 +156,30 @@ namespace Ward.App
             AddButton(townGo.transform, "Close", new Vector2(0, -300), () => flow.CloseTown());
 
             hudGo.SetActive(false);
+
+            // Build splash last so it stays on top of title/create while the gate is held.
+            var splash = Panel(canvas.transform, "Splash", new Color(0.04f, 0.03f, 0.05f, 1f));
+            var mist = new GameObject("Mist", typeof(RectTransform), typeof(Image));
+            mist.transform.SetParent(splash.transform, false);
+            var mistRt = mist.GetComponent<RectTransform>();
+            mistRt.anchorMin = Vector2.zero;
+            mistRt.anchorMax = Vector2.one;
+            mistRt.offsetMin = mistRt.offsetMax = Vector2.zero;
+            mist.GetComponent<Image>().color = new Color(0.28f, 0.08f, 0.1f, 0.35f);
+            mist.GetComponent<Image>().raycastTarget = false;
+            var brand = AddLabel(splash.transform, "WARD", 84, new Vector2(0, 48));
+            brand.fontSize = 84;
+            brand.fontStyle = FontStyle.Bold;
+            brand.color = new Color(0.92f, 0.82f, 0.58f);
+            brand.rectTransform.sizeDelta = new Vector2(980, 120);
+            var tag = AddLabel(splash.transform, "Gate of the ruined ward", 28, new Vector2(0, -28));
+            tag.rectTransform.sizeDelta = new Vector2(900, 48);
+            tag.color = new Color(0.78f, 0.7f, 0.62f);
+            var status = AddLabel(splash.transform, "The gate is open", 22, new Vector2(0, -88));
+            status.rectTransform.sizeDelta = new Vector2(700, 40);
+            status.color = new Color(0.7f, 0.58f, 0.48f);
+            var enter = PlaceButton(splash.transform, "Enter", new Vector2(0.5f, 0.5f), new Vector2(0f, -160f), new Vector2(240f, 64f), () => flow.DismissSplash());
+            enter.GetComponent<Image>().color = new Color(0.42f, 0.16f, 0.14f, 0.96f);
             splash.SetActive(true);
             splash.transform.SetAsLastSibling();
 
@@ -180,6 +196,9 @@ namespace Ward.App
             typeof(AppFlow).GetField("sheet", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, sheet);
             typeof(AppFlow).GetField("town", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, town);
             typeof(AppFlow).GetField("skills", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(flow, skillWheel);
+            // Keep the splash up immediately — do not wait for Start().
+            typeof(AppFlow).GetMethod("ShowSplashThenTitle", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.Invoke(flow, null);
 
             var cam = Camera.main;
             if (cam == null)
@@ -283,6 +302,15 @@ namespace Ward.App
             return canvas;
         }
 
+        static Font UiFont()
+        {
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (font == null)
+                font = Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Helvetica", "Segoe UI", "sans-serif" }, 32);
+            return font;
+        }
+
         static GameObject Panel(Transform parent, string name, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -303,8 +331,7 @@ namespace Ward.App
             rt.sizeDelta = new Vector2(700, 80);
             rt.anchoredPosition = pos;
             var t = go.GetComponent<Text>();
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (t.font == null) t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            t.font = UiFont();
             t.text = text;
             t.fontSize = size;
             t.alignment = anchor;
