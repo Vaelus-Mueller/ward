@@ -17,6 +17,7 @@ namespace Ward.Game
         public string id;
         public string name;
         public GearSlot slot;
+        public WeaponFamily family = WeaponFamily.Unarmed;
         public int cost;
         public int strength;
         public int stamina;
@@ -28,10 +29,10 @@ namespace Ward.Game
     {
         public static readonly List<GearItem> Shop = new()
         {
-            new() { id = "whetblade", name = "Whetblade", slot = GearSlot.Weapon, cost = 40, strength = 2, blurb = "A filed edge from Ashgate." },
+            new() { id = "whetblade", name = "Whetblade", slot = GearSlot.Weapon, family = WeaponFamily.Sword, cost = 40, strength = 2, blurb = "A filed edge from Ashgate." },
             new() { id = "ashmail", name = "Ash Mail", slot = GearSlot.Armor, cost = 55, stamina = 3, blurb = "Soot-black rings." },
             new() { id = "gatecharm", name = "Gate Charm", slot = GearSlot.Trinket, cost = 35, agility = 2, blurb = "A ward token on a cord." },
-            new() { id = "ironspike", name = "Iron Spike", slot = GearSlot.Weapon, cost = 90, strength = 4, blurb = "Heavy nail of the Tenth Ward." },
+            new() { id = "ironspike", name = "Iron Spike", slot = GearSlot.Weapon, family = WeaponFamily.Polearm, cost = 90, strength = 4, blurb = "Heavy nail of the Tenth Ward." },
         };
 
         public static GearItem ById(string id)

@@ -25,21 +25,19 @@ namespace Ward.UI
                 if (slotLabels == null || i >= slotLabels.Length || slotLabels[i] == null) continue;
                 var id = slots != null && i < slots.Length ? slots[i] : null;
                 var def = string.IsNullOrEmpty(id) ? null : SkillCatalog.ById(id);
-                slotLabels[i].text = def != null ? def.name : $"Skill {i + 1}";
+                slotLabels[i].text = def != null ? def.name : "";
             }
         }
 
         public void CastSlot(int index) => player?.TryCastSkill(index);
 
+        /// <summary>Ensure three slots exist. New exiles keep them empty until assigned.</summary>
         public void AssignDefaultsIfEmpty()
         {
             var c = player?.Character;
             if (c == null) return;
             if (c.skillSlots == null || c.skillSlots.Length != 3)
-                c.skillSlots = new string[3];
-            if (string.IsNullOrEmpty(c.skillSlots[0])) c.skillSlots[0] = "cleave";
-            if (string.IsNullOrEmpty(c.skillSlots[1])) c.skillSlots[1] = "shadowstep";
-            if (string.IsNullOrEmpty(c.skillSlots[2])) c.skillSlots[2] = "wardpulse";
+                c.skillSlots = new[] { "", "", "" };
             Refresh();
         }
     }

@@ -19,7 +19,7 @@ namespace Ward.Game
         public int stamina;
         public int luck;
         public int spirit;
-        public string[] skillSlots = { "cleave", "shadowstep", "wardpulse" };
+        public string[] skillSlots = { "", "", "" };
         public string[] inventoryIds = Array.Empty<string>();
         public string[] equippedIds = Array.Empty<string>();
 
@@ -31,7 +31,7 @@ namespace Ward.Game
                 name = string.IsNullOrWhiteSpace(name) ? "Exile" : name.Trim(),
                 race = race,
                 gender = g,
-                skillSlots = new[] { "cleave", "shadowstep", "wardpulse" },
+                skillSlots = new[] { "", "", "" },
                 inventoryIds = Array.Empty<string>(),
                 equippedIds = Array.Empty<string>()
             };

@@ -41,9 +41,12 @@ namespace Ward.Game
             }
         }
 
+        /// <summary>Monsters hold still and do not attack. Turn on when combat should run.</summary>
+        public const bool AiEnabled = false;
+
         void Update()
         {
-            if (IsDead || _target == null) return;
+            if (!AiEnabled || IsDead || _target == null) return;
             _cd = Mathf.Max(0f, _cd - Time.deltaTime);
             var to = _target.position - transform.position;
             to.y = 0f;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -74,12 +75,12 @@ namespace Ward.App
             var dead = Panel(hudGo.transform, "Dead", new Color(0.1f, 0.05f, 0.05f, 0.85f));
             dead.SetActive(false);
             AddLabel(dead.transform, "You fall", 40, Vector2.zero);
-            var retry = AddButton(dead.transform, "Retry", new Vector2(0, -80), () => session.Retry());
-            WireHud(hud, identity, place, hp, gold, dead, player, session);
+            AddButton(dead.transform, "Retry", new Vector2(0, -80), () => session.Retry());
             var skillWheel = hudGo.AddComponent<SkillWheelView>();
-            var s1 = PlaceButton(hudGo.transform, "S1", new Vector2(1f, 0f), new Vector2(-148f, 156f), new Vector2(84f, 64f), () => player.TryCastSkill(0));
-            var s2 = PlaceButton(hudGo.transform, "S2", new Vector2(1f, 0f), new Vector2(-148f, 84f), new Vector2(84f, 64f), () => player.TryCastSkill(1));
-            var s3 = PlaceButton(hudGo.transform, "S3", new Vector2(1f, 0f), new Vector2(-148f, 16f), new Vector2(84f, 64f), () => player.TryCastSkill(2));
+            // Oniro-style fan: skills around a large circular Attack.
+            var s1 = PlaceCircleButton(hudGo.transform, "", new Vector2(1f, 0f), new Vector2(-118f, 188f), 72f, () => player.TryCastSkill(0), new Color(0.22f, 0.12f, 0.1f, 0.92f));
+            var s2 = PlaceCircleButton(hudGo.transform, "", new Vector2(1f, 0f), new Vector2(-24f, 168f), 72f, () => player.TryCastSkill(1), new Color(0.22f, 0.12f, 0.1f, 0.92f));
+            var s3 = PlaceCircleButton(hudGo.transform, "", new Vector2(1f, 0f), new Vector2(-132f, 96f), 72f, () => player.TryCastSkill(2), new Color(0.22f, 0.12f, 0.1f, 0.92f));
             typeof(SkillWheelView).GetField("slotLabels", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 ?.SetValue(skillWheel, new[]
                 {
@@ -87,14 +88,18 @@ namespace Ward.App
                     s2.GetComponentInChildren<Text>(),
                     s3.GetComponentInChildren<Text>()
                 });
-            PlaceButton(hudGo.transform, "Attack", new Vector2(1f, 0f), new Vector2(-16f, 16f), new Vector2(116f, 116f), () => player.TryAttack());
-            PlaceButton(hudGo.transform, "Sheet", new Vector2(1f, 1f), new Vector2(-16f, -56f), new Vector2(140f, 44f), () => flow.OpenSheet());
-            PlaceButton(hudGo.transform, "Town", new Vector2(1f, 1f), new Vector2(-16f, -108f), new Vector2(140f, 44f), () => flow.OpenTown());
-            PlaceButton(hudGo.transform, "Save", new Vector2(1f, 1f), new Vector2(-16f, -160f), new Vector2(140f, 44f), () =>
+            var attack = PlaceCircleButton(hudGo.transform, "", new Vector2(1f, 0f), new Vector2(-18f, 22f), 108f, () => player.TryAttack(), new Color(0.45f, 0.16f, 0.1f, 0.95f));
+            var attackIcon = AddWeaponIcon(attack.transform, "WeaponIcon", Vector2.zero, new Vector2(58f, 58f));
+            var attackIcon2 = AddWeaponIcon(attack.transform, "WeaponIcon2", new Vector2(14f, -6f), new Vector2(44f, 44f));
+            attackIcon2.enabled = false;
+            WireHud(hud, identity, place, hp, gold, dead, attackIcon, attackIcon2, player, session);
+            PlaceCircleButton(hudGo.transform, "Sheet", new Vector2(1f, 1f), new Vector2(-16f, -48f), 72f, () => flow.OpenSheet(), new Color(0.25f, 0.18f, 0.14f, 0.95f));
+            PlaceCircleButton(hudGo.transform, "Town", new Vector2(1f, 1f), new Vector2(-16f, -128f), 72f, () => flow.OpenTown(), new Color(0.25f, 0.18f, 0.14f, 0.95f));
+            PlaceCircleButton(hudGo.transform, "Save", new Vector2(1f, 1f), new Vector2(-16f, -208f), 72f, () =>
             {
                 SaveService.Write(session.ToSave());
                 flow.ShowTitle();
-            });
+            }, new Color(0.25f, 0.18f, 0.14f, 0.95f));
 
             var stick = new GameObject("Stick", typeof(RectTransform), typeof(Image));
             stick.transform.SetParent(hudGo.transform, false);
@@ -103,11 +108,11 @@ namespace Ward.App
             stickRt.pivot = new Vector2(0f, 0f);
             stickRt.anchoredPosition = new Vector2(24f, 24f);
             stickRt.sizeDelta = new Vector2(150f, 150f);
-            stick.GetComponent<Image>().color = new Color(1, 1, 1, 0.12f);
+            MakeCircle(stick.GetComponent<Image>(), new Color(1f, 1f, 1f, 0.14f));
             var knob = new GameObject("Knob", typeof(RectTransform), typeof(Image));
             knob.transform.SetParent(stick.transform, false);
             knob.GetComponent<RectTransform>().sizeDelta = new Vector2(64, 64);
-            knob.GetComponent<Image>().color = new Color(0.9f, 0.75f, 0.45f, 0.55f);
+            MakeCircle(knob.GetComponent<Image>(), new Color(0.9f, 0.75f, 0.45f, 0.7f));
             typeof(TouchControls).GetField("stickBase", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 ?.SetValue(touch, stickRt);
             typeof(TouchControls).GetField("stickKnob", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
@@ -194,8 +199,11 @@ namespace Ward.App
         static void BuildBox()
         {
             var root = new GameObject("BoxLevel").transform;
-            float[] xs = { -6f, -2f, 2f, 6f };
-            float[] zs = { -4f, 0f, 4f };
+            // 4× original footprint: tile every 4 units across 32×24.
+            var xs = new List<float>();
+            var zs = new List<float>();
+            for (var x = -14f; x <= 14f; x += 4f) xs.Add(x);
+            for (var z = -10f; z <= 10f; z += 4f) zs.Add(z);
             foreach (var x in xs)
             foreach (var z in zs)
                 Place("floor", root, new Vector3(x, -0.05f, z), Quaternion.identity, false);
@@ -204,28 +212,34 @@ namespace Ward.App
             ground.transform.SetParent(root, false);
             var box = ground.AddComponent<BoxCollider>();
             box.center = new Vector3(0f, -0.25f, 0f);
-            box.size = new Vector3(16.2f, 0.5f, 12.2f);
+            box.size = new Vector3(WorldData.ArenaWidth + 0.2f, 0.5f, WorldData.ArenaHeight + 0.2f);
 
+            const float wallZ = 13f;
+            const float wallX = 17f;
             foreach (var x in xs)
             {
-                Place("wall", root, new Vector3(x, 0f, 6.5f), Quaternion.identity, true);
-                Place("wall", root, new Vector3(x, 0f, -6.5f), Quaternion.Euler(0f, 180f, 0f), true);
+                Place("wall", root, new Vector3(x, 0f, wallZ), Quaternion.identity, true);
+                Place("wall", root, new Vector3(x, 0f, -wallZ), Quaternion.Euler(0f, 180f, 0f), true);
             }
             foreach (var z in zs)
             {
-                Place("wall", root, new Vector3(8.5f, 0f, z), Quaternion.Euler(0f, 90f, 0f), true);
-                Place("wall", root, new Vector3(-8.5f, 0f, z), Quaternion.Euler(0f, -90f, 0f), true);
+                Place("wall", root, new Vector3(wallX, 0f, z), Quaternion.Euler(0f, 90f, 0f), true);
+                Place("wall", root, new Vector3(-wallX, 0f, z), Quaternion.Euler(0f, -90f, 0f), true);
             }
 
-            Place("pillar", root, new Vector3(-4f, 0f, -2f), Quaternion.identity, true);
-            Place("pillar", root, new Vector3(4f, 0f, -2f), Quaternion.identity, true);
-            Place("pillar", root, new Vector3(-4f, 0f, 2f), Quaternion.identity, true);
-            Place("pillar", root, new Vector3(4f, 0f, 2f), Quaternion.identity, true);
-            Place("column", root, new Vector3(-6.4f, 0f, 0f), Quaternion.identity, false);
-            Place("column", root, new Vector3(6.4f, 0f, 0f), Quaternion.identity, false);
-            Place("chest", root, new Vector3(-5.2f, 0f, -4.2f), Quaternion.Euler(0f, 25f, 0f), false);
-            Place("barrel", root, new Vector3(5.1f, 0f, -3.5f), Quaternion.identity, false);
-            Place("barrel", root, new Vector3(5.7f, 0f, -4.5f), Quaternion.Euler(0f, 35f, 0f), false);
+            Place("pillar", root, new Vector3(-8f, 0f, -4f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(8f, 0f, -4f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(-8f, 0f, 4f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(8f, 0f, 4f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(-4f, 0f, 0f), Quaternion.identity, true);
+            Place("pillar", root, new Vector3(4f, 0f, 0f), Quaternion.identity, true);
+            Place("column", root, new Vector3(-12.8f, 0f, 0f), Quaternion.identity, false);
+            Place("column", root, new Vector3(12.8f, 0f, 0f), Quaternion.identity, false);
+            Place("column", root, new Vector3(0f, 0f, 8f), Quaternion.identity, false);
+            Place("chest", root, new Vector3(-10.4f, 0f, -8.4f), Quaternion.Euler(0f, 25f, 0f), false);
+            Place("barrel", root, new Vector3(10.2f, 0f, -7f), Quaternion.identity, false);
+            Place("barrel", root, new Vector3(11.4f, 0f, -9f), Quaternion.Euler(0f, 35f, 0f), false);
+            Place("barrel", root, new Vector3(-11f, 0f, 7f), Quaternion.Euler(0f, -20f, 0f), false);
         }
 
         static void Place(string key, Transform parent, Vector3 pos, Quaternion rot, bool collide)
@@ -480,7 +494,68 @@ namespace Ward.App
             return button;
         }
 
-        static void WireHud(HudView hud, Text identity, Text place, Text hp, Text gold, GameObject dead, PlayerController player, RunSession session)
+        static Button PlaceCircleButton(Transform parent, string label, Vector2 anchor, Vector2 pos, float diameter, UnityEngine.Events.UnityAction action, Color color)
+        {
+            var button = PlaceButton(parent, label, anchor, pos, new Vector2(diameter, diameter), action);
+            MakeCircle(button.GetComponent<Image>(), color);
+            var labelText = button.GetComponentInChildren<Text>();
+            if (labelText != null) labelText.fontSize = Mathf.Max(14, Mathf.RoundToInt(diameter * 0.22f));
+            return button;
+        }
+
+        static Sprite _circleSprite;
+
+        static Sprite CircleSprite()
+        {
+            if (_circleSprite != null) return _circleSprite;
+            const int size = 128;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            var center = (size - 1) * 0.5f;
+            var radius = center - 1.5f;
+            for (var y = 0; y < size; y++)
+            for (var x = 0; x < size; x++)
+            {
+                var dx = x - center;
+                var dy = y - center;
+                var d = Mathf.Sqrt(dx * dx + dy * dy);
+                var a = d <= radius - 1f ? 1f : d >= radius + 1f ? 0f : 1f - (d - (radius - 1f)) / 2f;
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            }
+            tex.Apply(false, false);
+            _circleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            return _circleSprite;
+        }
+
+        static void MakeCircle(Image image, Color color)
+        {
+            if (image == null) return;
+            image.sprite = CircleSprite();
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            image.color = color;
+            image.alphaHitTestMinimumThreshold = 0.1f;
+        }
+
+        static Image AddWeaponIcon(Transform parent, string name, Vector2 pos, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            var image = go.GetComponent<Image>();
+            image.raycastTarget = false;
+            image.preserveAspect = true;
+            image.sprite = WeaponIcons.ForFamily(WeaponFamily.Unarmed);
+            image.color = new Color(0.95f, 0.86f, 0.62f, 0.95f);
+            return image;
+        }
+
+        static void WireHud(HudView hud, Text identity, Text place, Text hp, Text gold, GameObject dead, Image attackIcon, Image attackIconSecondary, PlayerController player, RunSession session)
         {
             var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
             typeof(HudView).GetField("identity", flags)?.SetValue(hud, identity);
@@ -488,6 +563,8 @@ namespace Ward.App
             typeof(HudView).GetField("hpText", flags)?.SetValue(hud, hp);
             typeof(HudView).GetField("goldText", flags)?.SetValue(hud, gold);
             typeof(HudView).GetField("deadPanel", flags)?.SetValue(hud, dead);
+            typeof(HudView).GetField("attackIcon", flags)?.SetValue(hud, attackIcon);
+            typeof(HudView).GetField("attackIconSecondary", flags)?.SetValue(hud, attackIconSecondary);
             typeof(HudView).GetField("player", flags)?.SetValue(hud, player);
             typeof(HudView).GetField("session", flags)?.SetValue(hud, session);
         }

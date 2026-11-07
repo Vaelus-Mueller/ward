@@ -12,10 +12,24 @@ namespace Ward.Game
     /// </summary>
     public static class WardModels
     {
+        /// <summary>Meshes used in the normal spawn rotation.</summary>
         static readonly string[] EnemyKeys =
         {
             "mon_wolf", "mon_skeleton", "mon_zombie", "mon_imp",
             "mon_spider", "mon_slime", "mon_cultist", "mon_gargoyle"
+        };
+
+        /// <summary>Every authored enemy body under Resources/Models/Actors.</summary>
+        public static readonly string[] AllEnemyKeys =
+        {
+            "mon_archdemon", "mon_assassin", "mon_cultist", "mon_direrat",
+            "mon_dragon", "mon_drake", "mon_flicker", "mon_gargoyle",
+            "mon_giantrat", "mon_hillock", "mon_imp", "mon_legionnaire",
+            "mon_lumen", "mon_lurker", "mon_packrat", "mon_rat",
+            "mon_roofrat", "mon_skeleton", "mon_slayer", "mon_slime",
+            "mon_spider", "mon_sprig", "mon_whelp", "mon_wisp",
+            "mon_wolf", "mon_wolfF", "mon_wyrm", "mon_wyvern",
+            "mon_zombie", "mon_zombieF"
         };
 
         static readonly Dictionary<string, Mesh> ActorMeshes = new();
@@ -104,10 +118,10 @@ namespace Ward.Game
 
         public static GameObject SpawnEnemy(int index, bool elite, Transform parent)
         {
-            var key = elite ? "mon_hillock" : EnemyKeys[Mathf.Abs(index) % EnemyKeys.Length];
+            var key = EnemyKeys[Mathf.Abs(index) % EnemyKeys.Length];
             var go = SpawnActor(key, parent);
             if (go == null) return null;
-            if (elite) go.transform.localScale = Vector3.one * 1.12f;
+            if (elite) go.transform.localScale = Vector3.one * 1.2f;
             return go;
         }
 

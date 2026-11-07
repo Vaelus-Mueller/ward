@@ -17,15 +17,16 @@ namespace Ward.Game
 
     public static class WorldData
     {
-        public const float ArenaWidth = 16f;
-        public const float ArenaHeight = 12f;
-        public const float ArenaHalfX = 7.3f;
-        public const float ArenaHalfZ = 5.3f;
+        // Test room is 4× the original footprint (2× each side).
+        public const float ArenaWidth = 32f;
+        public const float ArenaHeight = 24f;
+        public const float ArenaHalfX = 14.6f;
+        public const float ArenaHalfZ = 10.6f;
         public const float RoadHalf = ArenaHalfX;
-        public const float SpawnRadius = 7f;
-        public static readonly Vector3 CameraOffset = new(0f, 11f, -6.5f);
+        public const float SpawnRadius = 14f;
+        public static readonly Vector3 CameraOffset = new(0f, 14f, -8.5f);
 
-        public static Vector2 RoadStart => new(0f, -3.2f);
+        public static Vector2 RoadStart => new(0f, -6.4f);
 
         [Serializable]
         class PackFile
@@ -55,7 +56,7 @@ namespace Ward.Game
                     id = first?.id ?? "1-0",
                     level = first?.level ?? 1,
                     placeName = first?.name ?? "Threshold",
-                    position = new Vector2(-1.2f, 1.2f),
+                    position = new Vector2(-2.4f, 2.4f),
                     size = 3,
                     boss = false
                 },
@@ -64,9 +65,36 @@ namespace Ward.Game
                     id = second?.id ?? "2-0",
                     level = second?.level ?? 2,
                     placeName = second?.name ?? "Ash Court",
-                    position = new Vector2(1.4f, 4.1f),
+                    position = new Vector2(2.8f, 8.2f),
                     size = 2,
                     boss = true
+                },
+                new()
+                {
+                    id = "1-idle-a",
+                    level = 1,
+                    placeName = "West alcove",
+                    position = new Vector2(-10f, 0f),
+                    size = 3,
+                    boss = false
+                },
+                new()
+                {
+                    id = "1-idle-b",
+                    level = 1,
+                    placeName = "East alcove",
+                    position = new Vector2(10f, 1.5f),
+                    size = 3,
+                    boss = false
+                },
+                new()
+                {
+                    id = "1-idle-c",
+                    level = 1,
+                    placeName = "North hall",
+                    position = new Vector2(0f, 9f),
+                    size = 4,
+                    boss = false
                 }
             };
         }

@@ -54,8 +54,51 @@ namespace Ward.Game
                 player.transform.position = new Vector3(start.x, 0f, start.y);
                 player.HealFull();
             }
+            SpawnEnemyGallery(player.transform);
             RefreshPacks();
             PlaceLabel = WorldData.PlaceAt(new Vector2(player.transform.position.x, player.transform.position.z), _packs);
+        }
+
+        /// <summary>
+        /// One of every authored enemy mesh in a ring, with its elite (same body,
+        /// tinted + scaled) standing outward behind it. AI stays off.
+        /// </summary>
+        public void SpawnEnemyGallery(Transform target)
+        {
+            if (enemyRoot == null)
+            {
+                var root = GameObject.Find("Enemies");
+                enemyRoot = root != null ? root.transform : new GameObject("Enemies").transform;
+            }
+            var keys = WardModels.AllEnemyKeys;
+            var count = keys.Length;
+            if (count == 0) return;
+            var center = new Vector3(0f, 0f, 2f);
+            var radius = 7.5f;
+            var eliteGap = 2.4f;
+            for (var i = 0; i < count; i++)
+            {
+                var key = keys[i];
+                var angle = i * Mathf.PI * 2f / count - Mathf.PI * 0.5f;
+                var dir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                SpawnGalleryMob(key, center + dir * radius, center, false, target);
+                SpawnGalleryMob(key, center + dir * (radius + eliteGap), center, true, target);
+            }
+        }
+
+        void SpawnGalleryMob(string key, Vector3 pos, Vector3 faceToward, bool elite, Transform target)
+        {
+            var go = WardModels.SpawnActor(key, enemyRoot);
+            if (go == null) return;
+            go.name = elite ? $"GalleryElite_{key}" : $"Gallery_{key}";
+            go.transform.position = pos;
+            if (elite) go.transform.localScale = Vector3.one * 1.2f;
+            var face = faceToward - pos;
+            face.y = 0f;
+            if (face.sqrMagnitude > 0.01f) go.transform.rotation = Quaternion.LookRotation(face);
+            var agent = go.GetComponent<EnemyAgent>() ?? go.AddComponent<EnemyAgent>();
+            agent.Init("gallery", elite ? 80f : 40f, 0f, elite, target);
+            _enemies.Add(agent);
         }
 
         public void PlayerAttack(Vector3 origin, Vector3 facing, float range, float damage)
