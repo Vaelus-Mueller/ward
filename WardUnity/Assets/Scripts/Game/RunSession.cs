@@ -134,13 +134,12 @@ namespace Ward.Game
             float damage,
             Vector3 attackerPos,
             Vector3 attackerFwd,
-            HashSet<int> alreadyHit)
+            HashSet<EnemyAgent> alreadyHit)
         {
             foreach (var e in _enemies)
             {
                 if (e == null || e.IsDead) continue;
-                var id = e.GetInstanceID();
-                if (alreadyHit.Contains(id)) continue;
+                if (alreadyHit.Contains(e)) continue;
                 var toEnemy = e.transform.position - mid;
                 toEnemy.y = 0f;
                 if (toEnemy.magnitude > radius + 0.45f) continue;
@@ -148,7 +147,7 @@ namespace Ward.Game
                 to.y = 0f;
                 if (to.sqrMagnitude > 0.01f && Vector3.Dot(attackerFwd, to.normalized) < -0.15f)
                     continue;
-                alreadyHit.Add(id);
+                alreadyHit.Add(e);
                 ApplyPlayerHit(e, damage);
             }
         }

@@ -36,7 +36,7 @@ namespace Ward.Game
             var tint = RaceTint(data.race);
             var kind = SkeletonDef.ForRace(data.race);
             _rig = ActorRig.Create(transform, "ActorRig", tint, scale: RaceScale(data.race), withWeapon: true, kind: kind);
-            _rig.Weapon?.Configure(session, data.AttackDamage, GetInstanceID());
+            _rig.Weapon?.Configure(session, data.AttackDamage);
 
             _cc = GetComponent<CharacterController>();
             if (_cc == null) _cc = gameObject.AddComponent<CharacterController>();

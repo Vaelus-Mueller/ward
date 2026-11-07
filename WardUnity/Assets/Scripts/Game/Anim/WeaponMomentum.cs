@@ -25,7 +25,7 @@ namespace Ward.Game.Anim
         Transform _tip;
         Vector3 _prevTip;
         bool _hasPrev;
-        readonly HashSet<int> _hitThisSwing = new();
+        readonly HashSet<EnemyAgent> _hitThisSwing = new();
         float _baseDamage = 8f;
 
         public void Bind(ActorRig rig)
@@ -54,7 +54,7 @@ namespace Ward.Game.Anim
             _tip.localPosition = new Vector3(0f, BladeLength, 0f);
         }
 
-        public void Configure(RunSession session, float baseDamage, int ownerId = 0)
+        public void Configure(RunSession session, float baseDamage)
         {
             _session = session;
             _baseDamage = baseDamage;
@@ -108,8 +108,7 @@ namespace Ward.Game.Anim
                 if (col == null) continue;
                 var agent = col.GetComponentInParent<EnemyAgent>();
                 if (agent == null || agent.IsDead) continue;
-                var id = agent.GetInstanceID();
-                if (!_hitThisSwing.Add(id)) continue;
+                if (!_hitThisSwing.Add(agent)) continue;
                 // Facing gate: tip should be roughly in front of the attacker.
                 var to = agent.transform.position - transform.position;
                 to.y = 0f;
